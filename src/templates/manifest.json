@@ -1,0 +1,132 @@
+{
+    "schemaVersion": 1,
+    "repository": "fozy-labs/astp",
+    "bundles": {
+        "base": {
+            "name": "base",
+            "version": "1.0.0",
+            "description": "Base skill for VSCode Copilot agent orchestration",
+            "default": true,
+            "items": [
+                {
+                    "source": "base/skills/orchestrate/SKILL.md",
+                    "target": "skills/orchestrate/SKILL.md",
+                    "category": "skill"
+                }
+            ]
+        },
+        "rdpi": {
+            "name": "rdpi",
+            "version": "1.0.0",
+            "description": "Full RDPI pipeline — agents, instructions, and stage definitions",
+            "default": false,
+            "items": [
+                {
+                    "source": "rdpi/agents/RDPI-Orchestrator.agent.md",
+                    "target": "agents/RDPI-Orchestrator.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/agents/rdpi-approve.agent.md",
+                    "target": "agents/rdpi-approve.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/agents/rdpi-architect.agent.md",
+                    "target": "agents/rdpi-architect.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/agents/rdpi-codder.agent.md",
+                    "target": "agents/rdpi-codder.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/agents/rdpi-codebase-researcher.agent.md",
+                    "target": "agents/rdpi-codebase-researcher.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/agents/rdpi-design-reviewer.agent.md",
+                    "target": "agents/rdpi-design-reviewer.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/agents/rdpi-external-researcher.agent.md",
+                    "target": "agents/rdpi-external-researcher.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/agents/rdpi-implement-reviewer.agent.md",
+                    "target": "agents/rdpi-implement-reviewer.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/agents/rdpi-plan-reviewer.agent.md",
+                    "target": "agents/rdpi-plan-reviewer.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/agents/rdpi-planner.agent.md",
+                    "target": "agents/rdpi-planner.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/agents/rdpi-qa-designer.agent.md",
+                    "target": "agents/rdpi-qa-designer.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/agents/rdpi-questioner.agent.md",
+                    "target": "agents/rdpi-questioner.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/agents/rdpi-redraft.agent.md",
+                    "target": "agents/rdpi-redraft.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/agents/rdpi-research-reviewer.agent.md",
+                    "target": "agents/rdpi-research-reviewer.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/agents/rdpi-stage-creator.agent.md",
+                    "target": "agents/rdpi-stage-creator.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/agents/rdpi-tester.agent.md",
+                    "target": "agents/rdpi-tester.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/instructions/thoughts-workflow.instructions.md",
+                    "target": "instructions/thoughts-workflow.instructions.md",
+                    "category": "instruction"
+                },
+                {
+                    "source": "rdpi/rdpi-stages/01-research.md",
+                    "target": "rdpi-stages/01-research.md",
+                    "category": "stage-definition"
+                },
+                {
+                    "source": "rdpi/rdpi-stages/02-design.md",
+                    "target": "rdpi-stages/02-design.md",
+                    "category": "stage-definition"
+                },
+                {
+                    "source": "rdpi/rdpi-stages/03-plan.md",
+                    "target": "rdpi-stages/03-plan.md",
+                    "category": "stage-definition"
+                },
+                {
+                    "source": "rdpi/rdpi-stages/04-implement.md",
+                    "target": "rdpi-stages/04-implement.md",
+                    "category": "stage-definition"
+                }
+            ]
+        }
+    }
+}
