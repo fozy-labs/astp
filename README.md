@@ -5,7 +5,7 @@ CLI tool for managing MDA files (skills, agents, instructions, stage definitions
 ## Installation
 
 ```bash
-npm install -g astp
+npm install -g @fozy-labs/astp
 ```
 
 Requires **Node.js >= 22**.
