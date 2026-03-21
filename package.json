@@ -1,0 +1,29 @@
+{
+  "name": "astp",
+  "version": "0.1.0",
+  "homepage": "https://github.com/fozy-labs/astp#readme",
+  "bugs": {
+    "url": "https://github.com/fozy-labs/astp/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fozy-labs/astp.git"
+  },
+  "license": "GPL-3.0-or-later",
+  "author": "Vladimir Panev <vova6255@gmail.com>",
+  "scripts": {
+    "build": "rimraf ./dist && tsc && tsc-alias",
+    "build:watch": "npm run build && (concurrently \"tsc -w\" \"tsc-alias -w\")",
+    "ts-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/"
+  },
+  "devDependencies": {
+    "@fozy-labs/js-configs": "^0.1.3"
+  }
+}
