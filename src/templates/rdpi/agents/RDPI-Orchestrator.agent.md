@@ -57,8 +57,8 @@ If there are no unfinished features, or the user chooses to start new, proceed w
 
 1. Decide on the name of the task.
 2. Create a new directory `.thoughts/<YYYY-MM-DD-HHmm>_<feature-name>/`.
-3. If the user's task description is NOT in English, translate it to English preserving the original meaning.
-4. Create `TASK.md` in this directory, insert the task into it.
+3. If the user's task description is NOT in English, translate it to English preserving the original meaning. This is the ONLY transformation allowed.
+4. Create `TASK.md` in this directory. Copy the user's task description into it **as-is** (or its English translation from step 3). Do NOT rephrase, summarize, expand, research, or interpret the text. The user's wording is authoritative.
 
 
 ## Orchestration steps
@@ -71,8 +71,7 @@ Maintain an in-memory list of completed phase numbers to track progress (skip al
 3. Execute phases (see "Phase execution" below).
 4. Spawn the `rdpi-approve`.
 5a. If the stage is approved, proceed to the next stage (go to step 1 with the next stage identifier).
-5b. If the stage is not approved and redraft count < 3, spawn the `rdpi-stage-creator` again in `redraft` mode (it will read REVIEW.md and append fix phases to PHASES.md), then go to step #2 to execute the new phases.
-5c. If redraft count ≥ 3, stop and report to the user that the stage has exceeded the redraft limit.
+5b. If the stage is not approved, spawn the `rdpi-stage-creator` again in `redraft` mode (it will read REVIEW.md and append fix phases to PHASES.md), then go to step #2 to execute the new phases.
 
 After the final stage (`04-implement`) is approved, produce a brief completion summary referencing the `.thoughts/` directory and notify the user that the pipeline is complete.
 
@@ -129,5 +128,4 @@ Base:
 
 - You MUST follow the orchestration steps in order.
 - NEVER alter the scope or instructions of a subagent's phase prompt. You MAY prepend runtime context (file paths, previous outputs) but the original prompt from PHASES.md stays intact.
-- Maximum 3 redraft rounds per stage. After that, stop and escalate.
 - You read files and make decisions, but you NEVER produce stage deliverable content yourself. Administrative files (TASK.md) are your responsibility.

@@ -63,7 +63,7 @@ export async function selectBundles(manifest: Manifest): Promise<Bundle[]> {
         .map((b) => b.name);
 
     const selected = await p.multiselect({
-        message: "Select bundles to install:",
+        message: "Select bundles to install:\n(Space = toggle, Enter = confirm)",
         options,
         initialValues,
         required: true,
@@ -95,7 +95,7 @@ export async function confirmInstall(bundles: Bundle[], target: InstallTarget): 
 
 export async function selectInstalledBundles(installed: InstalledBundle[]): Promise<InstalledBundle[]> {
     const selected = await p.multiselect({
-        message: "Select bundles to delete:",
+        message: "Select bundles to delete:\n(Space = toggle, Enter = confirm)",
         options: installed.map((bundle) => ({
             value: bundle.bundleName,
             label: `${bundle.bundleName} (${bundle.files.length} file${bundle.files.length === 1 ? "" : "s"})`,

@@ -181,4 +181,4 @@ Return the verdict as a clear string: `"Approved"` or `"Not Approved"`.
 - Do NOT rewrite the stage's documents. Only write REVIEW.md and update README.md status.
 - Do NOT suggest alternative designs or approaches in the review.
 - NEVER auto-approve. If no Critical issues → ask the user.
-- After 2+ redraft rounds on the same stage (determined in Step 2): you MUST NOT auto-reject even on Critical issues — always present to the user. This prevents infinite loops where review and redraft keep cycling without human intervention.
+- Auto-redraft limit: after 2 redraft rounds on the same stage (determined in Step 2), you MUST stop auto-rejecting and present to the user — even if Critical issues remain. This is the hard cap on automatic redraft cycles.

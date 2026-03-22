@@ -22,7 +22,7 @@ applyTo: ".thoughts/**"
 
 ## Document Conventions
 
-- **Workflow version**: `{{ASTP_WORKFLOW_VERSION}}` (must be included in each md's file)
+- **`rdpi-version`**: `{{ASTP_WORKFLOW_VERSION}}` (must be included in each md file's YAML frontmatter)
 - **Language**: English. (all files inside `.thoughts`)
 - **User Language**: Russian (all user I/O must be in Russian)
 - **Front matter**: Each file must have a front matter section.
