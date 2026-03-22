@@ -3,9 +3,9 @@ import * as p from "@clack/prompts";
 import type {
     Bundle,
     FileStatus,
+    InstalledBundle,
     InstallTarget,
     InstallTargetType,
-    InstalledBundle,
     Manifest,
     UpdateReport,
 } from "@/types/index.js";

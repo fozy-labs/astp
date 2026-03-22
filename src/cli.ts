@@ -9,7 +9,9 @@ import { executeInstall } from "@/commands/install.js";
 import { executeUpdate } from "@/commands/update.js";
 import { launchWizard } from "@/ui/wizard.js";
 
-const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version?: string };
+const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+    version?: string;
+};
 
 const program = new Command();
 

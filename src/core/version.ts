@@ -164,7 +164,9 @@ export async function removeBundle(
     force = false,
 ): Promise<{ removed: string[]; skipped: FileStatus[] }> {
     const statuses = await detectModified(bundle, installRoot);
-    const modifiedPaths = new Set(statuses.filter((status) => status.state === "modified").map((status) => status.targetPath));
+    const modifiedPaths = new Set(
+        statuses.filter((status) => status.state === "modified").map((status) => status.targetPath),
+    );
     const skipped = statuses.filter((status) => status.state === "modified");
     const removed: string[] = [];
 
