@@ -11,7 +11,7 @@ const program = new Command();
 program
     .name("astp")
     .description("MDA file manager for AI coding agents")
-    .version("0.1.3")
+    .version("0.1.4")
     .action(async () => {
         await launchWizard();
     });
