@@ -1,6 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
 import { downloadTemplate } from "giget";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { downloadBundle } from "../fetcher.js";
 
