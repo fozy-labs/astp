@@ -28,7 +28,7 @@ export async function installFile(
 
 export function validateTargetPath(installRoot: string, targetPath: string): void {
     // Reject absolute paths (POSIX and Windows)
-    if (path.isAbsolute(targetPath)) {
+    if (path.isAbsolute(targetPath) || path.posix.isAbsolute(targetPath) || path.win32.isAbsolute(targetPath)) {
         throw new Error(`Invalid target path: absolute paths are not allowed: ${targetPath}`);
     }
 
