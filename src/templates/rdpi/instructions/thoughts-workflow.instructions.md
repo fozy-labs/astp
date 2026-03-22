@@ -22,10 +22,11 @@ applyTo: ".thoughts/**"
 
 ## Document Conventions
 
-- **Workflow version**: `b0.5` (must be included in each md's file)
+- **Workflow version**: `{{ASTP_WORKFLOW_VERSION}}` (must be included in each md's file)
 - **Language**: English. (all files inside `.thoughts`)
 - **User Language**: Russian (all user I/O must be in Russian)
 - **Front matter**: Each file must have a front matter section.
+- **Stage guidance skill**: `rdpi-<stage-identifier>`
 - **Status**: README.md contains "Status" field:
     - Inprogress: work in progress, not ready for review,
     - Draft: ready for review, awaiting feedback,

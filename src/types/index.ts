@@ -16,6 +16,8 @@ export interface Bundle {
     name: string;
     /** Semver version string (e.g., "1.0.0"). */
     version: string;
+    /** Optional workflow version for templated bundle content (e.g., "b0.5"). */
+    workflowVersion?: string;
     /** Human-readable description for display in prompts. */
     description: string;
     /** Whether this bundle is pre-selected by default in the interactive wizard. */
@@ -34,7 +36,7 @@ export interface TemplateItem {
     category: ItemCategory;
 }
 
-export type ItemCategory = "agent" | "skill" | "instruction" | "stage-definition";
+export type ItemCategory = "agent" | "skill" | "instruction";
 
 // ── Install Target Types (§3.2) ──────────────────────────────────────
 

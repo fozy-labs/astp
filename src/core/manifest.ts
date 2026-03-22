@@ -85,6 +85,10 @@ function validateBundle(key: string, data: unknown): void {
         throw new Error(`Invalid bundle '${key}': missing or invalid version`);
     }
 
+    if ("workflowVersion" in bundle && typeof bundle.workflowVersion !== "string") {
+        throw new Error(`Invalid bundle '${key}': workflowVersion must be a string`);
+    }
+
     if (!("items" in bundle) || !Array.isArray(bundle.items)) {
         throw new Error(`Invalid bundle '${key}': missing or invalid items`);
     }

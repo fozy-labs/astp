@@ -157,3 +157,50 @@ export async function detectModified(bundle: InstalledBundle, _installRoot: stri
 
     return results;
 }
+
+export async function removeBundle(
+    bundle: InstalledBundle,
+    installRoot: string,
+    force = false,
+): Promise<{ removed: string[]; skipped: FileStatus[] }> {
+    const statuses = await detectModified(bundle, installRoot);
+    const modifiedPaths = new Set(statuses.filter((status) => status.state === "modified").map((status) => status.targetPath));
+    const skipped = statuses.filter((status) => status.state === "modified");
+    const removed: string[] = [];
+
+    for (const file of bundle.files) {
+        if (modifiedPaths.has(file.relativePath) && !force) {
+            continue;
+        }
+
+        await fs.rm(file.filePath, { force: true });
+        await removeEmptyDirectories(path.dirname(file.filePath), installRoot);
+        removed.push(file.relativePath);
+    }
+
+    return {
+        removed,
+        skipped: force ? [] : skipped,
+    };
+}
+
+async function removeEmptyDirectories(startDir: string, installRoot: string): Promise<void> {
+    const normalizedRoot = path.resolve(installRoot);
+    let currentDir = path.resolve(startDir);
+
+    while (currentDir.startsWith(normalizedRoot) && currentDir !== normalizedRoot) {
+        let entries;
+        try {
+            entries = await fs.readdir(currentDir);
+        } catch {
+            return;
+        }
+
+        if (entries.length > 0) {
+            return;
+        }
+
+        await fs.rmdir(currentDir);
+        currentDir = path.dirname(currentDir);
+    }
+}

@@ -1,6 +1,14 @@
 import * as p from "@clack/prompts";
 
-import type { Bundle, FileStatus, InstallTarget, InstallTargetType, Manifest, UpdateReport } from "@/types/index.js";
+import type {
+    Bundle,
+    FileStatus,
+    InstallTarget,
+    InstallTargetType,
+    InstalledBundle,
+    Manifest,
+    UpdateReport,
+} from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 
 // Re-export intro/outro for wizard usage
@@ -8,13 +16,14 @@ export const intro = p.intro;
 export const outro = p.outro;
 export const spinner = p.spinner;
 
-export async function selectAction(): Promise<"install" | "update" | "check"> {
+export async function selectAction(): Promise<"install" | "update" | "check" | "delete"> {
     const action = await p.select({
         message: "What would you like to do?",
         options: [
             { value: "install" as const, label: "Install bundles" },
             { value: "check" as const, label: "Check for updates" },
             { value: "update" as const, label: "Update installed files" },
+            { value: "delete" as const, label: "Delete installed bundles" },
         ],
     });
 
@@ -74,6 +83,45 @@ export async function confirmInstall(bundles: Bundle[], target: InstallTarget): 
 
     const confirmed = await p.confirm({
         message: `Install ${bundles.length} bundle${bundles.length === 1 ? "" : "s"} (${totalFiles} file${totalFiles === 1 ? "" : "s"}) to ${targetLabel}?`,
+    });
+
+    if (p.isCancel(confirmed)) {
+        p.cancel("Cancelled.");
+        process.exit(0);
+    }
+
+    return confirmed;
+}
+
+export async function selectInstalledBundles(installed: InstalledBundle[]): Promise<InstalledBundle[]> {
+    const selected = await p.multiselect({
+        message: "Select bundles to delete:",
+        options: installed.map((bundle) => ({
+            value: bundle.bundleName,
+            label: `${bundle.bundleName} (${bundle.files.length} file${bundle.files.length === 1 ? "" : "s"})`,
+        })),
+        required: true,
+    });
+
+    if (p.isCancel(selected)) {
+        p.cancel("Cancelled.");
+        process.exit(0);
+    }
+
+    const selectedNames = new Set(selected as string[]);
+    return installed.filter((bundle) => selectedNames.has(bundle.bundleName));
+}
+
+export async function confirmDelete(
+    bundles: InstalledBundle[],
+    target: InstallTarget,
+    force: boolean,
+): Promise<boolean> {
+    const totalFiles = bundles.reduce((sum, bundle) => sum + bundle.files.length, 0);
+    const targetLabel = target.type === "project" ? ".github/" : "~/.copilot/";
+
+    const confirmed = await p.confirm({
+        message: `Delete ${bundles.length} bundle${bundles.length === 1 ? "" : "s"} (${totalFiles} file${totalFiles === 1 ? "" : "s"}) from ${targetLabel}${force ? " with --force" : ""}?`,
     });
 
     if (p.isCancel(confirmed)) {

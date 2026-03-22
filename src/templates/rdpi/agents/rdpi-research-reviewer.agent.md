@@ -62,7 +62,7 @@ title: "Research: <Feature Name>"
 date: <YYYY-MM-DD>
 status: Draft
 feature: "<brief feature description>"
-rdpi-version: "<workflow version>"
+rdpi-version: "{{ASTP_WORKFLOW_VERSION}}"
 ---
 ```
 

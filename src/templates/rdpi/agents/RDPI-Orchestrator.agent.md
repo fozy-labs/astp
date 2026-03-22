@@ -92,8 +92,6 @@ If all retries fail, escalate to the user directly (using `#vscode_askQuestions`
 
 ## Subagents roles
 
-All roles are defined as `.agent.md` files in the `.github/agents/` directory.
-
 Base:
 - `rdpi-stage-creator`: Creates an initial directory (with `README.md` and `PHASES.md` files) for each stage. Allocates resources to the task and defines the necessary roles. Operates in three modes: `initial` (new stage), `redraft` (appending fix phases after Not Approved verdict), and `resume` (recovering an interrupted stage — determines what was already completed).
 - `rdpi-approve`: Compiles the stage reviewer's findings, performs a lightweight sanity check, and presents the combined results to the user for an approval decision. Human-in-the-loop gate.

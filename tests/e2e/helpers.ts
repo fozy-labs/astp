@@ -27,6 +27,7 @@ export function createFixtureManifest(version = "1.0.0"): Manifest {
             rdpi: {
                 name: "rdpi",
                 version,
+                workflowVersion: "b0.5",
                 description: "Full RDPI pipeline — agents, instructions, and stage definitions",
                 default: false,
                 items: [
@@ -116,24 +117,24 @@ export function createFixtureManifest(version = "1.0.0"): Manifest {
                         category: "instruction",
                     },
                     {
-                        source: "rdpi/rdpi-stages/01-research.md",
-                        target: "rdpi-stages/01-research.md",
-                        category: "stage-definition",
+                        source: "rdpi/skills/rdpi-01-research/SKILL.md",
+                        target: "skills/rdpi-01-research/SKILL.md",
+                        category: "skill",
                     },
                     {
-                        source: "rdpi/rdpi-stages/02-design.md",
-                        target: "rdpi-stages/02-design.md",
-                        category: "stage-definition",
+                        source: "rdpi/skills/rdpi-02-design/SKILL.md",
+                        target: "skills/rdpi-02-design/SKILL.md",
+                        category: "skill",
                     },
                     {
-                        source: "rdpi/rdpi-stages/03-plan.md",
-                        target: "rdpi-stages/03-plan.md",
-                        category: "stage-definition",
+                        source: "rdpi/skills/rdpi-03-plan/SKILL.md",
+                        target: "skills/rdpi-03-plan/SKILL.md",
+                        category: "skill",
                     },
                     {
-                        source: "rdpi/rdpi-stages/04-implement.md",
-                        target: "rdpi-stages/04-implement.md",
-                        category: "stage-definition",
+                        source: "rdpi/skills/rdpi-04-implement/SKILL.md",
+                        target: "skills/rdpi-04-implement/SKILL.md",
+                        category: "skill",
                     },
                 ],
             },
@@ -180,8 +181,6 @@ function generateTemplateContent(item: TemplateItem, version: string): string {
             return `---\nname: ${name}\n---\n# ${name}\n\nSkill v${version} content.\n`;
         case "instruction":
             return `---\ndescription: ${name}\n---\n# ${name}\n\nInstruction v${version} content.\n`;
-        case "stage-definition":
-            return `# Stage: ${name}\n\nStage v${version} content.\n`;
         default:
             throw new Error(`Unknown category: ${item.category}`);
     }

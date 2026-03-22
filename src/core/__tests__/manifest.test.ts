@@ -22,6 +22,7 @@ const validManifestData = {
         rdpi: {
             name: "rdpi",
             version: "1.0.0",
+            workflowVersion: "b0.5",
             description: "RDPI bundle",
             default: false,
             items: [
@@ -43,6 +44,7 @@ describe("validateManifest", () => {
         expect(result.repository).toBe("fozy-labs/astp");
         expect(Object.keys(result.bundles)).toEqual(["base", "rdpi"]);
         expect(result.bundles.base.items).toHaveLength(1);
+        expect(result.bundles.rdpi.workflowVersion).toBe("b0.5");
     });
 
     // T13: Missing required fields
@@ -76,6 +78,21 @@ describe("validateManifest", () => {
 
     it("T15: throws on non-object input (string)", () => {
         expect(() => validateManifest("string")).toThrow("expected an object");
+    });
+
+    it("throws on non-string workflowVersion", () => {
+        expect(() =>
+            validateManifest({
+                ...validManifestData,
+                bundles: {
+                    ...validManifestData.bundles,
+                    rdpi: {
+                        ...validManifestData.bundles.rdpi,
+                        workflowVersion: 5,
+                    },
+                },
+            }),
+        ).toThrow("workflowVersion must be a string");
     });
 });
 

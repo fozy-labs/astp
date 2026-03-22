@@ -1,4 +1,5 @@
 import { executeCheck } from "@/commands/check.js";
+import { executeDelete } from "@/commands/delete.js";
 import { executeInstall } from "@/commands/install.js";
 import { executeUpdate } from "@/commands/update.js";
 
@@ -18,6 +19,9 @@ export async function launchWizard(): Promise<void> {
             break;
         case "check":
             await executeCheck({});
+            break;
+        case "delete":
+            await executeDelete({});
             break;
     }
 

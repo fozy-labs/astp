@@ -1,7 +1,11 @@
+---
+name: "rdpi-03-plan"
+description: "ONLY for RDPI pipeline."
+---
+
 # Stage: 03-Plan
 
 Plan stage decomposes the approved design into an actionable, phased implementation plan. Does NOT introduce new design decisions.
-
 
 ## Available Roles
 
@@ -10,20 +14,18 @@ Plan stage decomposes the approved design into an actionable, phased implementat
 | Planner | `rdpi-planner` | Analyzes design, maps components to concrete file changes, builds phased plan with dependencies and verification | max 4 invocation, retry 2 |
 | Plan Reviewer | `rdpi-plan-reviewer` | Reviews plan for design traceability, task concreteness, file path validity, adds Quality Review to README.md | max 2 invocation, retry 2 |
 
-
 ## Typical Phase Structure
 
 | Phase | Agent | Outputs | Depends on | Parallelizable |
 |-------|-------|---------|------------|----------------|
-| 1 | `rdpi-planner` | `README.md`, `01-phase.md` ... `NN-phase.md` | — | No |
+| 1 | `rdpi-planner` | `README.md`, `01-phase.md` ... `NN-phase.md` | - | No |
 | 2 | `rdpi-plan-reviewer` | Updates `README.md` (adds Quality Review) | 1 | No |
 
 Phase 1 produces the entire plan atomically. Phase 2 reviews and adds Quality Review to README.md.
 
-
 ## Phase Prompt Guidelines
 
-### Phase 1 — Implementation Planning
+### Phase 1 - Implementation Planning
 
 The prompt MUST specify:
 - Paths to ALL documents: `../01-research/`, `../02-design/`
@@ -43,7 +45,7 @@ The prompt MUST specify:
   - Verification checklist per phase (minimum: `npm run ts-check`)
 - Constraints:
   - Every phase must leave the project in a compilable state
-  - No vague tasks — every task specifies exact files and concrete changes
+  - No vague tasks - every task specifies exact files and concrete changes
   - Do not split trivial changes into separate tasks
   - Include docs/ and apps/demos/ impact (if any per design)
 
@@ -51,19 +53,18 @@ The prompt MUST specify:
 File paths in the plan MUST be verified against the actual repository. The planner must search to confirm files exist before referencing them.
 </critical>
 
-
-### Phase 2 — Plan Review
+### Phase 2 - Plan Review
 
 The prompt MUST specify:
 - Paths to ALL plan files: README.md and all NN-phase.md files in the stage directory
-- Path to all design documents (`../02-design/` — README.md and individual design files) for traceability check
+- Path to all design documents (`../02-design/` - README.md and individual design files) for traceability check
 - Review criteria:
   1. Every design component is mapped to at least one plan task
   2. File paths are concrete and verified (not placeholders)
   3. Dependencies between phases are correct
   4. Each phase has verification criteria
   5. Each phase leaves the project in a compilable state (`npm run ts-check`)
-  6. No vague tasks — all tasks specify exact changes
+  6. No vague tasks - all tasks specify exact changes
   7. Each task references the design section it implements
   8. Parallelizable vs. sequential tasks correctly marked
   9. Per-task complexity estimates present (Low/Medium/High)
@@ -71,7 +72,6 @@ The prompt MUST specify:
   11. Mermaid dependency graph present in README.md
   12. Phase summary table complete in README.md
 - Update README.md: add `## Quality Review` section, set status to `Draft`
-
 
 ## Output Conventions
 
@@ -81,9 +81,8 @@ The prompt MUST specify:
 - Phase file structure: frontmatter, Goal, Dependencies (Requires/Blocks), Execution (Sequential/Parallel), Tasks (detailed), Verification (checklist)
 - Mermaid diagrams for dependency graph and optionally Gantt for parallelization
 
-
 ## Scaling Rules
 
 - For small plans (< 3 phases): planner produces all outputs in a single pass
-- For large plans (> 6 phases): the stage-creator may split into 2 planner invocations (overriding the default max 1) — one for analysis/README.md and one for individual phase files — but this is rare
-- Never exceed 3 total phases for plan stage: planner (1–2 invocations) + reviewer (1 invocation)
+- For large plans (> 6 phases): the stage-creator may split into 2 planner invocations (overriding the default max 1) - one for analysis/README.md and one for individual phase files - but this is rare
+- Never exceed 3 total phases for plan stage: planner (1-2 invocations) + reviewer (1 invocation)

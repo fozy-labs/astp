@@ -1,7 +1,11 @@
+---
+name: "rdpi-04-implement"
+description: "ONLY for RDPI pipeline."
+---
+
 # Stage: 04-Implement
 
-Implement stage executes the approved plan. Code changes must precisely follow the plan — no deviations, no extra features, no unrelated refactoring.
-
+Implement stage executes the approved plan. Code changes must precisely follow the plan - no deviations, no extra features, no unrelated refactoring.
 
 ## Available Roles
 
@@ -9,8 +13,7 @@ Implement stage executes the approved plan. Code changes must precisely follow t
 |------|-------|-------------|------------------------------------------|
 | Coder | `rdpi-codder` | Implements code changes according to plan phase tasks | max 8 invocation per plan phase, retry 2 |
 | Tester | `rdpi-tester` | Runs verification for completed phases, saves report to `verification-<N>.md` | max 8 invocation per plan phase, retry 1 |
-| Implementation Reviewer | `rdpi-implement-reviewer` | Reviews all changes, creates implementation record README.md | max 4 invocation, retry 2                |
-
+| Implementation Reviewer | `rdpi-implement-reviewer` | Reviews all changes, creates implementation record README.md | max 4 invocation, retry 2 |
 
 ## Typical Phase Structure
 
@@ -22,12 +25,11 @@ The number of implement phases is derived from the plan. For each plan phase:
 | N.2 | `rdpi-tester` | `verification-N.md` (in stage directory) | N.1 |
 | Final | `rdpi-implement-reviewer` | `README.md` (implementation record) | All N.1 + N.2 |
 
-Each plan phase becomes a code → test pair. The tester saves a verification report to `verification-<N>.md` in the `04-implement/` directory. The reviewer runs once at the end, reading all verification files.
-
+Each plan phase becomes a code -> test pair. The tester saves a verification report to `verification-<N>.md` in the `04-implement/` directory. The reviewer runs once at the end, reading all verification files.
 
 ## Phase Prompt Guidelines
 
-### Phase N.1 — Code Implementation (per plan phase)
+### Phase N.1 - Code Implementation (per plan phase)
 
 The prompt MUST specify:
 - Path to the specific plan phase file: `../03-plan/NN-phase.md`
@@ -43,7 +45,7 @@ The prompt MUST specify:
   - If `ts-check` fails after implementation: fix within phase scope (max 2 attempts)
   - If unfixable: document the issue and continue
 
-### Phase N.2 — Verification (per plan phase)
+### Phase N.2 - Verification (per plan phase)
 
 The prompt MUST specify:
 - What was implemented (reference the coder's phase)
@@ -52,10 +54,10 @@ The prompt MUST specify:
   - Any phase-specific behavioral checks
   - API consistency checks
 - Report format: pass/fail per check, error details if failed
-- Save verification report to `04-implement/verification-<N>.md` (or `verification-<lowest-N>-<highest-N>.md` for grouped phases) — the implement-reviewer reads these files
-- If tests fail: report to orchestrator (do not attempt fixes — that's the coder's job on retry)
+- Save verification report to `04-implement/verification-<N>.md` (or `verification-<lowest-N>-<highest-N>.md` for grouped phases) - the implement-reviewer reads these files
+- If tests fail: report to orchestrator (do not attempt fixes - that's the coder's job on retry)
 
-### Final Phase — Implementation Review
+### Final Phase - Implementation Review
 
 The prompt MUST specify:
 - Paths to ALL plan phases and their implemented changes
@@ -76,7 +78,6 @@ The prompt MUST specify:
       - ??
     ```
 
-
 ## Output Conventions
 
 - Frontmatter fields: phase outputs use (title, date, stage, role); README.md uses (title, date, status, feature, plan)
@@ -84,9 +85,8 @@ The prompt MUST specify:
 - Code style: match existing codebase exactly (read neighbor files for reference)
 - Use `@/*` path alias for imports within `src/`
 
-
 ## Scaling Rules
 
 - For phases with only type changes: tester phase can be reduced to `ts-check` only
 - For large plans (> 5 plan phases): consider grouping independent plan phases into a single coder invocation if they are parallelizable per the plan. The corresponding tester verifies all grouped phases and saves a report named `verification-<lowest-N>-<highest-N>.md` (e.g., `verification-2-3.md`)
-- Never exceed 2× (number of plan phases) + 1 total phases for implement stage
+- Never exceed 2x (number of plan phases) + 1 total phases for implement stage

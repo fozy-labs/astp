@@ -15,7 +15,7 @@ src/templates/
 └── rdpi/                  ← bundle: rdpi
     ├── agents/
     ├── instructions/
-    └── rdpi-stages/
+    └── skills/
 ```
 
 Each bundle directory's internal structure mirrors the install target structure. For example, `rdpi/agents/rdpi-approve.agent.md` installs to `<install-root>/agents/rdpi-approve.agent.md`.
@@ -38,6 +38,7 @@ The `manifest.json` file defines all available bundles and their contents. It is
 |-------|------|-------------|
 | `name` | `string` | Bundle identifier (matches the key in `bundles`). |
 | `version` | `string` | Semver version string (e.g., `"1.0.0"`). |
+| `workflowVersion` | `string` | Optional workflow contract version injected into templated bundle files. |
 | `description` | `string` | Human-readable description for display in prompts. |
 | `default` | `boolean` | Whether this bundle is pre-selected by default in the interactive wizard. |
 | `items` | `TemplateItem[]` | Files included in this bundle. |
@@ -48,7 +49,7 @@ The `manifest.json` file defines all available bundles and their contents. It is
 |-------|------|-------------|
 | `source` | `string` | Path relative to `src/templates/` (e.g., `rdpi/agents/rdpi-approve.agent.md`). |
 | `target` | `string` | Path relative to install root (e.g., `agents/rdpi-approve.agent.md`). |
-| `category` | `string` | MDA file category: `agent`, `skill`, `instruction`, or `stage-definition`. |
+| `category` | `string` | MDA file category: `agent`, `skill`, or `instruction`. |
 
 ### Path conventions
 

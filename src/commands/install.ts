@@ -38,6 +38,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 source: manifest.repository,
                 bundle: bundle.name,
                 version: bundle.version,
+                workflowVersion: bundle.workflowVersion,
             });
             installedCount++;
         }

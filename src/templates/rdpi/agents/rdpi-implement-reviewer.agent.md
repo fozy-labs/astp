@@ -79,7 +79,7 @@ date: <YYYY-MM-DD>
 status: Draft
 feature: "<brief feature description>"
 plan: "../03-plan/README.md"
-rdpi-version: "<workflow version>"
+rdpi-version: "{{ASTP_WORKFLOW_VERSION}}"
 ---
 ```
 
