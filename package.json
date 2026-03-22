@@ -27,7 +27,7 @@
         "build": "rimraf ./dist && tsc && tsc-alias",
         "build:watch": "npm run build && (concurrently \"tsc -w\" \"tsc-alias -w\")",
         "ts-check": "tsc --noEmit",
-        "test": "tsc --noEmit -p tsconfig.test.json && vitest run",
+        "test": "tsc -p tsconfig.test.json && vitest run",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
         "lint": "eslint src/",
