@@ -1,6 +1,6 @@
 {
     "name": "@fozy-labs/astp",
-    "version": "0.1.7",
+    "version": "0.2.0",
     "type": "module",
     "private": false,
     "description": "A command-line tool for generating skills, instrustions and other files for you AI workflow.",
