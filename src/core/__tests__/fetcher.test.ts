@@ -20,7 +20,7 @@ describe("downloadBundle", () => {
         await downloadBundle("fozy-labs/astp", "rdpi");
 
         expect(mockedDownloadTemplate).toHaveBeenCalledWith(
-            "gh:fozy-labs/astp/src/templates/rdpi#main",
+            "gh:fozy-labs/astp/templates/rdpi#main",
             expect.objectContaining({
                 dir: expect.stringMatching(/astp-rdpi-/),
             }),
@@ -33,7 +33,7 @@ describe("downloadBundle", () => {
         await downloadBundle("fozy-labs/astp", "base", "v1.0.0");
 
         expect(mockedDownloadTemplate).toHaveBeenCalledWith(
-            "gh:fozy-labs/astp/src/templates/base#v1.0.0",
+            "gh:fozy-labs/astp/templates/base#v1.0.0",
             expect.objectContaining({
                 dir: expect.stringMatching(/astp-base-/),
             }),
@@ -48,14 +48,14 @@ describe("downloadBundle", () => {
 
         expect(mockedDownloadTemplate).toHaveBeenNthCalledWith(
             1,
-            "gh:fozy-labs/astp/src/templates/base#main",
+            "gh:fozy-labs/astp/templates/base#main",
             expect.objectContaining({
                 dir: expect.stringMatching(/astp-base-/),
             }),
         );
         expect(mockedDownloadTemplate).toHaveBeenNthCalledWith(
             2,
-            "gh:fozy-labs/astp/src/templates/rdpi#main",
+            "gh:fozy-labs/astp/templates/rdpi#main",
             expect.objectContaining({
                 dir: expect.stringMatching(/astp-rdpi-/),
             }),

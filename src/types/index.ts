@@ -16,8 +16,6 @@ export interface Bundle {
     name: string;
     /** Semver version string (e.g., "1.0.0"). */
     version: string;
-    /** Optional workflow version for templated bundle content (e.g., "b0.5"). */
-    workflowVersion?: string;
     /** Human-readable description for display in prompts. */
     description: string;
     /** Whether this bundle is pre-selected by default in the interactive wizard. */
@@ -28,7 +26,7 @@ export interface Bundle {
 
 /** A single template file within a bundle. */
 export interface TemplateItem {
-    /** Path relative to src/templates/ (e.g., "rdpi/agents/rdpi-approve.agent.md"). */
+    /** Path relative to templates/ (e.g., "rdpi/agents/rdpi-approve.agent.md"). */
     source: string;
     /** Path relative to install root (e.g., "agents/rdpi-approve.agent.md"). */
     target: string;

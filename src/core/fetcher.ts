@@ -6,7 +6,7 @@ import { downloadTemplate } from "giget";
 
 export async function downloadBundle(repository: string, bundleName: string, ref?: string): Promise<string> {
     const branch = ref ?? "main";
-    const source = `gh:${repository}/src/templates/${bundleName}#${branch}`;
+    const source = `gh:${repository}/templates/${bundleName}#${branch}`;
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), `astp-${bundleName}-`));
 
     try {

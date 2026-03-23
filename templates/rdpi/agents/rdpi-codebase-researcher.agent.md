@@ -32,7 +32,6 @@ title: "<Topic> — Codebase Analysis"
 date: <YYYY-MM-DD>
 stage: 01-research
 role: rdpi-codebase-researcher
-rdpi-version: "{{ASTP_WORKFLOW_VERSION}}"
 ---
 ```
 

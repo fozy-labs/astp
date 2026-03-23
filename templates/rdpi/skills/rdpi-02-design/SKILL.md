@@ -44,7 +44,7 @@ The prompt MUST specify:
 - Use cases with TypeScript code examples and React integration patterns
 - Edge cases and migration paths
 - Documentation impact: what concepts need docs, what existing docs need updates, what examples to create
-- Strict scope: describe WHAT needs documentation, not HOW. No JSDoc. Match existing rx-toolkit doc style.
+- Strict scope: describe WHAT needs documentation, not HOW. No JSDoc. Match existing project doc style.
 
 <critical>
 Warn the agent explicitly: docs.md must be SHORT and focused. Large docs.md is an anti-pattern. Only high-impact documentation changes.

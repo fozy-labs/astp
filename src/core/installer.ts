@@ -9,7 +9,7 @@ export async function installFile(
     tempDir: string,
     item: TemplateItem,
     target: InstallTarget,
-    meta: { source: string; bundle: string; version: string; workflowVersion?: string },
+    meta: { source: string; bundle: string; version: string },
 ): Promise<void> {
     // giget downloads the bundle subdirectory, so file paths inside tempDir
     // mirror item.target (source path without the bundle prefix)
@@ -18,27 +18,13 @@ export async function installFile(
 
     validateTargetPath(target.rootDir, item.target);
 
-    const content = renderTemplateContent(sourceContent, meta.workflowVersion);
+    const content = sourceContent;
     const hash = computeHash(content);
     const finalContent = injectAstpFields(content, meta, hash);
 
     const targetFile = path.join(target.rootDir, item.target);
     await fs.mkdir(path.dirname(targetFile), { recursive: true });
     await fs.writeFile(targetFile, finalContent, "utf8");
-}
-
-const WORKFLOW_VERSION_TOKEN = "{{ASTP_WORKFLOW_VERSION}}";
-
-function renderTemplateContent(content: string, workflowVersion?: string): string {
-    if (!content.includes(WORKFLOW_VERSION_TOKEN)) {
-        return content;
-    }
-
-    if (!workflowVersion) {
-        throw new Error("Template requires workflowVersion but the bundle does not define it in manifest.json");
-    }
-
-    return content.replaceAll(WORKFLOW_VERSION_TOKEN, workflowVersion);
 }
 
 export function validateTargetPath(installRoot: string, targetPath: string): void {

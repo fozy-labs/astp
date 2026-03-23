@@ -117,31 +117,4 @@ Agent body`;
         expect(installed).toContain("# Stage content");
         expect(installed).toContain("astp-source:");
     });
-
-    it("renders workflow version tokens from manifest metadata", async () => {
-        const sourceContent = "rdpi-version: {{ASTP_WORKFLOW_VERSION}}\n";
-
-        await fs.mkdir(path.join(tempDir, "instructions"), { recursive: true });
-        await fs.writeFile(path.join(tempDir, "instructions", "workflow.md"), sourceContent);
-
-        await installFile(
-            tempDir,
-            {
-                source: "test-bundle/instructions/workflow.md",
-                target: "instructions/workflow.md",
-                category: "instruction",
-            },
-            { type: "project", rootDir: targetRoot },
-            {
-                source: "fozy-labs/astp",
-                bundle: "rdpi",
-                version: "1.0.0",
-                workflowVersion: "b0.5",
-            },
-        );
-
-        const installed = await fs.readFile(path.join(targetRoot, "instructions", "workflow.md"), "utf8");
-        expect(installed).toContain("rdpi-version: b0.5");
-        expect(installed).not.toContain("{{ASTP_WORKFLOW_VERSION}}");
-    });
 });

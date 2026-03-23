@@ -27,7 +27,6 @@ export function createFixtureManifest(version = "1.0.0"): Manifest {
             rdpi: {
                 name: "rdpi",
                 version,
-                workflowVersion: "b0.5",
                 description: "Full RDPI pipeline — agents, instructions, and stage definitions",
                 default: false,
                 items: [

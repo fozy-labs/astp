@@ -50,7 +50,6 @@ status: Inprogress
 feature: "<brief feature description>"
 research: "../01-research/README.md"
 design: "../02-design/README.md"
-rdpi-version: "{{ASTP_WORKFLOW_VERSION}}"
 ---
 ```
 

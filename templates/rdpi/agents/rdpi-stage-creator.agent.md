@@ -73,7 +73,6 @@ title: "<Stage Title>: <Feature Name>"
 date: <YYYY-MM-DD>
 status: Inprogress
 feature: "<brief feature description>"
-rdpi-version: {{ASTP_WORKFLOW_VERSION}}
 ---
 ```
 

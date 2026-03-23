@@ -50,7 +50,7 @@ Record the checklist results in the `## Quality Review` section of README.md.
 2. Read existing `apps/demos/` to understand interactive examples scope
 3. Verify `07-docs.md` changes are harmonious with existing documentation — proportional to the existing docs and examples
 4. A small internal change must NOT produce pages of doc impact
-5. Verify docs.md describes WHAT needs documentation (not HOW) — no JSDoc proposals, no full-text doc drafts, matches existing rx-toolkit doc style
+5. Verify docs.md describes WHAT needs documentation (not HOW) — no JSDoc proposals, no full-text doc drafts, matches existing project doc style
 
 ### Step 4 — Synthesize
 
@@ -75,7 +75,6 @@ date: <YYYY-MM-DD>
 status: Draft
 feature: "<brief feature description>"
 research: "../01-research/README.md"
-rdpi-version: "{{ASTP_WORKFLOW_VERSION}}"
 ---
 ```
 

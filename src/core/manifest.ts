@@ -5,7 +5,7 @@ const SUPPORTED_SCHEMA_VERSION = 1;
 export async function fetchManifest(repository?: string, ref?: string): Promise<Manifest> {
     const repo = repository ?? "fozy-labs/astp";
     const branch = ref ?? "main";
-    const url = `https://raw.githubusercontent.com/${encodeURIComponent(repo.split("/")[0])}/${encodeURIComponent(repo.split("/")[1])}/${encodeURIComponent(branch)}/src/templates/manifest.json`;
+    const url = `https://raw.githubusercontent.com/${encodeURIComponent(repo.split("/")[0])}/${encodeURIComponent(repo.split("/")[1])}/${encodeURIComponent(branch)}/templates/manifest.json`;
 
     let response: Response;
     try {
@@ -83,10 +83,6 @@ function validateBundle(key: string, data: unknown): void {
 
     if (!("version" in bundle) || typeof bundle.version !== "string") {
         throw new Error(`Invalid bundle '${key}': missing or invalid version`);
-    }
-
-    if ("workflowVersion" in bundle && typeof bundle.workflowVersion !== "string") {
-        throw new Error(`Invalid bundle '${key}': workflowVersion must be a string`);
     }
 
     if (!("items" in bundle) || !Array.isArray(bundle.items)) {

@@ -17,8 +17,7 @@
         },
         "rdpi": {
             "name": "rdpi",
-            "version": "1.0.1",
-            "workflowVersion": "b0.5",
+            "version": "1.0.2",
             "description": "Full RDPI pipeline — agents, instructions, and stage definitions",
             "default": false,
             "items": [

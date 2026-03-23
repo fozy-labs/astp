@@ -69,7 +69,6 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                 source: manifest.repository,
                 bundle: update.bundleName,
                 version: manifestBundle.version,
-                workflowVersion: manifestBundle.workflowVersion,
             });
             updatedCount++;
         }
