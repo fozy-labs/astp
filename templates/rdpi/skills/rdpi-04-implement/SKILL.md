@@ -70,13 +70,6 @@ The prompt MUST specify:
   - Quality review checklist: all plan phases implemented, verification passed, no out-of-scope files modified, code follows project patterns, barrel exports correct, TypeScript strict mode, docs proportional, no security vulnerabilities
   - List of all changed files
   - Post-implementation recommendations (build, manual testing areas)
-  - Recommended commit message (conventional commits format)
-    ```
-      ??(??): ??
-
-      - ??
-      - ??
-    ```
 
 ## Output Conventions
 

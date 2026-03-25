@@ -123,7 +123,4 @@ If no issues: "No issues found.">
 
 ## Change Summary
 <Bullet list of all changed files with brief description of what changed>
-
-## Recommended Commit Message
-<conventional commits format>
 ```

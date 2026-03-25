@@ -127,8 +127,6 @@ Compose a message that includes:
 
 User-facing text (message and options) must be in **I/O language**.
 
-**For `01-research` stage only**: add a third option: **"Утвердить + пройтись по open-questions"**. If the user selects this option, proceed to Step 7a before recording the decision.
-
 The user may respond with:
 - **Approved** — proceed
 - **Not Approved** — with optional additional feedback
@@ -137,24 +135,11 @@ The user may respond with:
 
 ### Step 7a — Open Questions walkthrough (01-research only)
 
-This step runs only if the user chose "Утвердить + пройтись по open-questions".
+This step runs only if the user chose Approved + open-questions.
 
 1. Read `03-open-questions.md` in the stage directory. If the file does not exist, skip this step and proceed to Step 8 with "Approved" verdict.
-2. For each question (Q1, Q2, etc.), present it to the user via `#vscode_askQuestions`.
-3. Record the user's answers. Append a `## User Answers` section to `03-open-questions.md`:
-
-```markdown
-## User Answers
-
-### Q1: <Question title>
-**Decision**: <user's answer>
-
-### Q2: <Question title>
-**Decision**: <user's answer>
-
-...
-```
-
+2. For each question (Q1, Q2, etc.), present it to the user via `#vscode_askQuestions` (use max text length in limits).
+3. Record the user's answers. Append a `User Answer` subsections to `03-open-questions.md`:
 4. After all questions are answered, proceed to Step 8 with the "Approved" verdict.
 
 ### Step 8 — Record decision

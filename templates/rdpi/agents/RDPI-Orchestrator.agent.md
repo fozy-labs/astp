@@ -73,7 +73,13 @@ Maintain an in-memory list of completed phase numbers to track progress (skip al
 5a. If the stage is approved, proceed to the next stage (go to step 1 with the next stage identifier).
 5b. If the stage is not approved, spawn the `rdpi-stage-creator` again in `redraft` mode (it will read REVIEW.md and append fix phases to PHASES.md), then go to step #2 to execute the new phases.
 
-After the final stage (`04-implement`) is approved, produce a brief completion summary referencing the `.thoughts/` directory and notify the user that the pipeline is complete.
+After the final stage (`04-implement`) is approved, produce a brief completion summary referencing the `.thoughts/` directory, notify the user that the pipeline is complete and recommend commit message (conventional commits format)
+  ```
+    ??(??): ??
+
+    - ??
+    - ??
+  ```
 
 
 ## Phase execution
@@ -86,36 +92,7 @@ For each phase in PHASES.md:
 4. **Collect output**: record each subagent's text output. If the subagent produces files, note the file paths.
 5. **Handle failure**: if a subagent reports failure, retry up to the phase's `Retry limit`.
 If all retries fail, escalate to the user directly (using `#vscode_askQuestions`) — describe what happened, and what you will do.
-
-
-
-## Subagents roles
-
-Base:
-- `rdpi-stage-creator`: Creates an initial directory (with `README.md` and `PHASES.md` files) for each stage. Allocates resources to the task and defines the necessary roles. Operates in three modes: `initial` (new stage), `redraft` (appending fix phases after Not Approved verdict), and `resume` (recovering an interrupted stage — determines what was already completed).
-- `rdpi-approve`: Compiles the stage reviewer's findings, performs a lightweight sanity check, and presents the combined results to the user for an approval decision. Human-in-the-loop gate.
-- `rdpi-redraft`: Re-drafts specific documents within a stage based on review feedback (used as a phase agent within redraft rounds).
-
-01-Research:
-- `rdpi-codebase-researcher`: Traces code paths, maps dependencies, documents patterns with exact file references.
-- `rdpi-external-researcher`: Research external sources for the feature.
-- `rdpi-questioner`: Formulates open-ended questions.
-- `rdpi-research-reviewer`: Reviews the research findings and summarizes them.
-
-02-Design:
-- `rdpi-architect`: Designs the overall architecture of the feature.
-- `rdpi-qa-designer`: Designs the quality assurance strategy for the feature.
-- `rdpi-design-reviewer`: Reviews the design and summarizes it.
-
-03-Plan:
-- `rdpi-planner`: Creates a detailed implementation plan for the feature.
-- `rdpi-plan-reviewer`: Reviews the plan for design traceability, task concreteness, and dependency correctness.
-
-04-Implement:
-- `rdpi-codder`: Implements the feature according to the plan.
-- `rdpi-tester`: Tests the implemented feature and reports results.
-- `rdpi-implement-reviewer`: Reviews the implementation and summarizes it.
-
+  
 ## Specific Input/Output
 
 - For each subagent by default:
