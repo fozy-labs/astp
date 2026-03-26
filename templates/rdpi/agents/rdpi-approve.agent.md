@@ -27,9 +27,11 @@ Read the stage `README.md`. This is the reviewer's output and contains:
 - A synthesis of the stage work
 - A `## Quality Review` section with a structured checklist and issues list
 
+
 ### Step 2 — Determine redraft round
 
 Read `PHASES.md` in the stage directory. Count the number of `# Redraft Round` headings. This is the current redraft round number (0 if no redraft rounds exist).
+
 
 ### Step 3 — Sanity check (lightweight, non-duplicative)
 
@@ -41,6 +43,7 @@ Perform a quick scan of the stage to catch anything the reviewer might have miss
 
 This is NOT a full re-review. Trust the reviewer's output. Only flag obvious gaps.
 
+
 ### Step 4 — Assess severity
 
 Compile all issues from:
@@ -51,6 +54,7 @@ Classify combined issues:
 - **Critical**: Blocks the next stage entirely (e.g., missing required documents, contradictory design decisions, plan references non-existent files). The stage CANNOT proceed.
 - **High**: Significant quality concern that should be fixed but doesn't fundamentally block progress.
 - **Medium/Low**: Minor issues, stylistic concerns, non-blocking suggestions.
+
 
 ### Step 5 — Early rejection (Critical issues only)
 
@@ -71,9 +75,10 @@ stage: <stage-identifier>
 
 Include: `## Source`, `## Issues Summary`, `## Issues`, `## Recommendations` (same structure as Step 6).
 
-3. Return `"Not Approved"` to the orchestrator
+3. Return the result using the `## Conclusion` format with `Verdict: Not Approved`
 
 This is the ONLY case where you bypass the user. For High/Medium/Low issues, always ask.
+
 
 ### Step 6 — Write REVIEW.md
 
@@ -114,6 +119,7 @@ If no issues: "No issues found.">
 <Non-blocking suggestions for improvement. These do NOT affect approval.>
 ```
 
+
 ### Step 7 — Present to user and await decision
 
 If no early rejection was triggered, present a concise summary to the user using `#vscode_askQuestions`:
@@ -133,6 +139,7 @@ The user may respond with:
 - **Not Approved with comments** — user adds specific issues to address
 - **(01-research only) Approved + open-questions** — approved, but first review open questions with the user
 
+
 ### Step 7a — Open Questions walkthrough (01-research only)
 
 This step runs only if the user chose Approved + open-questions.
@@ -141,6 +148,7 @@ This step runs only if the user chose Approved + open-questions.
 2. For each question (Q1, Q2, etc.), present it to the user via `#vscode_askQuestions` (use max text length in limits).
 3. Record the user's answers. Append a `User Answer` subsections to `03-open-questions.md`:
 4. After all questions are answered, proceed to Step 8 with the "Approved" verdict.
+
 
 ### Step 8 — Record decision
 
@@ -153,9 +161,10 @@ After receiving the user's response:
    - If **Approved**: set `status` to `Approved`
    - If **Not Approved**: set `status` to `Redraft`
 
+
 ### Step 9 — Return decision to orchestrator
 
-Return the verdict as a clear string: `"Approved"` or `"Not Approved"`.
+Return the result using the `## Conclusion` section below. The `Verdict` field MUST use the exact value `Approved` or `Not Approved`.
 
 
 ## Rules
@@ -167,3 +176,22 @@ Return the verdict as a clear string: `"Approved"` or `"Not Approved"`.
 - Do NOT suggest alternative designs or approaches in the review.
 - NEVER auto-approve. If no Critical issues → ask the user.
 - Auto-redraft limit: after 2 redraft rounds on the same stage (determined in Step 2), you MUST stop auto-rejecting and present to the user — even if Critical issues remain. This is the hard cap on automatic redraft cycles.
+
+
+## Conclusion
+
+After completing the gate decision, return ONLY this section and nothing else:
+
+```markdown
+## Conclusion
+Verdict: Approved | Not Approved
+Review file: <relative path to REVIEW.md>
+User input: not-needed | requested | received
+Escalation: none | user-input | blocked: <one-line reason>
+Next step: proceed-to-next-stage | create-redraft-phases | await-user-decision
+```
+
+Rules:
+- `Verdict` MUST use the exact strings `Approved` or `Not Approved`.
+- Do NOT repeat issue lists or review details; `README.md` and `REVIEW.md` are the sources of truth.
+- Output nothing after the `## Conclusion` section.

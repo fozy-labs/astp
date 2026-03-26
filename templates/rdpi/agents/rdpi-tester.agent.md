@@ -66,3 +66,22 @@ role: rdpi-tester
 <N>/<Total> checks passed.
 <If any failures: brief description of what's broken>
 ```
+
+
+## Conclusion
+
+After writing the verification report, return ONLY this section and nothing else:
+
+```markdown
+## Conclusion
+Status: success | partial | blocked
+Report file: <relative path to verification-*.md, or none>
+Verification: pass | fail | partial
+Escalation: none | retry | user-input | blocked: <one-line reason>
+Next step: proceed-to-review | retry-coder | await-user-input
+```
+
+Rules:
+- Keep the response focused on orchestration state, not report contents.
+- Do NOT paste error logs or long explanations into the response; keep them in the report file.
+src/templates- Output nothing after the `## Conclusion` section.

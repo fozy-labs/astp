@@ -137,3 +137,23 @@ If no issues: "No issues found.">
 ## Next Steps
 Proceeds to Plan stage after human review.
 ```
+
+
+## Conclusion
+
+After updating `README.md`, return ONLY this section and nothing else:
+
+```markdown
+## Conclusion
+Status: success | partial | blocked
+Artifacts: <comma-separated relative paths, or none>
+Summary:
+- <up to 3 orchestration-relevant facts only>
+Escalation: none | retry | user-input | blocked: <one-line reason>
+Next step: <single orchestration action>
+```
+
+Rules:
+- Keep the response focused on orchestration state, not document contents.
+- Do NOT paste review details, long explanations, or file excerpts.
+- Output nothing after the `## Conclusion` section.

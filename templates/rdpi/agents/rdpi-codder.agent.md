@@ -53,13 +53,7 @@ If verification fails:
 
 ### Step 5 — Report
 
-Summarize what was done:
-```
-Phase N complete: <N> tasks implemented.
-- Task N.1: <file> — <what was done>
-- Task N.2: <file> — <what was done>
-Verification: <pass/fail>
-```
+Return the result using the `## Conclusion` section below.
 
 
 ## Code Conventions
@@ -69,3 +63,22 @@ Verification: <pass/fail>
 - TypeScript strict mode, no `any` unless existing code uses it in that context
 - Barrel exports in `index.ts` for public API
 - `@/*` import alias for `src/` paths
+
+
+## Conclusion
+
+After completing the implementation work, return ONLY this section and nothing else:
+
+```markdown
+## Conclusion
+Status: success | partial | blocked
+Changed files: <comma-separated relative paths, or none>
+Verification: pass | fail | not-run
+Escalation: none | retry | user-input | blocked: <one-line reason>
+Next step: run-tester | retry-coder | await-user-input
+```
+
+Rules:
+- Keep the response focused on orchestration state, not code diffs.
+- Do NOT paste implementation details, long explanations, or code excerpts.
+- Output nothing after the `## Conclusion` section.

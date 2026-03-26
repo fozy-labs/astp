@@ -73,8 +73,8 @@ Maintain an in-memory list of completed phase numbers to track progress (skip al
 5a. If the stage is approved, proceed to the next stage (go to step 1 with the next stage identifier).
 5b. If the stage is not approved, spawn the `rdpi-stage-creator` again in `redraft` mode (it will read REVIEW.md and append fix phases to PHASES.md), then go to step #2 to execute the new phases.
 
-After the final stage (`04-implement`) is approved, produce a brief completion summary referencing the `.thoughts/` directory, notify the user that the pipeline is complete and recommend commit message (conventional commits format)
-  ```
+After the final stage (`04-implement`) is approved, produce a brief completion summary referencing the `.thoughts/` directory, notify the user that the pipeline is complete and recommend commit message (conventional commits format):
+  ```txt
     ??(??): ??
 
     - ??

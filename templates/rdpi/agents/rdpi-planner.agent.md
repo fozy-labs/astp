@@ -123,3 +123,23 @@ role: rdpi-planner
 Conventions:
 - Mermaid diagrams for dependency graph (required), Gantt for parallelization (optional)
 - All file paths verified against real repository
+
+
+## Conclusion
+
+After writing the requested plan artifacts, return ONLY this section and nothing else:
+
+```markdown
+## Conclusion
+Status: success | partial | blocked
+Artifacts: <comma-separated relative paths, or none>
+Summary:
+- <up to 3 orchestration-relevant facts only>
+Escalation: none | retry | user-input | blocked: <one-line reason>
+Next step: <single orchestration action>
+```
+
+Rules:
+- Keep the response focused on orchestration state, not document contents.
+- Do NOT paste plan details, long explanations, or file excerpts.
+src/templates- Output nothing after the `## Conclusion` section.

@@ -66,3 +66,23 @@ Document structure:
 - [Source 1](url) — <what it covers>
 - [Source 2](url) — <what it covers>
 ```
+
+
+## Conclusion
+
+After writing the requested research artifact, return ONLY this section and nothing else:
+
+```markdown
+## Conclusion
+Status: success | partial | blocked
+Artifacts: <comma-separated relative paths, or none>
+Summary:
+- <up to 3 orchestration-relevant facts only>
+Escalation: none | retry | user-input | blocked: <one-line reason>
+Next step: <single orchestration action>
+```
+
+Rules:
+- Keep the response focused on orchestration state, not document contents.
+- Do NOT paste findings, long explanations, or file excerpts.
+- Output nothing after the `## Conclusion` section.

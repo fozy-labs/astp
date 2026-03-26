@@ -224,15 +224,7 @@ For phases whose `Output` is a description (e.g., "Code changes per ...", "Updat
 
 ### Step 3 — Report to orchestrator
 
-Return a structured report:
-
-```
-Resume analysis for <stage-identifier>:
-- Completed phases: <list of phase numbers>
-- Incomplete phases: <list of phase numbers>
-- Unknown phases: <list of phase numbers, if any>
-- Recommended action: Continue from phase <N>
-```
+Return the result using the `## Conclusion` section below.
 
 Do NOT re-create PHASES.md or README.md. Do NOT modify any existing files. Only read and report.
 
@@ -272,3 +264,24 @@ A good Redraft section:
 - Groups related issues into single phases where appropriate
 - Includes a re-review phase at the end
 - Doesn't touch content that passed review
+
+
+## Conclusion
+
+After completing the stage setup or recovery work, return ONLY this section and nothing else:
+
+```markdown
+## Conclusion
+Mode: initial | redraft | resume
+Stage: 01-research | 02-design | 03-plan | 04-implement
+Status: success | partial | blocked
+Artifacts: <comma-separated relative paths, or none>
+Phase summary: <single line with created/appended phase counts, or completed/incomplete/unknown lists in resume mode>
+Escalation: none | retry | user-input | blocked: <one-line reason>
+Next step: <single orchestration action>
+```
+
+Rules:
+- Keep the response focused on orchestration state, not document contents.
+- Do NOT paste full phase prompts, long explanations, or file excerpts.
+src/templates- Output nothing after the `## Conclusion` section.

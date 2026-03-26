@@ -57,14 +57,7 @@ After all fixes:
 
 ### Step 6 — Report
 
-Write a brief summary of what was fixed to stdout (the orchestrator reads this):
-
-```
-Redraft complete: <N> issues fixed.
-- Issue 1: <what was fixed>
-- Issue 2: <what was fixed>
-...
-```
+Return the result using the `## Conclusion` section below.
 
 
 ## Rules
@@ -74,3 +67,22 @@ Redraft complete: <N> issues fixed.
 - NEVER change the document's scope or purpose.
 - If a fix in one document creates an inconsistency with another within the same stage, fix the inconsistency in the other document too — but limit to maintaining consistency, not expanding scope.
 - Preserve YAML frontmatter in all output documents.
+
+
+## Conclusion
+
+After completing the redraft work, return ONLY this section and nothing else:
+
+```markdown
+## Conclusion
+Status: success | partial | blocked
+Issues fixed: <comma-separated issue numbers, or none>
+Touched files: <comma-separated relative paths, or none>
+Escalation: none | retry | user-input | blocked: <one-line reason>
+Next step: re-review-stage | continue-redraft | await-user-input
+```
+
+Rules:
+- Keep the response focused on orchestration state, not document contents.
+- Do NOT paste issue details, long explanations, or file excerpts.
+src/templates- Output nothing after the `## Conclusion` section.
