@@ -67,7 +67,7 @@ The prompt MUST specify:
 
 ## Output Conventions
 
-- Frontmatter fields: phase outputs use (title, date, stage, role); README.md uses (title, date, status, feature)
+- Frontmatter fields: phase outputs use (title, date, stage, role); README.md uses (title, date, status, feature, astp-version)
 - README.md structure: Summary, Documents, Key Findings, Contradictions and Gaps, Quality Review, Next Steps
 - File paths referenced with `@/` alias (e.g., `@/signals/signals/State.ts`)
 - Mermaid diagrams: titled, max 15-20 elements, clear node names

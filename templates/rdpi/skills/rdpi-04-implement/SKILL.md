@@ -21,11 +21,27 @@ The number of implement phases is derived from the plan. For each plan phase:
 
 | Phase | Agent | Output | Depends on |
 |-------|-------|--------|------------|
-| N.1 | `rdpi-codder` | Code changes for plan phase N | Previous plan phase completion |
+| N.1 | `rdpi-codder` | Code changes for plan phase N | Completion of plan phases that N depends on (see plan dependency graph) |
 | N.2 | `rdpi-tester` | `verification-N.md` (in stage directory) | N.1 |
 | Final | `rdpi-implement-reviewer` | `README.md` (implementation record) | All N.1 + N.2 |
 
-Each plan phase becomes a code -> test pair. The tester saves a verification report to `verification-<N>.md` in the `04-implement/` directory. The reviewer runs once at the end, reading all verification files.
+**Parallel execution**: if the plan's dependency graph shows that plan phases X and Y are independent (e.g., both depend only on plan phase 1), then implement phases X.1 and Y.1 MUST have the same `Depends on` value (i.e., the tester phase of plan phase 1) — NOT depend on each other. The orchestrator will run them in parallel.
+
+Example for plan: P1 → {P2, P3} → P4:
+
+| Impl Phase | Agent | Depends on |
+|------------|-------|------------|
+| 1.1 | `rdpi-codder` | — |
+| 1.2 | `rdpi-tester` | 1.1 |
+| 2.1 | `rdpi-codder` | 1.2 |
+| 3.1 | `rdpi-codder` | 1.2 |
+| 2.2 | `rdpi-tester` | 2.1 |
+| 3.2 | `rdpi-tester` | 3.1 |
+| 4.1 | `rdpi-codder` | 2.2, 3.2 |
+| 4.2 | `rdpi-tester` | 4.1 |
+| Final | `rdpi-implement-reviewer` | all above |
+
+Each plan phase becomes a code → test pair that forms a **retry loop**: if the tester reports failures (`Next step: retry-coder`), the orchestrator re-spawns the coder (with the verification report path for context), then re-runs the tester. This loop repeats until the tester passes or the coder's retry limit is exhausted. The reviewer runs once at the end, after ALL code → test pairs have passed, reading all verification files.
 
 ## Phase Prompt Guidelines
 
@@ -73,7 +89,7 @@ The prompt MUST specify:
 
 ## Output Conventions
 
-- Frontmatter fields: phase outputs use (title, date, stage, role); README.md uses (title, date, status, feature, plan)
+- Frontmatter fields: phase outputs use (title, date, stage, role); README.md uses (title, date, status, feature, plan, astp-version)
 - Implementation record README.md structure: Status, Quality Review (Checklist + Documentation Proportionality + Issues Found), Post-Implementation Recommendations, Change Summary, Recommended Commit Message
 - Code style: match existing codebase exactly (read neighbor files for reference)
 - Use `@/*` path alias for imports within `src/`
@@ -81,5 +97,6 @@ The prompt MUST specify:
 ## Scaling Rules
 
 - For phases with only type changes: tester phase can be reduced to `ts-check` only
-- For large plans (> 5 plan phases): consider grouping independent plan phases into a single coder invocation if they are parallelizable per the plan. The corresponding tester verifies all grouped phases and saves a report named `verification-<lowest-N>-<highest-N>.md` (e.g., `verification-2-3.md`)
+- **Preserve plan parallelism**: if the plan marks phases as independent/parallel, create separate implement phase pairs (code + test) for each and set their `Depends on` to reflect the plan's dependency graph — do NOT merge independent plan phases into a single coder invocation. The orchestrator handles parallel execution automatically.
+- Grouping is only allowed for truly trivial plan phases (e.g., two phases that each touch 1-2 files with minor changes). In that case the tester saves a report named `verification-<lowest-N>-<highest-N>.md`.
 - Never exceed 2x (number of plan phases) + 1 total phases for implement stage

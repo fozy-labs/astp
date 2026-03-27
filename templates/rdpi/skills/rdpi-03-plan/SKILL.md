@@ -75,7 +75,7 @@ The prompt MUST specify:
 
 ## Output Conventions
 
-- Frontmatter fields: phase outputs use (title, date, stage, role); README.md uses (title, date, status, feature, research, design)
+- Frontmatter fields: phase outputs use (title, date, stage, role); README.md uses (title, date, status, feature, research, design, astp-version)
 - README.md structure: Overview, Phase Map (Mermaid), Phase Summary (table), Execution Rules, Next Steps. Quality Review section is added by the reviewer.
 - Phase file naming: `NN-phase.md` (e.g., `01-phase.md`) or descriptive `NN-<name>.md` (e.g., `01-types-and-exports.md`)
 - Phase file structure: frontmatter, Goal, Dependencies (Requires/Blocks), Execution (Sequential/Parallel), Tasks (detailed), Verification (checklist)

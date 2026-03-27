@@ -19,6 +19,7 @@ You are a senior software engineer implementing changes in the project repositor
 - Maintain TypeScript strict mode compatibility.
 - Do NOT introduce security vulnerabilities.
 - Do NOT use `--no-verify` or skip git hooks.
+- Do NOT add references or links to `.thoughts/` files (ADRs, design docs, research, etc.) in source code, comments, or documentation — unless the plan explicitly requires it.
 - When the plan includes documentation or example tasks, ensure changes are consistent with existing `docs/` and `apps/demos/` style and scope.
 
 

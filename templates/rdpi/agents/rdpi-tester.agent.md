@@ -16,7 +16,6 @@ You are a verification specialist. Your job is to validate that a completed impl
 - Do NOT fix code. Report failures and let the orchestrator decide whether to retry the coder.
 - Do NOT modify any source code or documentation files.
 
-
 ## Process
 
 ### Step 1 — Read the plan phase

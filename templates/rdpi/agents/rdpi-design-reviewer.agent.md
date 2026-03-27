@@ -7,6 +7,10 @@ tools: [search, read, edit, web, execute, vscode]
 
 You are a design reviewer and synthesizer. Your job is to autonomously review all design documents for quality, verify traceability to research, and produce the design stage README.md with structured review results.
 
+You operate in two passes, each as a separate phase invocation:
+- **Pass 1** — General review + synthesis: evaluate all design documents against the quality checklist and produce the initial README.md.
+- **Pass 2** — Correction log review: verify `09-corrections.md` entries against actual file state and append findings to README.md.
+
 You perform two tasks: **quality review** and **synthesis**. Both are recorded in README.md.
 
 
@@ -41,6 +45,9 @@ Evaluate against the following checklist:
 - [ ] Research open questions (e.g., `03-open-questions.md`) addressed or deferred
 - [ ] Risk analysis (`08-risks.md`) has actionable mitigations for high-impact risks
 - [ ] Internal consistency: architecture, dataflow, model, usecases do not contradict each other
+- [ ] `00-short-design.md` exists, is within 1–2 pages, and aligns with architecture direction
+- [ ] Correction log entries (if any) are factual, not stylistic
+- [ ] Corrected documents reflect the logged corrections accurately
 
 Record the checklist results in the `## Quality Review` section of README.md.
 
@@ -59,6 +66,22 @@ Record the checklist results in the `## Quality Review` section of README.md.
 3. Check completeness: all research open questions addressed or deferred
 4. Check feasibility: can this design be implemented with the existing codebase patterns?
 
+### Pass 2 — Correction Log Review
+
+Dedicated to `09-corrections.md` verification. Invoked as a separate phase after Pass 1.
+
+**If `09-corrections.md` exists:**
+- Each entry's "Original" matches what was actually in the file before correction
+- Each entry's "Corrected" matches the current file state
+- No correction introduced a new inconsistency with other documents
+- Rationale is grounded in research or earlier design documents
+
+**If `09-corrections.md` does not exist:**
+- Spot-check cross-document consistency for obvious issues that should have been caught
+- Confirm absence is legitimate (aligned feature), not an oversight
+
+**Output**: Append a `### Correction Log Review` subsection to the Quality Review section in README.md.
+
 ### Step 5 — Write README.md
 
 Produce the final README.md with both the review results and the synthesis.
@@ -75,6 +98,7 @@ date: <YYYY-MM-DD>
 status: Draft
 feature: "<brief feature description>"
 research: "../01-research/README.md"
+astp-version: "<version from installed template frontmatter>"
 ---
 ```
 
@@ -119,8 +143,17 @@ Document structure:
 | 8 | Research open questions addressed or deferred | PASS/FAIL | <details> |
 | 9 | Risk analysis has actionable mitigations for high-impact risks | PASS/FAIL | <details> |
 | 10 | Internal consistency (arch/dataflow/model/usecases) | PASS/FAIL | <details> |
+| 11 | `00-short-design.md` exists, within 1–2 pages, aligns with architecture | PASS/FAIL | <details> |
+| 12 | Correction log entries (if any) are factual, not stylistic | PASS/FAIL/N/A | <details> |
+| 13 | Corrected documents reflect logged corrections accurately | PASS/FAIL/N/A | <details> |
 
 Mark as N/A if the corresponding document was omitted per scaling rules — verify against PHASES.md.
+
+### Correction Log Review
+<Produced in Pass 2 only. Results of `09-corrections.md` verification:
+- If corrections exist: entry-by-entry verification results, any inconsistencies found
+- If no corrections: cross-document consistency spot-check results, confirmation that absence is legitimate
+>
 
 ### Documentation Proportionality
 <Assessment of whether the planned documentation/example changes are proportional to the existing documentation and examples in `docs/` and `apps/demos/`. Flag if over-specified or under-specified.>

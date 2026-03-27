@@ -92,6 +92,17 @@ For each phase in PHASES.md:
 4. **Collect output**: record each subagent's text output. If the subagent produces files, note the file paths.
 5. **Handle failure**: if a subagent reports failure, retry up to the phase's `Retry limit`.
 If all retries fail, escalate to the user directly (using `#vscode_askQuestions`) — describe what happened, and what you will do.
+
+### Code → Test retry loop (04-implement only)
+
+In the `04-implement` stage, coder and tester phases form pairs. When a tester phase reports `Next step: retry-coder` (verification failed):
+
+1. Re-spawn the corresponding coder phase with a `## Runtime Context` block that includes the path to the tester's verification report file so the coder can read the failures.
+2. After the coder completes, re-spawn the tester phase.
+3. Repeat until the tester reports `Next step: proceed-to-review` OR the coder's retry limit for this pair is exhausted.
+4. If the retry limit is exhausted and the tester still fails, escalate to the user.
+
+Do NOT advance to the next phase or the reviewer until the tester approves the coder's output.
   
 ## Specific Input/Output
 

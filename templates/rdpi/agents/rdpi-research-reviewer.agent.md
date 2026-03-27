@@ -62,6 +62,7 @@ title: "Research: <Feature Name>"
 date: <YYYY-MM-DD>
 status: Draft
 feature: "<brief feature description>"
+astp-version: "<preserve from existing README.md>"
 ---
 ```
 
