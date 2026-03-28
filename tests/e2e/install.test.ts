@@ -76,7 +76,7 @@ describe("E2E: install", () => {
     });
 
     // T31: astp install rdpi --target project
-    it("T31: installs rdpi bundle — 21 files with astp frontmatter", async () => {
+    it("T31: installs rdpi bundle — 22 files with astp frontmatter", async () => {
         const tplDir = await setupTemplateDir(manifest, "rdpi");
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);
@@ -85,7 +85,7 @@ describe("E2E: install", () => {
 
         const githubDir = path.join(projectDir, ".github");
         const rdpiBundle = manifest.bundles.rdpi;
-        expect(rdpiBundle.items).toHaveLength(21);
+        expect(rdpiBundle.items).toHaveLength(22);
 
         for (const item of rdpiBundle.items) {
             const filePath = path.join(githubDir, item.target);

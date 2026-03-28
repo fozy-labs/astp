@@ -144,9 +144,9 @@ The user may respond with:
 
 This step runs only if the user chose Approved + open-questions.
 
-1. Read `03-open-questions.md` in the stage directory. If the file does not exist, skip this step and proceed to Step 8 with "Approved" verdict.
+1. Read `05-open-questions.md` in the stage directory. If it does not exist, fall back to legacy `03-open-questions.md`. If neither file exists, skip this step and proceed to Step 8 with "Approved" verdict.
 2. For each question (Q1, Q2, etc.), present it to the user via `#vscode_askQuestions` (use max text length in limits).
-3. Record the user's answers. Append a `User Answer` subsections to `03-open-questions.md`:
+3. Record the user's answers. Append `User Answer` subsections to the open-questions file you used in step 1.
 4. After all questions are answered, proceed to Step 8 with the "Approved" verdict.
 
 

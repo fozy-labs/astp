@@ -67,10 +67,10 @@ Compare installed file versions against the remote manifest and display a status
 | Bundle | Files | Description | Default |
 |--------|-------|-------------|---------|
 | `base` | 1 | Base skill for VSCode Copilot agent orchestration | Yes |
-| `rdpi` | 21 | Full RDPI pipeline — agents, instructions, and stage definitions | No |
+| `rdpi` | 22 | Full RDPI pipeline — agents, instructions, and stage definitions | No |
 
 - **base** includes the orchestration skill (`skills/orchestrate/SKILL.md`) that enables multi-agent coordination.
-- **rdpi** includes 16 specialized agents, 1 instruction file, and 4 stage definitions for the Research → Design → Plan → Implement workflow.
+- **rdpi** includes 17 specialized agents, 1 instruction file, and 4 stage definitions for the Research → Design → Plan → Implement workflow.
 
 ## CI/CD
 

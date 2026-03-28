@@ -81,6 +81,11 @@ export function createFixtureManifest(version = "1.0.0"): Manifest {
                         category: "agent",
                     },
                     {
+                        source: "rdpi/agents/rdpi-problem-analyst.agent.md",
+                        target: "agents/rdpi-problem-analyst.agent.md",
+                        category: "agent",
+                    },
+                    {
                         source: "rdpi/agents/rdpi-qa-designer.agent.md",
                         target: "agents/rdpi-qa-designer.agent.md",
                         category: "agent",

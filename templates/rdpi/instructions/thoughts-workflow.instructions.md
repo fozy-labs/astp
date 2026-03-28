@@ -47,7 +47,7 @@ Rules:
 
 ## Stages
 
-- `01-research` — gathering facts, analyzing the codebase and ecosystem.
+- `01-research` — gathering facts, analyzing the codebase and ecosystem, and validating reported problems when they exist.
 - `02-design` — designing a solution based on the facts.
 - `03-plan` — decomposing the design into implementation phases.
 - `04-implement` — executing the plan.
@@ -62,6 +62,7 @@ Base:
 01-Research:
 - `rdpi-codebase-researcher`: Traces code paths, maps dependencies, documents patterns with exact file references.
 - `rdpi-external-researcher`: Research external sources for the feature.
+- `rdpi-problem-analyst`: Analyzes explicit issue/problem statements from the task, validates reproduction evidence, and maps failing tests when they exist.
 - `rdpi-questioner`: Formulates open-ended questions.
 - `rdpi-research-reviewer`: Reviews the research findings and summarizes them.
 

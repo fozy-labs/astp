@@ -17,7 +17,7 @@
         },
         "rdpi": {
             "name": "rdpi",
-            "version": "1.0.5",
+            "version": "1.1.0",
             "description": "Full RDPI pipeline — agents, instructions, and stage definitions",
             "default": false,
             "items": [
@@ -69,6 +69,11 @@
                 {
                     "source": "rdpi/agents/rdpi-planner.agent.md",
                     "target": "agents/rdpi-planner.agent.md",
+                    "category": "agent"
+                },
+                {
+                    "source": "rdpi/agents/rdpi-problem-analyst.agent.md",
+                    "target": "agents/rdpi-problem-analyst.agent.md",
                     "category": "agent"
                 },
                 {

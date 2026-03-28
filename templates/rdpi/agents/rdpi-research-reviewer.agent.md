@@ -18,14 +18,14 @@ You perform two tasks: **quality review** and **synthesis**. Both are recorded i
 - The README.md you produce is the primary entry point for the design stage — it must capture the most important findings.
 - Key findings should be 5–7 bullets, not a rehash of every detail.
 - Do NOT add new research. Only synthesize what exists.
-- Do NOT modify the phase output files (01-codebase-analysis.md, etc.). Only write/update README.md.
+- Do NOT modify the phase output files (`01-codebase-analysis.md`, `02-external-research.md`, `04-problem-analysis.md`, `05-open-questions.md`, legacy `03-open-questions.md`, etc.). Only write/update README.md.
 
 
 ## Process
 
 ### Step 1 — Read all documents
 
-Read every phase output file in the stage directory.
+Read every phase output file in the stage directory, including optional `03-supporting-research.md` and `04-problem-analysis.md` when present.
 
 ### Step 2 — Quality review
 
@@ -34,6 +34,7 @@ Evaluate each document against the following checklist:
 - [ ] All defined phases produced output files
 - [ ] Codebase analysis references exact file paths with line numbers (not guesses or approximations)
 - [ ] External research annotates every claim with source and confidence level (High/Medium/Low)
+- [ ] Problem analysis is evidence-based: reported vs actual behavior, reproduction status, failure path, and failing test evidence (or explicit absence of matching tests)
 - [ ] Open questions are actionable — each has context, options, and risks (not vague)
 - [ ] No solutions or design proposals present anywhere (research is facts-only; evidence-based leanings in open questions' "Researcher recommendation" are acceptable — they inform decisions without prescribing solutions)
 - [ ] YAML frontmatter is present and correct on all output files
@@ -77,9 +78,11 @@ This is the executive summary — it must stand alone for someone who won't read
 <List all phase output files present in the stage directory. Typical set:
 - [Codebase Analysis](./01-codebase-analysis.md)
 - [External Research](./02-external-research.md)
-- [Open Questions](./03-open-questions.md)
+- [Supporting Research](./03-supporting-research.md)
+- [Problem Analysis](./04-problem-analysis.md)
+- [Open Questions](./05-open-questions.md)
 
-Omit entries for files that were not produced (e.g., when external research was dropped per scaling rules).>
+Omit entries for files that were not produced (e.g., when external research or problem analysis was dropped per scaling rules). Use `03-open-questions.md` only when reviewing a legacy research stage created before the 05-open-questions convention.>
 
 ## Key Findings
 <5–7 bullet points of the most important discoveries across all documents.
@@ -97,10 +100,11 @@ If none, state: "No contradictions found.">
 | 1 | All phases produced output files | PASS/FAIL | <details> |
 | 2 | Codebase analysis has exact file:line references | PASS/FAIL | <details> |
 | 3 | External research has source + confidence annotations | PASS/FAIL/N/A | <details> |
-| 4 | Open questions are actionable (context, options, risks) | PASS/FAIL | <details> |
-| 5 | No solutions or design proposals in research | PASS/FAIL | <details> |
-| 6 | YAML frontmatter present on all files | PASS/FAIL | <details> |
-| 7 | Cross-references consistent between documents | PASS/FAIL | <details> |
+| 4 | Problem analysis is evidence-based and test-aware | PASS/FAIL/N/A | <details> |
+| 5 | Open questions are actionable (context, options, risks) | PASS/FAIL | <details> |
+| 6 | No solutions or design proposals in research | PASS/FAIL | <details> |
+| 7 | YAML frontmatter present on all files | PASS/FAIL | <details> |
+| 8 | Cross-references consistent between documents | PASS/FAIL | <details> |
 
 Mark as N/A if the corresponding phase was dropped per scaling rules — verify against PHASES.md.
 

@@ -42,7 +42,8 @@ Evaluate against the following checklist:
 - [ ] `07-docs.md` is concise and proportional — not bloated relative to existing `docs/` and `apps/demos/`
 - [ ] `07-docs.md` describes WHAT needs documentation, not HOW (no JSDoc proposals, no full-text doc drafts)
 - [ ] No implementation details or actual code (design-level only; illustrative TS snippets for API are OK)
-- [ ] Research open questions (e.g., `03-open-questions.md`) addressed or deferred
+- [ ] Research problem analysis findings (e.g., `04-problem-analysis.md`) are reflected in design constraints, risks, or test strategy when such a document exists
+- [ ] Research open questions (canonical `05-open-questions.md`, legacy `03-open-questions.md`) addressed or deferred
 - [ ] Risk analysis (`08-risks.md`) has actionable mitigations for high-impact risks
 - [ ] Internal consistency: architecture, dataflow, model, usecases do not contradict each other
 - [ ] `00-short-design.md` exists, is within 1–2 pages, and aligns with architecture direction
@@ -64,7 +65,8 @@ Record the checklist results in the `## Quality Review` section of README.md.
 1. Check traceability: each design decision → research finding
 2. Check internal consistency across all documents
 3. Check completeness: all research open questions addressed or deferred
-4. Check feasibility: can this design be implemented with the existing codebase patterns?
+4. Check completeness: any research problem-analysis findings are reflected in design constraints, risks, or test strategy
+5. Check feasibility: can this design be implemented with the existing codebase patterns?
 
 ### Pass 2 — Correction Log Review
 
@@ -140,12 +142,13 @@ Document structure:
 | 5 | docs.md is concise and proportional to existing docs/demos | PASS/FAIL/N/A | <details> |
 | 6 | docs.md describes WHAT not HOW (no JSDoc, no full drafts) | PASS/FAIL/N/A | <details> |
 | 7 | No implementation details or code | PASS/FAIL | <details> |
-| 8 | Research open questions addressed or deferred | PASS/FAIL | <details> |
-| 9 | Risk analysis has actionable mitigations for high-impact risks | PASS/FAIL | <details> |
-| 10 | Internal consistency (arch/dataflow/model/usecases) | PASS/FAIL | <details> |
-| 11 | `00-short-design.md` exists, within 1–2 pages, aligns with architecture | PASS/FAIL | <details> |
-| 12 | Correction log entries (if any) are factual, not stylistic | PASS/FAIL/N/A | <details> |
-| 13 | Corrected documents reflect logged corrections accurately | PASS/FAIL/N/A | <details> |
+| 8 | Research problem-analysis findings are addressed when present | PASS/FAIL/N/A | <details> |
+| 9 | Research open questions addressed or deferred | PASS/FAIL | <details> |
+| 10 | Risk analysis has actionable mitigations for high-impact risks | PASS/FAIL | <details> |
+| 11 | Internal consistency (arch/dataflow/model/usecases) | PASS/FAIL | <details> |
+| 12 | `00-short-design.md` exists, within 1–2 pages, aligns with architecture | PASS/FAIL | <details> |
+| 13 | Correction log entries (if any) are factual, not stylistic | PASS/FAIL/N/A | <details> |
+| 14 | Corrected documents reflect logged corrections accurately | PASS/FAIL/N/A | <details> |
 
 Mark as N/A if the corresponding document was omitted per scaling rules — verify against PHASES.md.
 
