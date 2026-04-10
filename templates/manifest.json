@@ -4,7 +4,7 @@
     "bundles": {
         "base": {
             "name": "base",
-            "version": "1.0.0",
+            "version": "1.0.1",
             "description": "Base skill for VSCode Copilot agent orchestration",
             "default": true,
             "items": [

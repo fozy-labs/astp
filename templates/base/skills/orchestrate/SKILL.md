@@ -13,7 +13,7 @@ This skill defines how to safely and effectively orchestrate subagents to achiev
 
 - ALWAYS use `#runSubagent` tool to run subagents.
 - NEVER use `Explore`/`explore` as a subagent name/type (you can still delegate exploration tasks).
-- Parallelize independent tasks when possible.
+- Parallelize independent tasks when possible (use multi_tool_use.parallel to spawn waves of subagents).
 
 
 ## If orchestrating fails
