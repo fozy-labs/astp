@@ -137,7 +137,7 @@
         },
         "fozy-labs": {
             "name": "fozy-labs",
-            "version": "1.0.0",
+            "version": "1.0.1",
             "description": "Fozy Labs stack skills — DI, FSD, rx-api, signals (VS Code + Claude Code)",
             "default": false,
             "platforms": ["vscode", "claude-code"],
