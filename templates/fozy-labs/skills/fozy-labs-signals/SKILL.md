@@ -178,6 +178,26 @@ secret$ = Signal.state(null, { isDisabled: true });
 
 ---
 
+## 7. Batching
+
+You can update reactive signal chains in one cycle.
+This works with any depth.
+The only thing is that with "signal -> observable -> signal" with async or long and variable ones the sequence may double emission of the event.
+A single call to set/update is automatically wrapped in a batch; there is no need to call Batcher.run.
+```ts
+// This will run only once after both count1$ and count2$ have been updated
+Signal.compute/effect(() => {
+    const total = count1$() + count2$();
+});
+
+Batcher.run(() => {
+    count1$.set(1);
+    count2$.update((v) => v + 1);
+});
+```
+
+---
+
 ## 8. Types reference
 
 ```ts
