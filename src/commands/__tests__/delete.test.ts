@@ -3,7 +3,14 @@ import { vi } from "vitest";
 import { detectModified, removeBundle, scanInstalled } from "@/core/index.js";
 import type { InstalledBundle, InstallTarget } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
-import { selectInstalledBundles, selectTarget, showInfo, showSuccess, warnModified } from "@/ui/prompts.js";
+import {
+    selectInstalledBundles,
+    selectPlatform,
+    selectTarget,
+    showInfo,
+    showSuccess,
+    warnModified,
+} from "@/ui/prompts.js";
 
 import { executeDelete } from "../delete.js";
 
@@ -19,6 +26,7 @@ vi.mock("@/types/index.js", async (importOriginal) => {
 });
 
 vi.mock("@/ui/prompts.js", () => ({
+    selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     selectInstalledBundles: vi.fn(),
     confirmDelete: vi.fn().mockResolvedValue(true),
@@ -32,6 +40,7 @@ const mockScanInstalled = vi.mocked(scanInstalled);
 const mockDetectModified = vi.mocked(detectModified);
 const mockRemoveBundle = vi.mocked(removeBundle);
 const mockResolveTarget = vi.mocked(resolveTarget);
+const mockSelectPlatform = vi.mocked(selectPlatform);
 const mockSelectTarget = vi.mocked(selectTarget);
 const mockSelectInstalledBundles = vi.mocked(selectInstalledBundles);
 const mockShowInfo = vi.mocked(showInfo);
@@ -39,6 +48,7 @@ const mockShowSuccess = vi.mocked(showSuccess);
 const mockWarnModified = vi.mocked(warnModified);
 
 const testTarget: InstallTarget = {
+    platform: "vscode",
     type: "project",
     rootDir: "/project/.github",
 };
@@ -63,6 +73,7 @@ const testBundle: InstalledBundle = {
 beforeEach(() => {
     vi.clearAllMocks();
     mockResolveTarget.mockReturnValue(testTarget);
+    mockSelectPlatform.mockResolvedValue("vscode");
     mockSelectTarget.mockResolvedValue(testTarget);
     mockScanInstalled.mockResolvedValue([testBundle]);
     mockSelectInstalledBundles.mockResolvedValue([testBundle]);
@@ -72,7 +83,7 @@ beforeEach(() => {
 
 describe("executeDelete", () => {
     it("deletes the explicitly selected bundle", async () => {
-        await executeDelete({ bundle: "rdpi", target: "project" });
+        await executeDelete({ bundle: "rdpi", platform: "vscode", target: "project" });
 
         expect(mockSelectInstalledBundles).not.toHaveBeenCalled();
         expect(mockRemoveBundle).toHaveBeenCalledWith(testBundle, "/project/.github", false);
@@ -82,7 +93,7 @@ describe("executeDelete", () => {
     it("shows info when no managed files are installed", async () => {
         mockScanInstalled.mockResolvedValue([]);
 
-        await executeDelete({ target: "project" });
+        await executeDelete({ platform: "vscode", target: "project" });
 
         expect(mockShowInfo).toHaveBeenCalledWith("No astp-managed files found.");
         expect(mockRemoveBundle).not.toHaveBeenCalled();
@@ -95,7 +106,7 @@ describe("executeDelete", () => {
             skipped: [{ targetPath: "agents/rdpi-approve.agent.md", state: "modified" }],
         });
 
-        await executeDelete({ bundle: "rdpi", target: "project" });
+        await executeDelete({ bundle: "rdpi", platform: "vscode", target: "project" });
 
         expect(mockWarnModified).toHaveBeenCalled();
         expect(mockShowInfo).toHaveBeenCalledWith("No files deleted, skipped 1 modified file.");
@@ -104,14 +115,14 @@ describe("executeDelete", () => {
     it("deletes modified files with force", async () => {
         mockDetectModified.mockResolvedValue([{ targetPath: "agents/rdpi-approve.agent.md", state: "modified" }]);
 
-        await executeDelete({ bundle: "rdpi", force: true, target: "project" });
+        await executeDelete({ bundle: "rdpi", force: true, platform: "vscode", target: "project" });
 
         expect(mockWarnModified).not.toHaveBeenCalled();
         expect(mockRemoveBundle).toHaveBeenCalledWith(testBundle, "/project/.github", true);
     });
 
     it("throws when bundle is not installed", async () => {
-        await expect(executeDelete({ bundle: "base", target: "project" })).rejects.toThrow(
+        await expect(executeDelete({ bundle: "base", platform: "vscode", target: "project" })).rejects.toThrow(
             "Installed bundle 'base' not found",
         );
     });

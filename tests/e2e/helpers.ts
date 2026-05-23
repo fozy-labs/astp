@@ -16,6 +16,7 @@ export function createFixtureManifest(version = "1.0.0"): Manifest {
                 version,
                 description: "Base skill for VSCode Copilot agent orchestration",
                 default: true,
+                platforms: ["vscode"],
                 items: [
                     {
                         source: "base/skills/orchestrate/SKILL.md",
@@ -29,6 +30,7 @@ export function createFixtureManifest(version = "1.0.0"): Manifest {
                 version,
                 description: "Full RDPI pipeline — agents, instructions, and stage definitions",
                 default: false,
+                platforms: ["vscode"],
                 items: [
                     {
                         source: "rdpi/agents/RDPI-Orchestrator.agent.md",
@@ -193,7 +195,7 @@ function generateTemplateContent(item: TemplateItem, version: string): string {
 // ── Install target from temp dir ──────────────────────────────────────
 
 export function makeProjectTarget(baseDir: string): InstallTarget {
-    return { type: "project", rootDir: path.join(baseDir, ".github") };
+    return { platform: "vscode", type: "project", rootDir: path.join(baseDir, ".github") };
 }
 
 // ── Cleanup utility ───────────────────────────────────────────────────

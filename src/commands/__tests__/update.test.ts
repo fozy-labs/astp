@@ -9,7 +9,7 @@ import {
     scanInstalled,
 } from "@/core/index.js";
 import type { Bundle, InstalledBundle, InstallTarget, Manifest, TemplateItem, UpdateReport } from "@/types/index.js";
-import { selectTarget, showInfo, showSuccess, warnModified } from "@/ui/prompts.js";
+import { selectPlatform, selectTarget, showInfo, showSuccess, warnModified } from "@/ui/prompts.js";
 
 import { executeUpdate } from "../update.js";
 
@@ -25,6 +25,7 @@ vi.mock("@/core/index.js", () => ({
 
 // Mock prompts
 vi.mock("@/ui/prompts.js", () => ({
+    selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     showInfo: vi.fn(),
     showSuccess: vi.fn(),
@@ -39,12 +40,14 @@ const mockCompareVersions = vi.mocked(compareVersions);
 const mockDetectModified = vi.mocked(detectModified);
 const mockDownloadBundle = vi.mocked(downloadBundle);
 const mockInstallFile = vi.mocked(installFile);
+const mockSelectPlatform = vi.mocked(selectPlatform);
 const mockSelectTarget = vi.mocked(selectTarget);
 const mockShowInfo = vi.mocked(showInfo);
 const mockShowSuccess = vi.mocked(showSuccess);
 const mockWarnModified = vi.mocked(warnModified);
 
 const testTarget: InstallTarget = {
+    platform: "vscode",
     type: "project",
     rootDir: "/project/.github",
 };
@@ -60,6 +63,7 @@ const testBundle: Bundle = {
     version: "1.1.0",
     description: "RDPI pipeline",
     default: false,
+    platforms: ["vscode"],
     items: [testItem],
 };
 
@@ -119,7 +123,7 @@ describe("executeUpdate", () => {
         mockDownloadBundle.mockResolvedValue("/tmp/astp-rdpi");
         mockInstallFile.mockResolvedValue(undefined);
 
-        await executeUpdate({ force: true, target: "project" });
+        await executeUpdate({ force: true, platform: "vscode", target: "project" });
 
         // With --force, modified files should still be installed
         expect(mockInstallFile).toHaveBeenCalledTimes(1);
@@ -129,7 +133,7 @@ describe("executeUpdate", () => {
     it("shows info when no installed files found", async () => {
         mockScanInstalled.mockResolvedValue([]);
 
-        await executeUpdate({ target: "project" });
+        await executeUpdate({ platform: "vscode", target: "project" });
 
         expect(mockShowInfo).toHaveBeenCalledWith("No astp-managed files found.");
         expect(mockFetchManifest).not.toHaveBeenCalled();
@@ -140,7 +144,7 @@ describe("executeUpdate", () => {
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(noUpdatesReport);
 
-        await executeUpdate({ target: "project" });
+        await executeUpdate({ platform: "vscode", target: "project" });
 
         expect(mockShowInfo).toHaveBeenCalledWith("All bundles up to date.");
         expect(mockDownloadBundle).not.toHaveBeenCalled();
@@ -153,7 +157,7 @@ describe("executeUpdate", () => {
         mockDetectModified.mockResolvedValue([{ targetPath: "agents/rdpi-approve.agent.md", state: "modified" }]);
         mockDownloadBundle.mockResolvedValue("/tmp/astp-rdpi");
 
-        await executeUpdate({ target: "project" });
+        await executeUpdate({ platform: "vscode", target: "project" });
 
         expect(mockWarnModified).toHaveBeenCalled();
         expect(mockInstallFile).not.toHaveBeenCalled();
@@ -167,18 +171,20 @@ describe("executeUpdate", () => {
         mockDownloadBundle.mockResolvedValue("/tmp/astp-rdpi");
         mockInstallFile.mockResolvedValue(undefined);
 
-        await executeUpdate({ force: true, target: "project" });
+        await executeUpdate({ force: true, platform: "vscode", target: "project" });
 
         expect(mockInstallFile).toHaveBeenCalledTimes(1);
         expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining("1 file"));
     });
 
-    it("prompts for target when not provided", async () => {
+    it("prompts for platform and target when not provided", async () => {
+        mockSelectPlatform.mockResolvedValue("vscode");
         mockSelectTarget.mockResolvedValue(testTarget);
         mockScanInstalled.mockResolvedValue([]);
 
         await executeUpdate({});
 
-        expect(mockSelectTarget).toHaveBeenCalled();
+        expect(mockSelectPlatform).toHaveBeenCalled();
+        expect(mockSelectTarget).toHaveBeenCalledWith("vscode");
     });
 });

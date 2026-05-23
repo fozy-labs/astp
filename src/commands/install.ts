@@ -1,15 +1,19 @@
 import { downloadBundle, fetchManifest, installFile, resolveBundle } from "@/core/index.js";
-import type { Bundle, InstallTarget, InstallTargetType } from "@/types/index.js";
-import { resolveTarget } from "@/types/index.js";
-import { confirmInstall, selectBundles, selectTarget, showSuccess, spinner } from "@/ui/prompts.js";
+import type { Bundle, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
+import { bundleSupportsPlatform, resolveTarget } from "@/types/index.js";
+import { confirmInstall, selectBundles, selectPlatform, selectTarget, showSuccess, spinner } from "@/ui/prompts.js";
 
 export interface InstallOptions {
     bundle?: string;
+    platform?: Platform;
     target?: InstallTargetType;
 }
 
 export async function executeInstall(options: InstallOptions): Promise<void> {
-    const target: InstallTarget = options.target ? resolveTarget(options.target) : await selectTarget();
+    const platform: Platform = options.platform ?? (await selectPlatform());
+    const target: InstallTarget = options.target
+        ? resolveTarget(platform, options.target)
+        : await selectTarget(platform);
 
     const s = spinner();
     s.start("Fetching manifest...");
@@ -18,9 +22,15 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
 
     let selectedBundles: Bundle[];
     if (options.bundle) {
-        selectedBundles = [resolveBundle(manifest, options.bundle)];
+        const bundle = resolveBundle(manifest, options.bundle);
+        if (!bundleSupportsPlatform(bundle, platform)) {
+            throw new Error(
+                `Bundle '${bundle.name}' does not support platform '${platform}'. Supported: ${(bundle.platforms ?? ["vscode"]).join(", ")}`,
+            );
+        }
+        selectedBundles = [bundle];
     } else {
-        selectedBundles = await selectBundles(manifest);
+        selectedBundles = await selectBundles(manifest, platform);
     }
 
     const confirmed = await confirmInstall(selectedBundles, target);

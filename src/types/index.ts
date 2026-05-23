@@ -1,3 +1,14 @@
+// ── Platform Types (§3.0) ────────────────────────────────────────────
+
+/**
+ * Coding agent platform a bundle targets.
+ * - `vscode` — GitHub Copilot in VS Code (installs under `.github/` or `~/.copilot/`).
+ * - `claude-code` — Anthropic Claude Code CLI (installs under `.claude/` or `~/.claude/`).
+ */
+export type Platform = "vscode" | "claude-code";
+
+export const ALL_PLATFORMS: readonly Platform[] = ["vscode", "claude-code"] as const;
+
 // ── Remote Manifest Types (§3.1) ──────────────────────────────────────
 
 /** Remote manifest.json schema — the source of truth for available templates. */
@@ -20,6 +31,11 @@ export interface Bundle {
     description: string;
     /** Whether this bundle is pre-selected by default in the interactive wizard. */
     default: boolean;
+    /**
+     * Platforms this bundle can be installed on. Defaults to `["vscode"]` when omitted
+     * for backwards compatibility with manifests authored before platform support.
+     */
+    platforms?: Platform[];
     /** Files included in this bundle. */
     items: TemplateItem[];
 }
@@ -43,6 +59,8 @@ export type InstallTargetType = "project" | "user";
 
 /** Resolved install target with absolute paths. */
 export interface InstallTarget {
+    /** Coding agent platform this target belongs to. */
+    platform: Platform;
     type: InstallTargetType;
     /** Absolute path to the install root directory. */
     rootDir: string;
@@ -113,4 +131,5 @@ export type FileState = "unmodified" | "modified" | "new" | "removed";
 
 // ── Re-exports ───────────────────────────────────────────────────────
 
-export { resolveTarget } from "./resolve-target.js";
+export { bundleSupportsPlatform, filterBundlesByPlatform, getBundlePlatforms } from "./platform.js";
+export { describeTarget, resolveTarget } from "./resolve-target.js";

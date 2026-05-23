@@ -1,6 +1,8 @@
-import type { Bundle, Manifest } from "@/types/index.js";
+import type { Bundle, Manifest, Platform } from "@/types/index.js";
+import { ALL_PLATFORMS } from "@/types/index.js";
 
 const SUPPORTED_SCHEMA_VERSION = 1;
+const VALID_PLATFORMS: ReadonlySet<Platform> = new Set(ALL_PLATFORMS);
 
 export async function fetchManifest(repository?: string, ref?: string): Promise<Manifest> {
     const repo = repository ?? "fozy-labs/astp";
@@ -87,6 +89,19 @@ function validateBundle(key: string, data: unknown): void {
 
     if (!("items" in bundle) || !Array.isArray(bundle.items)) {
         throw new Error(`Invalid bundle '${key}': missing or invalid items`);
+    }
+
+    if ("platforms" in bundle && bundle.platforms !== undefined) {
+        if (!Array.isArray(bundle.platforms) || bundle.platforms.length === 0) {
+            throw new Error(`Invalid bundle '${key}': platforms must be a non-empty array when present`);
+        }
+        for (const platform of bundle.platforms) {
+            if (typeof platform !== "string" || !VALID_PLATFORMS.has(platform as Platform)) {
+                throw new Error(
+                    `Invalid bundle '${key}': unknown platform '${String(platform)}'. Expected one of: ${[...VALID_PLATFORMS].join(", ")}`,
+                );
+            }
+        }
     }
 }
 

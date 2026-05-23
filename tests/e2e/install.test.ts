@@ -33,6 +33,7 @@ vi.mock("@/types/index.js", async (importOriginal) => {
 });
 
 vi.mock("@/ui/prompts.js", () => ({
+    selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     selectBundles: vi.fn(),
     confirmInstall: vi.fn(),
@@ -81,7 +82,7 @@ describe("E2E: install", () => {
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);
 
-        await executeInstall({ bundle: "rdpi", target: "project" });
+        await executeInstall({ bundle: "rdpi", platform: "vscode", target: "project" });
 
         const githubDir = path.join(projectDir, ".github");
         const rdpiBundle = manifest.bundles.rdpi;
@@ -106,7 +107,7 @@ describe("E2E: install", () => {
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);
 
-        await executeInstall({ bundle: "base", target: "project" });
+        await executeInstall({ bundle: "base", platform: "vscode", target: "project" });
 
         const skillPath = path.join(projectDir, ".github", "skills", "orchestrate", "SKILL.md");
         const content = await fs.readFile(skillPath, "utf8");
@@ -120,6 +121,8 @@ describe("E2E: install", () => {
 
     // T38: astp install nonexistent --target project
     it("T38: rejects nonexistent bundle with error", async () => {
-        await expect(executeInstall({ bundle: "nonexistent", target: "project" })).rejects.toThrow(/not found/i);
+        await expect(executeInstall({ bundle: "nonexistent", platform: "vscode", target: "project" })).rejects.toThrow(
+            /not found/i,
+        );
     });
 });

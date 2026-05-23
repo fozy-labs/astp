@@ -1,9 +1,10 @@
 import { detectModified, removeBundle, scanInstalled } from "@/core/index.js";
-import type { InstallTarget, InstallTargetType } from "@/types/index.js";
+import type { InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import {
     confirmDelete,
     selectInstalledBundles,
+    selectPlatform,
     selectTarget,
     showInfo,
     showSuccess,
@@ -14,11 +15,15 @@ import {
 export interface DeleteOptions {
     bundle?: string;
     force?: boolean;
+    platform?: Platform;
     target?: InstallTargetType;
 }
 
 export async function executeDelete(options: DeleteOptions): Promise<void> {
-    const target: InstallTarget = options.target ? resolveTarget(options.target) : await selectTarget();
+    const platform: Platform = options.platform ?? (await selectPlatform());
+    const target: InstallTarget = options.target
+        ? resolveTarget(platform, options.target)
+        : await selectTarget(platform);
 
     const s = spinner();
     s.start("Scanning installed files...");

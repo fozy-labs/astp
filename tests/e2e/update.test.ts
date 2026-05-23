@@ -8,7 +8,7 @@ import { executeUpdate } from "@/commands/update.js";
 import { downloadBundle, extractAstpMetadata, fetchManifest } from "@/core/index.js";
 import type { Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
-import { confirmInstall, selectTarget, warnModified } from "@/ui/prompts.js";
+import { confirmInstall, selectPlatform, selectTarget, warnModified } from "@/ui/prompts.js";
 
 import {
     cleanupDir,
@@ -33,6 +33,7 @@ vi.mock("@/types/index.js", async (importOriginal) => {
 });
 
 vi.mock("@/ui/prompts.js", () => ({
+    selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     selectBundles: vi.fn(),
     confirmInstall: vi.fn(),
@@ -50,6 +51,7 @@ const mockResolveTarget = vi.mocked(resolveTarget);
 const mockConfirmInstall = vi.mocked(confirmInstall);
 const mockWarnModified = vi.mocked(warnModified);
 const mockSelectTarget = vi.mocked(selectTarget);
+const mockSelectPlatform = vi.mocked(selectPlatform);
 
 describe("E2E: update", () => {
     let projectDir: string;
@@ -81,7 +83,7 @@ describe("E2E: update", () => {
         const tplDir = await setupTemplateDir(manifestV1, "rdpi");
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);
-        await executeInstall({ bundle: "rdpi", target: "project" });
+        await executeInstall({ bundle: "rdpi", platform: "vscode", target: "project" });
     }
 
     async function setupV2Mocks(): Promise<Manifest> {
@@ -102,7 +104,7 @@ describe("E2E: update", () => {
         await installRdpi();
         const manifestV2 = await setupV2Mocks();
 
-        await executeUpdate({ target: "project" });
+        await executeUpdate({ platform: "vscode", target: "project" });
 
         const githubDir = path.join(projectDir, ".github");
         for (const item of manifestV2.bundles.rdpi.items) {
@@ -126,7 +128,7 @@ describe("E2E: update", () => {
         await fs.writeFile(modifiedFile, original + "\n<!-- user edit -->", "utf8");
 
         await setupV2Mocks();
-        await executeUpdate({ target: "project" });
+        await executeUpdate({ platform: "vscode", target: "project" });
 
         // Verify modified file was skipped
         expect(mockWarnModified).toHaveBeenCalled();
@@ -156,7 +158,7 @@ describe("E2E: update", () => {
         await fs.writeFile(modifiedFile, original + "\n<!-- user edit -->", "utf8");
 
         await setupV2Mocks();
-        await executeUpdate({ force: true, target: "project" });
+        await executeUpdate({ force: true, platform: "vscode", target: "project" });
 
         // Modified file overwritten with v1.1.0
         const content = await fs.readFile(modifiedFile, "utf8");
@@ -167,6 +169,7 @@ describe("E2E: update", () => {
 
     // T39: Non-TTY graceful handling
     it("T39: handles non-TTY gracefully when no target provided", async () => {
+        mockSelectPlatform.mockResolvedValue("vscode");
         mockSelectTarget.mockRejectedValue(new Error("Non-TTY: cannot prompt"));
 
         await expect(executeUpdate({})).rejects.toThrow();

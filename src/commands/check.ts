@@ -1,14 +1,16 @@
 import { compareVersions, fetchManifest, scanInstalled } from "@/core/index.js";
-import type { InstallTargetType } from "@/types/index.js";
+import type { InstallTargetType, Platform } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
-import { selectTarget, showCheckReport, showInfo, spinner } from "@/ui/prompts.js";
+import { selectPlatform, selectTarget, showCheckReport, showInfo, spinner } from "@/ui/prompts.js";
 
 export interface CheckOptions {
+    platform?: Platform;
     target?: InstallTargetType;
 }
 
 export async function executeCheck(options: CheckOptions): Promise<void> {
-    const target = options.target ? resolveTarget(options.target) : await selectTarget();
+    const platform: Platform = options.platform ?? (await selectPlatform());
+    const target = options.target ? resolveTarget(platform, options.target) : await selectTarget(platform);
 
     const s = spinner();
     s.start("Scanning installed files...");

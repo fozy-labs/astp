@@ -30,6 +30,7 @@ vi.mock("@/types/index.js", async (importOriginal) => {
 });
 
 vi.mock("@/ui/prompts.js", () => ({
+    selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     selectBundles: vi.fn(),
     confirmInstall: vi.fn(),
@@ -80,14 +81,14 @@ describe("E2E: check", () => {
         const tplDir = await setupTemplateDir(manifest, "rdpi");
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);
-        await executeInstall({ bundle: "rdpi", target: "project" });
+        await executeInstall({ bundle: "rdpi", platform: "vscode", target: "project" });
 
         // Reset mocks for the check call
         vi.clearAllMocks();
         mockFetchManifest.mockResolvedValue(manifest);
         mockResolveTarget.mockReturnValue(makeProjectTarget(projectDir));
 
-        await executeCheck({ target: "project" });
+        await executeCheck({ platform: "vscode", target: "project" });
 
         expect(mockShowCheckReport).toHaveBeenCalledTimes(1);
         const report: UpdateReport = mockShowCheckReport.mock.calls[0][0];
@@ -98,7 +99,7 @@ describe("E2E: check", () => {
 
     // T34: Check with no installed files
     it("T34: reports 'No astp-managed files found' for empty project", async () => {
-        await executeCheck({ target: "project" });
+        await executeCheck({ platform: "vscode", target: "project" });
 
         expect(mockShowInfo).toHaveBeenCalledWith("No astp-managed files found.");
         expect(mockShowCheckReport).not.toHaveBeenCalled();

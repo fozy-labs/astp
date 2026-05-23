@@ -7,6 +7,7 @@
             "version": "1.0.1",
             "description": "Base skill for VSCode Copilot agent orchestration",
             "default": true,
+            "platforms": ["vscode"],
             "items": [
                 {
                     "source": "base/skills/orchestrate/SKILL.md",
@@ -20,6 +21,7 @@
             "version": "1.1.0",
             "description": "Full RDPI pipeline — agents, instructions, and stage definitions",
             "default": false,
+            "platforms": ["vscode"],
             "items": [
                 {
                     "source": "rdpi/agents/RDPI-Orchestrator.agent.md",
@@ -129,6 +131,55 @@
                 {
                     "source": "rdpi/skills/rdpi-04-implement/SKILL.md",
                     "target": "skills/rdpi-04-implement/SKILL.md",
+                    "category": "skill"
+                }
+            ]
+        },
+        "fozy-labs": {
+            "name": "fozy-labs",
+            "version": "1.0.0",
+            "description": "Fozy Labs stack skills — DI, FSD, rx-api, signals (VS Code + Claude Code)",
+            "default": false,
+            "platforms": ["vscode", "claude-code"],
+            "items": [
+                {
+                    "source": "fozy-labs/skills/fozy-labs-di/SKILL.md",
+                    "target": "skills/fozy-labs-di/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-fsd/SKILL.md",
+                    "target": "skills/fozy-labs-fsd/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-fsd/references/cross-import-patterns.md",
+                    "target": "skills/fozy-labs-fsd/references/cross-import-patterns.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-fsd/references/layer-structure.md",
+                    "target": "skills/fozy-labs-fsd/references/layer-structure.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-fsd/references/migration-guide.md",
+                    "target": "skills/fozy-labs-fsd/references/migration-guide.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-fsd/references/practical-examples.md",
+                    "target": "skills/fozy-labs-fsd/references/practical-examples.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-rx-api/SKILL.md",
+                    "target": "skills/fozy-labs-rx-api/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-signals/SKILL.md",
+                    "target": "skills/fozy-labs-signals/SKILL.md",
                     "category": "skill"
                 }
             ]

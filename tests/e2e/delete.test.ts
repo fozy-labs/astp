@@ -33,6 +33,7 @@ vi.mock("@/types/index.js", async (importOriginal) => {
 });
 
 vi.mock("@/ui/prompts.js", () => ({
+    selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     selectBundles: vi.fn(),
     selectInstalledBundles: vi.fn(),
@@ -81,13 +82,13 @@ describe("E2E: delete", () => {
         const tplDir = await setupTemplateDir(manifest, "rdpi");
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);
-        await executeInstall({ bundle: "rdpi", target: "project" });
+        await executeInstall({ bundle: "rdpi", platform: "vscode", target: "project" });
     }
 
     it("deletes installed bundle files and prunes empty directories", async () => {
         await installRdpi();
 
-        await executeDelete({ bundle: "rdpi", target: "project" });
+        await executeDelete({ bundle: "rdpi", platform: "vscode", target: "project" });
 
         const deletedPath = path.join(projectDir, ".github", "agents", "rdpi-approve.agent.md");
         await expect(fs.access(deletedPath)).rejects.toThrow();
@@ -103,7 +104,7 @@ describe("E2E: delete", () => {
         const original = await fs.readFile(modifiedFile, "utf8");
         await fs.writeFile(modifiedFile, `${original}\n<!-- user edit -->`, "utf8");
 
-        await executeDelete({ bundle: "rdpi", target: "project" });
+        await executeDelete({ bundle: "rdpi", platform: "vscode", target: "project" });
 
         const content = await fs.readFile(modifiedFile, "utf8");
         const metadata = extractAstpMetadata(content);
@@ -118,7 +119,7 @@ describe("E2E: delete", () => {
         const original = await fs.readFile(modifiedFile, "utf8");
         await fs.writeFile(modifiedFile, `${original}\n<!-- user edit -->`, "utf8");
 
-        await executeDelete({ bundle: "rdpi", force: true, target: "project" });
+        await executeDelete({ bundle: "rdpi", force: true, platform: "vscode", target: "project" });
 
         await expect(fs.access(modifiedFile)).rejects.toThrow();
     });

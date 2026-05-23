@@ -7,9 +7,10 @@ import type {
     InstallTarget,
     InstallTargetType,
     Manifest,
+    Platform,
     UpdateReport,
 } from "@/types/index.js";
-import { resolveTarget } from "@/types/index.js";
+import { describeTarget, filterBundlesByPlatform, resolveTarget } from "@/types/index.js";
 
 // Re-export intro/outro for wizard usage
 export const intro = p.intro;
@@ -35,12 +36,32 @@ export async function selectAction(): Promise<"install" | "update" | "check" | "
     return action;
 }
 
-export async function selectTarget(): Promise<InstallTarget> {
+export async function selectPlatform(): Promise<Platform> {
+    const platform = await p.select({
+        message: "Which coding agent?",
+        options: [
+            { value: "vscode" as const, label: "VS Code Copilot (.github/, ~/.copilot/)" },
+            { value: "claude-code" as const, label: "Claude Code (.claude/, ~/.claude/)" },
+        ],
+    });
+
+    if (p.isCancel(platform)) {
+        p.cancel("Cancelled.");
+        process.exit(0);
+    }
+
+    return platform;
+}
+
+export async function selectTarget(platform: Platform): Promise<InstallTarget> {
+    const projectTarget = resolveTarget(platform, "project");
+    const userTarget = resolveTarget(platform, "user");
+
     const type = await p.select({
         message: "Install to:",
         options: [
-            { value: "project" as const, label: "Project level (.github/)" },
-            { value: "user" as const, label: "User level (~/.copilot/)" },
+            { value: "project" as const, label: `Project level (${describeTarget(projectTarget)})` },
+            { value: "user" as const, label: `User level (${describeTarget(userTarget)})` },
         ],
     });
 
@@ -49,18 +70,22 @@ export async function selectTarget(): Promise<InstallTarget> {
         process.exit(0);
     }
 
-    return resolveTarget(type as InstallTargetType);
+    return resolveTarget(platform, type as InstallTargetType);
 }
 
-export async function selectBundles(manifest: Manifest): Promise<Bundle[]> {
-    const options = Object.values(manifest.bundles).map((bundle) => ({
+export async function selectBundles(manifest: Manifest, platform: Platform): Promise<Bundle[]> {
+    const available = filterBundlesByPlatform(manifest, platform);
+    if (available.length === 0) {
+        p.cancel(`No bundles available for platform '${platform}'.`);
+        process.exit(0);
+    }
+
+    const options = available.map((bundle) => ({
         value: bundle.name,
         label: `${bundle.name} — ${bundle.description} (${bundle.items.length} file${bundle.items.length === 1 ? "" : "s"})`,
     }));
 
-    const initialValues = Object.values(manifest.bundles)
-        .filter((b) => b.default)
-        .map((b) => b.name);
+    const initialValues = available.filter((b) => b.default).map((b) => b.name);
 
     const selected = await p.multiselect({
         message: "Select bundles to install:\n(Space = toggle, Enter = confirm)",
@@ -79,7 +104,7 @@ export async function selectBundles(manifest: Manifest): Promise<Bundle[]> {
 
 export async function confirmInstall(bundles: Bundle[], target: InstallTarget): Promise<boolean> {
     const totalFiles = bundles.reduce((sum, b) => sum + b.items.length, 0);
-    const targetLabel = target.type === "project" ? ".github/" : "~/.copilot/";
+    const targetLabel = describeTarget(target);
 
     const confirmed = await p.confirm({
         message: `Install ${bundles.length} bundle${bundles.length === 1 ? "" : "s"} (${totalFiles} file${totalFiles === 1 ? "" : "s"}) to ${targetLabel}?`,
@@ -118,7 +143,7 @@ export async function confirmDelete(
     force: boolean,
 ): Promise<boolean> {
     const totalFiles = bundles.reduce((sum, bundle) => sum + bundle.files.length, 0);
-    const targetLabel = target.type === "project" ? ".github/" : "~/.copilot/";
+    const targetLabel = describeTarget(target);
 
     const confirmed = await p.confirm({
         message: `Delete ${bundles.length} bundle${bundles.length === 1 ? "" : "s"} (${totalFiles} file${totalFiles === 1 ? "" : "s"}) from ${targetLabel}${force ? " with --force" : ""}?`,

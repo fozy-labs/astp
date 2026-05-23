@@ -2,7 +2,7 @@ import { vi } from "vitest";
 
 import { compareVersions, fetchManifest, scanInstalled } from "@/core/index.js";
 import type { InstalledBundle, InstallTarget, Manifest, UpdateReport } from "@/types/index.js";
-import { selectTarget, showCheckReport, showInfo } from "@/ui/prompts.js";
+import { selectPlatform, selectTarget, showCheckReport, showInfo } from "@/ui/prompts.js";
 
 import { executeCheck } from "../check.js";
 
@@ -15,6 +15,7 @@ vi.mock("@/core/index.js", () => ({
 
 // Mock prompts
 vi.mock("@/ui/prompts.js", () => ({
+    selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     showCheckReport: vi.fn(),
     showInfo: vi.fn(),
@@ -24,11 +25,13 @@ vi.mock("@/ui/prompts.js", () => ({
 const mockFetchManifest = vi.mocked(fetchManifest);
 const mockScanInstalled = vi.mocked(scanInstalled);
 const mockCompareVersions = vi.mocked(compareVersions);
+const mockSelectPlatform = vi.mocked(selectPlatform);
 const mockSelectTarget = vi.mocked(selectTarget);
 const mockShowCheckReport = vi.mocked(showCheckReport);
 const mockShowInfo = vi.mocked(showInfo);
 
 const testTarget: InstallTarget = {
+    platform: "vscode",
     type: "project",
     rootDir: "/project/.github",
 };
@@ -59,6 +62,7 @@ const testManifest: Manifest = {
             version: "1.2.0",
             description: "RDPI pipeline",
             default: false,
+            platforms: ["vscode"],
             items: [
                 {
                     source: "rdpi/agents/rdpi-approve.agent.md",
@@ -91,7 +95,7 @@ describe("executeCheck", () => {
     it("shows info when no installed files found", async () => {
         mockScanInstalled.mockResolvedValue([]);
 
-        await executeCheck({ target: "project" });
+        await executeCheck({ platform: "vscode", target: "project" });
 
         expect(mockShowInfo).toHaveBeenCalledWith("No astp-managed files found.");
         expect(mockFetchManifest).not.toHaveBeenCalled();
@@ -103,7 +107,7 @@ describe("executeCheck", () => {
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(mixedReport);
 
-        await executeCheck({ target: "project" });
+        await executeCheck({ platform: "vscode", target: "project" });
 
         expect(mockFetchManifest).toHaveBeenCalled();
         expect(mockCompareVersions).toHaveBeenCalledWith([testInstalledBundle], testManifest);
@@ -134,17 +138,19 @@ describe("executeCheck", () => {
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(report);
 
-        await executeCheck({ target: "project" });
+        await executeCheck({ platform: "vscode", target: "project" });
 
         expect(mockShowCheckReport).toHaveBeenCalledWith(report);
     });
 
-    it("prompts for target when not provided", async () => {
+    it("prompts for platform and target when not provided", async () => {
+        mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockResolvedValue(testTarget);
         mockScanInstalled.mockResolvedValue([]);
 
         await executeCheck({});
 
-        expect(mockSelectTarget).toHaveBeenCalled();
+        expect(mockSelectPlatform).toHaveBeenCalled();
+        expect(mockSelectTarget).toHaveBeenCalledWith("claude-code");
     });
 });

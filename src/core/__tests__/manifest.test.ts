@@ -79,6 +79,84 @@ describe("validateManifest", () => {
     });
 });
 
+describe("platform validation", () => {
+    it("accepts bundle with valid platforms array", () => {
+        const data = {
+            ...validManifestData,
+            bundles: {
+                ...validManifestData.bundles,
+                "fozy-labs": {
+                    name: "fozy-labs",
+                    version: "1.0.0",
+                    description: "Cross-platform",
+                    default: false,
+                    platforms: ["vscode", "claude-code"],
+                    items: [
+                        {
+                            source: "fozy-labs/skills/x/SKILL.md",
+                            target: "skills/x/SKILL.md",
+                            category: "skill",
+                        },
+                    ],
+                },
+            },
+        };
+        const result = validateManifest(data);
+        expect(result.bundles["fozy-labs"].platforms).toEqual(["vscode", "claude-code"]);
+    });
+
+    it("accepts bundle without platforms (legacy default vscode)", () => {
+        const data = {
+            ...validManifestData,
+            bundles: {
+                legacy: {
+                    name: "legacy",
+                    version: "1.0.0",
+                    description: "Legacy bundle",
+                    default: false,
+                    items: [{ source: "x", target: "x", category: "skill" }],
+                },
+            },
+        };
+        const result = validateManifest(data);
+        expect(result.bundles.legacy.platforms).toBeUndefined();
+    });
+
+    it("rejects bundle with empty platforms array", () => {
+        const data = {
+            ...validManifestData,
+            bundles: {
+                broken: {
+                    name: "broken",
+                    version: "1.0.0",
+                    description: "x",
+                    default: false,
+                    platforms: [],
+                    items: [{ source: "x", target: "x", category: "skill" }],
+                },
+            },
+        };
+        expect(() => validateManifest(data)).toThrow(/platforms must be a non-empty array/);
+    });
+
+    it("rejects bundle with unknown platform", () => {
+        const data = {
+            ...validManifestData,
+            bundles: {
+                broken: {
+                    name: "broken",
+                    version: "1.0.0",
+                    description: "x",
+                    default: false,
+                    platforms: ["jetbrains"],
+                    items: [{ source: "x", target: "x", category: "skill" }],
+                },
+            },
+        };
+        expect(() => validateManifest(data)).toThrow(/unknown platform 'jetbrains'/);
+    });
+});
+
 describe("resolveBundle", () => {
     const manifest = validateManifest(validManifestData) as Manifest;
 

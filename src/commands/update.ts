@@ -6,17 +6,29 @@ import {
     installFile,
     scanInstalled,
 } from "@/core/index.js";
-import type { InstallTarget, InstallTargetType } from "@/types/index.js";
+import type { InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
-import { selectTarget, showInfo, showSuccess, showUpdateReport, spinner, warnModified } from "@/ui/prompts.js";
+import {
+    selectPlatform,
+    selectTarget,
+    showInfo,
+    showSuccess,
+    showUpdateReport,
+    spinner,
+    warnModified,
+} from "@/ui/prompts.js";
 
 export interface UpdateOptions {
     force?: boolean;
+    platform?: Platform;
     target?: InstallTargetType;
 }
 
 export async function executeUpdate(options: UpdateOptions): Promise<void> {
-    const target: InstallTarget = options.target ? resolveTarget(options.target) : await selectTarget();
+    const platform: Platform = options.platform ?? (await selectPlatform());
+    const target: InstallTarget = options.target
+        ? resolveTarget(platform, options.target)
+        : await selectTarget(platform);
 
     const s = spinner();
     s.start("Scanning installed files...");
