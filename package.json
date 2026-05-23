@@ -15,7 +15,7 @@
     "license": "GPL-3.0-or-later",
     "author": "Vladimir Panev <vova6255@gmail.com>",
     "bin": {
-        "astp": "./dist/cli.js"
+        "astp": "dist/cli.js"
     },
     "files": [
         "dist"
