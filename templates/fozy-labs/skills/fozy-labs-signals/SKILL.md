@@ -35,7 +35,7 @@ user$.update((u) => ({ ...u, displayName }));
 
 ## 2. `Signal.compute` — derived (read-only)
 
-Recomputes lazily; only when a dependency it actually reads has changed.
+Recomputes lazily; only when a dependency it actually reads has changed. Returns a `DisposableSignal<T>` — call `dispose()` (or use `using`) to stop a long-lived computed and release its subscriptions; most computeds need no explicit teardown (they hold nothing without active subscribers).
 
 ```ts
 isAuthenticated$ = Signal.compute(() => this.user$() !== null);
@@ -140,6 +140,7 @@ import { signalize } from "@fozy-labs/rx-toolkit";
 
 const clicks$ = signalize(
   fromEvent(document, "click").pipe(scan((n) => n + 1, 0), startWith(0)),
+  // You can pass `0` istaend of use `startWith(0)` in pipe.
 );
 const doubled$ = Signal.compute(() => clicks$() * 2);
 ```
@@ -154,6 +155,8 @@ sub.unsubscribe();
 ```
 
 Use signals as the source of truth for **state**; use RxJS operators when you genuinely need stream semantics (debouncing, windowing, taking N events).
+
+`signalize(observable, defaultValue?)`
 
 ---
 
@@ -201,28 +204,26 @@ Batcher.run(() => {
 ## 8. Types reference
 
 ```ts
-export interface ReadableSignalLike<T> {
+// Returned by signalize() / SourceSignal.create()
+export interface ReadonlySignal<T> {
   readonly obs: Observable<T>;
   peek(): T;
   get(): T;
-}
-
-export interface ReadableSignalFnLike<T> extends ReadableSignalLike<T> {
   (): T;
 }
 
-export interface WriteableSignalLike<T> {
+// Returned by Signal.compute()
+export interface DisposableSignal<T> extends ReadonlySignal<T> {
+  // Manudal dispose (auto by default) 
+  dispose(): void;
+  [Symbol.dispose](): void;
+}
+
+// Returned by Signal.state()
+export interface StateSignal<T> extends DisposableSignal<T> {
   set(value: T, actionName?: string): void;
   update(updater: (value: T) => T, actionName?: string): void;
 }
-
-export interface ClearableSignalLike<_T> {
-  clear(): void;
-}
-
-export interface StatefulSignalFn<T> extends ReadableSignalFnLike<T>, WriteableSignalLike<T>, ClearableSignalLike<T> {}
-export interface SignalFn<T>         extends ReadableSignalFnLike<T>, WriteableSignalLike<T> {}
-export type ComputeFn<T>             = ReadableSignalFnLike<T> & { destroy(): void };
 ```
 
 ---

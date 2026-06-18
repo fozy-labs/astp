@@ -213,12 +213,12 @@ For per-resource/per-command lifecycle (subscribe to websockets, log, instrument
 getCurrentUser = api.createResource({
   key: "currentUser",
   queryFn: fetchCurrentUser,
-  onCacheEntryAdded: async (args, { cacheDataLoaded, cacheEntryRemoved, updateCachedData }) => {
-    await cacheDataLoaded; // wait for initial data
+  onCacheEntryAdded: async (args, { entry, $cacheDataLoaded, $cacheEntryRemoved }) => {
+    await $cacheDataLoaded; // wait for initial data
     const sub = wsClient.subscribe("user", (patch) => {
-      updateCachedData((draft) => Object.assign(draft, patch));
+      entry.createPatch((draft) => Object.assign(draft, patch)); // apply update to cached data
     });
-    await cacheEntryRemoved; // wait for last consumer to detach
+    await $cacheEntryRemoved; // wait for last consumer to detach
     sub.unsubscribe();
   },
 });
