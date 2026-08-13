@@ -1,12 +1,17 @@
 ---
 name: fozy-labs-di
 description: >
-  Dependency injection for projects on the @fozy-labs/simplest-di stack.
+  Dependency injection for js/ts projects based on @fozy-labs/simplest-di package.
 ---
 
 # @fozy-labs/simplest-di
 
-DI for projects on the fozy-labs stack. Classes decorated with `@injectable` are managed by the container — resolved via `inject()`, never instantiated with `new`.
+DI for js/ts projects. Classes decorated with `@injectable` are managed by the container — resolved via `inject()`, never instantiated with `new`.
+
+Two layers:
+
+- **core** — framework-agnostic (`inject`, `injectable`, `Scope`, contracts). Works in Node, workers, tests, any framework.
+- **react** — optional binding (`setupReactDi`, `DiScopeProvider`, `useScope`). Requires React ≥ 19.
 
 Uses **TC39 Stage 3 decorators**. Do **not** enable `experimentalDecorators` in `tsconfig.json`.
 
@@ -17,7 +22,7 @@ Uses **TC39 Stage 3 decorators**. Do **not** enable `experimentalDecorators` in 
 ```ts
 import { injectable } from "@fozy-labs/simplest-di";
 
-@injectable("SINGLETON") // one instance per app
+@injectable("SINGLETON") // one instance per app (also the default for bare `@injectable()`)
 export class SessionStore { ... }
 
 @injectable("SCOPED")    // one instance per Scope
@@ -33,38 +38,38 @@ export class Logger { ... }
 | `"SCOPED"`    | Tied to a `Scope` (page/widget subtree) — most stores and **all** API classes.         |
 | `"TRANSIENT"` | New instance per `inject()`. Rare; only when each consumer needs unique state/metadata. |
 
-### `onScopeInit` — cleanup hook
-
-For SCOPED classes that need teardown (close sockets, revoke blob URLs, dispose substores) when the owning `DiScopeProvider` unmounts:
+Detailed form:
 
 ```ts
 @injectable({
-  lifetime: "SCOPED",
+  lifetime: "SCOPED", 
+  requireProvide: true, // @default true. SCOPED option to disable auto-providing by `inject()`
   onScopeInit() {
-    return () => {
-      this.feedStore.destroy(); // called on scope dispose
-    };
+    this.socket.connect();            // instance is `this`, not an argument
+    return () => this.socket.close(); // runs on scope dispose
   },
 })
 export class FeedStore { ... }
 ```
 
-`onScopeInit` runs on scope init; the returned function runs on scope dispose. Use this — never side-effect code in the constructor.
-
-### `requireProvide: false`
-
-By default SCOPED throws `MustBeProvidedError` if not registered via `inject.provide`. Use sparingly when a SCOPED class should be auto-created on first `inject()` in any active scope:
-
-```ts
-@injectable({ lifetime: "SCOPED", requireProvide: false })
-export class FiltersPanelStore { ... }
-```
+- `onScopeInit` runs on scope init; the returned function runs on scope dispose. Use it — never side-effect code in the constructor.
+- `requireProvide: false` lets a SCOPED class be auto-created on first `inject()` in any active scope. Use sparingly.
 
 ---
 
-## 2. Consuming dependencies
+## 2. Resolving — `inject`
 
-### In stores / services (class fields)
+```ts
+inject(Token)              // resolve from the current scope
+inject(Token, scope)       // resolve from an explicit Scope
+inject(Token, TAG)         // resolve from the nearest ancestor scope carrying TAG
+```
+
+SCOPED legal calls:
+
+- a class-field initializer of an `@injectable` class,
+- a platform/framework based scope providing method (if settled). 
+- inside `scope.runInScope(() => ...)` — synchronous only.
 
 ```ts
 @injectable("SCOPED")
@@ -74,178 +79,54 @@ export class OrderListStore {
 }
 ```
 
-### In React components
+---
 
-```tsx
-function CurrentUserWidget() {
-  const session = inject(SessionStore);    // SINGLETON — always available
-  const list = inject(OrderListStore);     // SCOPED — must be provided above
-}
-```
+## 3. `inject.provide` vs `inject`
 
-> Never call `inject()` outside a render or class-field initializer (e.g. inside `useEffect`, event handlers, or constructor bodies).
+`inject.provide` is just `inject` with `requireProvide` forced off — it both registers and returns the instance.
 
 ---
 
-## 3. Scopes
+## 4. Errors
 
-SCOPED classes live inside a `DiScopeProvider`. Two equivalent patterns:
-
-### A. Inline `provide={[...]}` — for a stable set of services
-
-```tsx
-// app/layout/AppLayout.tsx
-<DiScopeProvider
-  keyName="app"
-  provide={[UserApi, OrderApi, NotificationsApi, ThemeStore]}
->
-  <AppLayoutInner />
-</DiScopeProvider>
-```
-
-### B. `useScope` + `inject.provide` — when the owner page needs to read the instance
-
-```tsx
-// pages/order/OrderPage.tsx
-export function OrderPage() {
-  const { orderId } = useParams<{ orderId: string }>();
-  const scope = useScope({ keyName: `order:${orderId}` });
-  const details = inject.provide(OrderDetailsStore, scope);
-
-  return (
-    <DiScopeProvider key={orderId} scope={scope}>
-      <OrderWidget onEditPress={() => details.openEdit(orderId)} />
-    </DiScopeProvider>
-  );
-}
-```
-
-### `inject.provide` vs `inject`
-
-|                  | `inject.provide`                                       | `inject`                                                     |
-|------------------|--------------------------------------------------------|--------------------------------------------------------------|
-| Use when         | Registering a SCOPED class for the current subtree     | Reading an already-registered or SINGLETON instance          |
-| Typical location | Component that owns the scope (page, widget root)      | Deeper components and stores                                 |
-| Creates instance | Yes, if not yet registered                             | Only SINGLETON (and SCOPED with `requireProvide: false`)     |
-
-### Scope tags — register in an ancestor scope
-
-When a child page needs to register a service in an ancestor's scope (e.g. `OrderApi` belongs to the `AUTHENTICATED` container, not the per-page scope):
-
-```ts
-// shared
-import { inject } from "@fozy-labs/simplest-di";
-export const AUTHENTICATED = inject.createTag();
-```
-
-```tsx
-// AppLayout.tsx
-<DiScopeProvider keyName="auth" tags={[AUTHENTICATED]}>...</DiScopeProvider>
-
-// OrderPage.tsx
-inject.provide(OrderApi, AUTHENTICATED); // registers in nearest ancestor with AUTHENTICATED tag
-```
+| Error                                                          | Cause                                                                   |
+|----------------------------------------------------------------|-------------------------------------------------------------------------|
+| `MustBeProvidedError`                                          | SCOPED class with `requireProvide: true` injected without `provide`.    |
+| `NonCompatibleParentError`                                     | SINGLETON or TRANSIENT injects a SCOPED — lifetime contract violated.   |
+| `CircularDependencyError`                                      | A injects B, B injects A inside class-field initializers.               |
+| `UnboundContractError`                                         | `inject(contract)` called before `contract.bind(Impl)`.                 |
+| `ContractAlreadyResolvedError`                                 | `contract.bind()` called after the contract was first resolved.         |
+| `Error: No active scope found for scoped injection of X`       | SCOPED resolved with no current scope and no explicit scope/tag.        |
+| `Error: Scope for X does not support initialization callbacks` | `onScopeInit` class resolved in a scope without `init$` / `destroyed$`. |
 
 ---
 
-## 4. `inject.define` — interface contracts
+## 5. DI is opt-in, not mandatory
 
-For platform-swappable or mock-able implementations only. **Not** for ordinary DI.
+Full rationale, plus the unidirectional-data-flow rule: `references/architecture.md`.
 
-```ts
-// shared/feature/feature.model.ts
-export interface DataSource { fetchItems(): Promise<string[]>; }
-export const DataSource = inject.define<DataSource>("DataSource");
-
-// Bind concrete impl (only valid before first resolution)
-DataSource.bind(CloudDataSource);
-
-// Later
-const ds = inject(DataSource);
-```
-
----
-
-## 5. Errors
-
-| Error                         | Cause                                                                  |
-|-------------------------------|------------------------------------------------------------------------|
-| `MustBeProvidedError`         | SCOPED class with `requireProvide: true` injected without `provide()`. |
-| `NonCompatibleParentError`    | SINGLETON or TRANSIENT injects a SCOPED — lifetime contract violated.  |
-| `CircularDependencyError`     | A inject(B), B inject(A) inside class-field initializers.              |
-| `UnboundContractError`        | `inject(contract)` called before `contract.bind(Impl)`.                |
-
----
-
-## 6. Architectural rules — DI is opt-in, not mandatory
-
-DI is a tool, not a default. Use it when you genuinely need a managed lifetime, scope-keyed identity, or cross-tree sharing. For everything else, plain classes / functions are simpler.
-
-### When **to** use DI
-
-- Cross-cutting singletons: `SessionStore`, `ThemeStore`, the shared `api` client.
-- Per-scope identity: a store/API that lives as long as a page/widget subtree (`OrderApi`, `FeedStore`).
-- Resources that need `onScopeInit` cleanup tied to a React subtree.
-
-### When **not** to use DI
-
-- Local UI state controlled by a single component → `useState`/`Signal.state` directly in that component.
-- A pure helper (formatter, mapper) → export a function.
-- A store whose entire lifetime is one parent component and whose dependencies are already in scope of that component → instantiate with `new` and pass deps explicitly.
-
-```ts
-// Without DI — plain class, deps via constructor
-export class SomeFeatureStore {
-  constructor(
-    private readonly _api: OrderApi,
-    private readonly _orderId: string,
-  ) {}
-}
-
-// In the parent component:
-const store = useMemo( // or useConstant if available
-  () => new SomeFeatureStore(orderApi, orderId),
-  [orderApi, orderId],
-);
-```
-
-### Unidirectional data flow — stores don't accept state pushes
-
-A common antipattern: a React component reads route params or upstream query data and `useEffect`s them into a DI-managed store via setter methods.
-
-```tsx
-// ❌ Antipattern — bidirectional flow, store is "bound" by its consumer
-const feed = inject(FeedStore);
-useEffect(() => feed.bindResource(resourceId, initialPage), [resourceId, initialPage]);
-useEffect(() => feed.setPermissionBits(permissionBits), [permissionBits]);
-useEffect(() => feed.setAuthors(authors), [authors]);
-```
-
-Problems: store state lags one render behind its inputs; ordering of multiple `useEffect`s is fragile; the store can't be reasoned about in isolation; tests need a fake React tree.
-
-Prefer one of (in order of preference):
-
-**1. Pass inputs at construction time.** If a store's identity is keyed on `resourceId`, hand it in once and let the scope key change when the input changes.
-
-```tsx
-// Scope is keyed on resourceId — instance is recreated when resourceId changes.
-const scope = useScope({ keyName: `feed:${resourceId}` });
-const feed = inject.provide(FeedStore, scope);
-// FeedStore reads resourceId from a SCOPED ResourceContext (registered alongside).
-```
-
-**2. Use plain `new` with constructor args** when DI is overkill (see "When not to use DI" above).
-
-**3. Let the store *pull* from upstream signals** instead of accepting pushes. E.g. compose `canSend$` from `SessionStore.user$` and a permissions signal owned by the store, not from a `setPermissionBits` setter.
-
----
+--- 
 
 ## Rules
 
-- ❌ Never `new SomeStore()` for classes decorated with `@injectable`.
-- ❌ Never call `inject()` outside a component render or class-field initializer.
-- ❌ Never run subscriptions/side effects in the constructor — use `onScopeInit`.
-- ❌ Never push React-side state into a DI store via setter methods (see §6).
-- ✅ SINGLETON deps need no `provide` — they are available app-wide.
-- ✅ Use `onScopeInit` for cleanup tied to a React subtree.
-- ✅ When DI gives no win, prefer plain classes constructed with `new` and explicit constructor args.
+- ❌ Never run scope-based subscriptions/side effects in the constructor — use `onScopeInit`.
+- ❌ Never push React-side state into a DI store via setter methods.
+- ✅ SINGLETON deps no need `provide` — they are available app-wide.
+- ✅ When DI no gives win, prefer plain classes constructed with `new` and explicit constructor args.
+
+---
+
+## Conditional references
+
+Load these only when the specific situation applies — do **not** preload.
+
+| Situation                                                                    | File                          |
+|------------------------------------------------------------------------------|-------------------------------|
+| Wiring DI into a React app, `setupReactDi`, StrictMode, testing components   | `references/setup-react.md`   |
+| Wiring DI outside React — Node, CLI, workers, unit tests, `resetRegistry`    | `references/setup-native.md`  |
+| `DiScopeProvider`, `useScope`, scope keying and tags in a React tree         | `references/scopes-react.md`  |
+| `Scope` by hand, cascade dispose, `runInScope`, `unstable_createScopesStore` | `references/scopes-native.md` |
+| `inject.define` contracts, `bind`, platform/mock swapping                    | `references/contracts.md`     |
+| Deciding whether DI belongs here at all; store-input data flow               | `references/architecture.md`  |
+
+Pick **one** setup file and **one** scopes file matching the target environment — loading both the native and React variants of the same topic is redundant.

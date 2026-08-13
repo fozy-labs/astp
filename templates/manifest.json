@@ -137,7 +137,7 @@
         },
         "fozy-labs": {
             "name": "fozy-labs",
-            "version": "1.0.2",
+            "version": "1.1.0",
             "description": "Fozy Labs stack skills — DI, FSD, rx-api, signals (VS Code + Claude Code)",
             "default": false,
             "platforms": ["vscode", "claude-code"],
@@ -145,6 +145,36 @@
                 {
                     "source": "fozy-labs/skills/fozy-labs-di/SKILL.md",
                     "target": "skills/fozy-labs-di/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-di/references/architecture.md",
+                    "target": "skills/fozy-labs-di/references/architecture.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-di/references/contracts.md",
+                    "target": "skills/fozy-labs-di/references/contracts.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-di/references/scopes-native.md",
+                    "target": "skills/fozy-labs-di/references/scopes-native.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-di/references/scopes-react.md",
+                    "target": "skills/fozy-labs-di/references/scopes-react.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-di/references/setup-native.md",
+                    "target": "skills/fozy-labs-di/references/setup-native.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-di/references/setup-react.md",
+                    "target": "skills/fozy-labs-di/references/setup-react.md",
                     "category": "skill"
                 },
                 {
