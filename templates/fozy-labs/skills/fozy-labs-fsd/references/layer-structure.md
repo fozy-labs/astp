@@ -1,46 +1,32 @@
-# Layer Structure Reference
+# Layer structure
 
-Detailed folder structures, code examples, and naming conventions for each
-FSD layer. Use this reference when creating, reviewing, or reorganizing
-project structure.
+What belongs in each layer, with a representative folder tree per layer. For the segments *inside* a slice
+and for file naming, see `segments-and-naming.md`.
 
 ---
 
-## App Layer
+## `app/`
 
-App-wide initialization: providers, routing, global styles, entry point.
-Organized by segments only — no slices.
+App-wide initialization: providers, routing, global styles, entry point. Segments only, no slices.
 
 ```text
 app/
-  providers/       ← Redux, React Query, Theme providers
-  styles/          ← Global CSS, reset, theme variables
-  router.tsx       ← Route configuration
-  index.tsx        ← Entry point
+  providers/          ← DI root scope, theme provider, error boundary
+  styles/             ← global CSS, reset, theme variables
+  app.router.tsx      ← route table
+  main.tsx            ← entry point
 ```
 
-```typescript
-// app/router.tsx
-import { HomePage } from '@/pages/home';
-import { ProfilePage } from '@/pages/profile';
+**Belongs:** global providers, router setup, global styles, error boundaries, analytics bootstrap.
 
-export const router = createBrowserRouter([
-  { path: '/', element: <HomePage /> },
-  { path: '/profile/:id', element: <ProfilePage /> },
-]);
-```
-
-**Belongs in app:** Global providers (Redux store, QueryClient, theme),
-routing setup, global styles, error boundaries, analytics initialization.
-
-**Does not belong:** Feature-specific code, business logic, page-level UI.
+**Does not belong:** feature-specific code, business logic, page-level UI.
 
 ---
 
-## Pages Layer
+## `pages/`
 
-Route-level composition. In v2.1, pages **own substantial logic** — they are
-not thin wrappers. In early project stages, most code lives here.
+Route-level composition. In v2.1 pages **own substantial logic** — they are not thin wrappers. Early in a
+project most code lives here.
 
 ```text
 pages/
@@ -48,80 +34,65 @@ pages/
     ui/
       HomePage.tsx
       HeroSection.tsx
-      FeaturesGrid.tsx
     model/
-      home-data.ts          ← Page-specific state + logic
+      home.store.ts           ← page state + logic
     api/
-      fetch-home-data.ts    ← Page-specific API calls
+      home.api.ts             ← page-local resources / commands
     index.ts
   profile/
     ui/
       ProfilePage.tsx
       ProfileForm.tsx
-      ProfileStats.tsx
     model/
-      profile.ts            ← Profile state + validation logic
+      profile.types.ts
+      profile.store.ts
     api/
-      update-profile.ts
-      fetch-profile.ts
+      profile.api.ts
+    react/
+      use-profile-form.ts
     index.ts
 ```
 
-**Belongs in pages:** Page-specific UI, forms, validation, data fetching,
-state management, business logic, API integrations. Even code that looks
-reusable stays here if it is simpler to keep local.
+**Belongs:** page-specific UI, forms, validation, data fetching, state, business logic. Code that merely
+*looks* reusable stays here.
 
-**Does not belong:** Code that is genuinely reused in 2+ pages (extract only
-when the team agrees).
+**Does not belong:** code with 2+ real consumers that the team has agreed to extract.
 
-### Page Layout Patterns
+### Composition
 
-A typical page composes widgets, features, and entities from lower layers,
-plus its own local UI components:
+A page composes lower layers plus its own local UI:
 
-```typescript
+```tsx
 // pages/product-detail/ui/ProductDetailPage.tsx
-import { Header } from '@/widgets/header';
-import { AddToCart } from '@/features/add-to-cart';
-import { Product } from '@/entities/product';
+import { Header } from "@/widgets/header";
+import { AddToCart } from "@/features/add-to-cart";
+import { ProductCard } from "@/entities/product";
+import { useProductDetail } from "../react/use-product-detail";
+import { RelatedProducts } from "./RelatedProducts";
 
-export const ProductDetailPage = ({ productId }) => {
-  const product = useProductDetail(productId); // local hook in this page
+export function ProductDetailPage({ productId }: { productId: string }) {
+  const product = useProductDetail(productId);
 
   return (
     <>
       <Header />
-      <Product.Card data={product} />
+      <ProductCard data={product} />
       <AddToCart productId={productId} />
-      <RelatedProducts products={product.related} /> {/* local component */}
+      <RelatedProducts products={product.related} />
     </>
   );
-};
+}
 ```
 
-For pages that only need shared + page-local code (no extracted layers):
-
-```typescript
-// pages/about/ui/AboutPage.tsx
-import { Card } from '@/shared/ui/Card';
-import { TeamSection } from './TeamSection';  // local to this page
-import { MissionStatement } from './MissionStatement';
-
-export const AboutPage = () => (
-  <main>
-    <MissionStatement />
-    <Card><TeamSection /></Card>
-  </main>
-);
-```
+A page that imports nothing but `shared/` and its own components is equally valid — no lower layer is
+mandatory.
 
 ---
 
-## Widgets Layer
+## `widgets/`
 
-Composite UI blocks with their own logic, **reused across multiple pages**.
-Add this layer only when UI blocks actually appear in 2+ pages and sharing
-provides clear value.
+Composite UI blocks with their own logic, reused across 2+ pages. Add the layer only once a block actually
+appears in 2+ pages.
 
 ```text
 widgets/
@@ -131,27 +102,26 @@ widgets/
       Navigation.tsx
       UserMenu.tsx
     model/
-      header.ts              ← Widget state
+      header.store.ts
     api/
-      fetch-notifications.ts
+      notifications.api.ts
     index.ts
   sidebar/
     ui/
       Sidebar.tsx
     model/
-      sidebar.ts
+      sidebar.store.ts
     index.ts
 ```
 
-**Belongs in widgets:** Navigation bars, sidebars, dashboards, footers,
-complex card layouts that combine data from multiple entities/features.
+**Belongs:** navigation bars, sidebars, dashboards, footers, card layouts that combine several
+entities/features.
 
-**Does not belong:** Simple UI primitives (→ `shared/ui/`), single-use
-page sections (→ keep in the page).
+**Does not belong:** UI primitives (→ `shared/ui/`), single-use page sections (→ keep them in the page).
 
 ---
 
-## Features Layer
+## `features/`
 
 Independent, reusable user interactions. **Create only when used in 2+ places.**
 
@@ -162,175 +132,96 @@ features/
       LoginForm.tsx
       RegisterForm.tsx
     model/
-      auth.ts               ← Auth state + logic
+      auth-form.store.ts
     api/
-      login.ts
-      register.ts
+      auth.api.ts
     index.ts
   add-to-cart/
     ui/
       AddToCartButton.tsx
     model/
-      cart.ts
+      cart.store.ts
     index.ts
   like-post/
     ui/
       LikeButton.tsx
-    model/
-      like.ts
     api/
-      toggle-like.ts
+      like.api.ts
     index.ts
 ```
 
-**Feature composition** — features consume entities and are composed in
-higher layers:
+Features consume entities and are themselves composed by higher layers:
 
-```typescript
+```tsx
 // widgets/post-card/ui/PostCard.tsx
-import { UserAvatar } from '@/entities/user';
-import { LikeButton } from '@/features/like-post';
-import { CommentButton } from '@/features/comment-create';
+import { UserAvatar } from "@/entities/user";
+import { LikeButton } from "@/features/like-post";
+import { CommentButton } from "@/features/comment-create";
 
-export const PostCard = ({ post }) => (
-  <article>
-    <UserAvatar userId={post.authorId} />
-    <h2>{post.title}</h2>
-    <p>{post.content}</p>
-    <div>
+export function PostCard({ post }: { post: Post }) {
+  return (
+    <article>
+      <UserAvatar userId={post.authorId} />
+      <h2>{post.title}</h2>
+      <p>{post.content}</p>
       <LikeButton postId={post.id} />
       <CommentButton postId={post.id} />
-    </div>
-  </article>
-);
+    </article>
+  );
+}
 ```
 
 ---
 
-## Entities Layer
+## `entities/`
 
-Reusable business domain models. **Create only when used in 2+ places. Starting
-without this layer is completely valid.**
+Reusable business domain models. **Create only when used in 2+ places — starting a project without this
+layer is completely valid.**
 
 ```text
-// Minimal entity — model only (most common form)
+// minimal entity — model only, the most common form
 entities/user/
   model/
-    user.ts                  ← Types + domain logic
+    user.types.ts
+    user.api.ts               ← entity api classes live in model/
   index.ts
 
-// Entity with UI (use with caution)
-// ⚠️ Adding UI to entities increases cross-import risk.
-// Other entities may want to import this UI, leading to @x dependencies.
-// Entity UI should only be imported from higher layers (features, widgets,
-// pages) — never from other entities.
+// entity with UI — use sparingly
 entities/product/
   model/
-    product.ts
+    product.types.ts
   ui/
     ProductCard.tsx
   index.ts
 ```
 
+Entity UI raises coupling risk: other entities start wanting to import it, which pushes the project toward
+`@x` dependencies. Entity UI is consumed by features, widgets and pages only. When two entities do want each
+other's code, treat it as a cross-import problem — `cross-import-patterns.md`.
+
 ---
 
-## Shared Layer Structure
+## `shared/`
 
-Infrastructure with no business logic. Organized by segments only (no slices).
-Segments may import from each other.
+Infrastructure with no business logic. Segments only, no slices; segments may import each other.
 
 ```text
 shared/
-  ui/                ← UI kit: Button, Input, Modal, Card
-  lib/               ← Utilities: formatDate, debounce, classnames
-  api/               ← API client, route constants, CRUD helpers, base types
-  auth/              ← Auth tokens, login utilities, session management
-  config/            ← Environment variables, app settings
-  assets/            ← Images, fonts, icons (company branding allowed)
+  ui/        ← UI kit: Button, Input, Modal, Card
+  date/      ← date utilities: format-date.ts
+  react/     ← generic React hooks / contexts: use-debounce.ts, use-media-query.ts
+  api/       ← api client instance, request infrastructure, base types
+  http/      ← raw fetch functions + zod DTO schemas
+  auth/      ← tokens, session store, login utilities
+  config/    ← environment variables, route constants, app settings
+  assets/    ← images, fonts, icons (branding allowed)
+  errors/    ← errors (exceptions) conventions
+  lib/       ← framework-agnostic utilities (try to avoid creating this directory)
+  and etc...
 ```
 
-```typescript
-// shared/ui/Button/Button.tsx
-export const Button = ({ children, onClick, variant = 'primary' }) => (
-  <button className={`btn btn-${variant}`} onClick={onClick}>
-    {children}
-  </button>
-);
+`shared/` **may** be application-aware — route constants, API endpoints, branding assets, common types. It
+must **never** hold business logic, feature-specific code, or entity-specific code.
 
-// shared/ui/Button/index.ts
-export { Button } from './Button';
-export type { ButtonProps } from './Button';
-```
-
-Shared **may** contain application-aware code (route constants, API endpoints,
-branding assets, common types). It must **never** contain business logic,
-feature-specific code, or entity-specific code.
-
----
-
-## Segment Naming Conventions
-
-### Domain-based naming
-
-Always name files after the business domain, not the technical role:
-
-```text
-// ❌ Technical-role naming — mixes domains
-model/types.ts          ← Which types? User? Order?
-model/utils.ts
-api/endpoints.ts
-model/selectors.ts
-
-// ✅ Domain-based naming — each file owns one domain
-model/user.ts           ← User types + logic + store
-model/order.ts          ← Order types + logic + store
-api/fetch-profile.ts    ← Clear what this API does
-model/todo.ts           ← Redux slice + selectors + thunks
-```
-
-### Single-concern segments
-
-If a segment contains only one domain concern, the filename may match the
-slice name:
-
-```text
-features/auth/
-  model/
-    auth.ts          ← Single concern, matches slice name
-```
-
-### Index files as public API
-
-Every slice must have an `index.ts` that re-exports its public interface:
-
-```typescript
-// entities/user/index.ts
-export { UserAvatar } from "./ui/UserAvatar";
-export { useUser, type User } from "./model/user";
-```
-
----
-
-## Path Aliases
-
-Configure path aliases so imports follow the `@/layer/slice` pattern:
-
-```json
-// tsconfig.json
-{
-  "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "@/app/*": ["src/app/*"],
-      "@/pages/*": ["src/pages/*"],
-      "@/widgets/*": ["src/widgets/*"],
-      "@/features/*": ["src/features/*"],
-      "@/entities/*": ["src/entities/*"],
-      "@/shared/*": ["src/shared/*"]
-    }
-  }
-}
-```
-
-For framework-specific alias configuration (Vite, Next.js, Nuxt), see
-`references/framework-integration.md`.
+Small projects may fold `http/` into `api/`; keep the split once raw request functions and DTO schemas
+outgrow a single folder.

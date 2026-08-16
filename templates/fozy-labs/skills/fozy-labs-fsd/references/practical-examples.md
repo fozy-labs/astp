@@ -1,22 +1,54 @@
-# Practical Examples
+# Practical examples
 
-Concrete patterns for common scenarios within FSD. Examples use the fozy-labs stack (`simplest-di` + `rx-toolkit`) as the default. For tool-level *how*, see the dedicated skills:
+Concrete placement answers for recurring situations, using the fozy-labs stack (`simplest-di` +
+`rx-toolkit`) as the default. This file covers **where the code goes**; the structural rules behind the
+answers are in `layer-structure.md` and `segments-and-naming.md`.
 
-- `fozy-labs-di` — `@injectable`, `inject()`, scopes.
+Tool-level *how* belongs to the sibling skills, not here:
+
+- `fozy-labs-di` — `@injectable`, `inject()`, scopes, contracts, and whether DI is warranted at all.
 - `fozy-labs-signals` — `Signal.state`, `Signal.compute`, `LocalSignal`.
 - `fozy-labs-rx-api` — `createResource`, `createCommand`, `links`.
 
-This file covers **placement** (which layer/slice/segment owns the code), not API details.
+---
+
+## 1. Single use vs shared
+
+| Scenario                  | Single use                          | Multi-use (with team agreement)       |
+|---------------------------|-------------------------------------|---------------------------------------|
+| User profile form         | `pages/profile/ui/ProfileForm.tsx`  | `features/profile-form/`              |
+| Product card              | `pages/products/ui/ProductCard.tsx` | `entities/product/ui/ProductCard.tsx` |
+| Login form                | `pages/login/ui/LoginForm.tsx`      | `features/auth/`                      |
+| Data fetching (API)       | `pages/[name]/api/[name].api.ts`    | `entities/[name]/model/[name].api.ts` |
+| Entity-bound React hook   | `pages/[name]/react/use-*.ts`       | `entities/[name]/react/use-*.ts`      |
+| Auth tokens / session     | `shared/auth/` (always)             | `shared/auth/` (always)               |
+| Generic Card layout       | `shared/ui/Card/` (always)          | `shared/ui/Card/` (always)            |
+| Generic React hook        | `shared/react/` (always)            | `shared/react/` (always)              |
+
+## 2. Artefact → path
+
+| You have…                                       | Place it in…                          |
+|-------------------------------------------------|---------------------------------------|
+| A `fetch*` function that hits the backend       | `shared/http/`                        |
+| A zod schema for an API response                | `shared/http/[name].schema.ts`        |
+| The `createApi` client instance                 | `shared/api/`                         |
+| `createResource` consumed by 2+ slices          | `entities/[name]/model/[name].api.ts` |
+| `createResource` consumed by one page           | `pages/[name]/api/[name].api.ts`      |
+| An `@injectable` store touched by one widget    | `widgets/[name]/model/[name].store.ts` |
+| A generic React hook (`useDebounce`)            | `shared/react/`                       |
+| An entity-bound React hook (`useCurrentUser`)   | `entities/[name]/react/`              |
+| Route path constants                            | `shared/config/`                      |
+| `inject.createTag()` for a DI container         | The slice that owns the container     |
 
 ---
 
-## 1. Authentication
+## 3. Authentication
 
-The most common FSD confusion: what goes in `shared/` vs. `features/`/`pages/`.
+The most common FSD confusion: what goes in `shared/` versus `features/` / `pages/`.
 
 ### Auth data → `shared/auth/`
 
-Tokens, session, login utilities are infrastructure.
+Tokens, session and login utilities are infrastructure.
 
 ```text
 shared/auth/
@@ -24,19 +56,20 @@ shared/auth/
   index.ts           ← export { SessionStore }
 ```
 
-`SessionStore` belongs here even with `login()` / `logout()` methods — those are infrastructure integrations with `shared/http/`.
+`SessionStore` belongs here even with `login()` / `logout()` methods — those are integrations with
+`shared/http/`, not domain rules.
 
 ### Auth UI → `pages/login/` (single use) or `features/auth/` (reused)
 
 ```text
-// Login UI only on /login:
+// login UI exists only on /login
 pages/login/
   ui/LoginPage.tsx
   ui/LoginForm.tsx
-  model/login-form.store.ts   ← @injectable("SCOPED"), form state
+  model/login-form.store.ts   ← form state
   index.ts
 
-// Login form reused (e.g. modal + dedicated page):
+// the same form is reused (modal + dedicated page)
 features/auth/
   ui/LoginForm.tsx
   ui/RegisterForm.tsx
@@ -44,28 +77,25 @@ features/auth/
   index.ts
 ```
 
-### Don't create a `user` entity just for auth
+### Do not create a `user` entity just for auth
 
-Tokens, session, login DTOs rarely flow through non-auth code. Create `entities/user/` only when user profile data is consumed for non-auth purposes (avatars in comments, displayName in posts).
+Tokens, session and login DTOs rarely flow through non-auth code. `entities/user/` is warranted only once
+profile data is consumed for non-auth purposes — avatars in comments, display names on posts.
 
 ---
 
-## 2. Type definitions
+## 4. Raw API shape vs domain model
 
-| Type scope                             | Location                                         |
-|----------------------------------------|--------------------------------------------------|
-| API request/response shapes            | `shared/http/*.types.ts` or `*.schema.ts`        |
-| Domain types with logic                | `entities/[name]/model/[name].types.ts`          |
-| Page-local types                       | `pages/[name]/model/[name].types.ts`             |
-| Feature-local types                    | `features/[name]/model/[name].types.ts`          |
-| Generic utility types (`Nullable<T>`)  | `shared/lib/types.ts` (rare)                     |
-
-The `.types.ts` / `.schema.ts` suffix is required (see FSD skill §5).
-
-### Raw API shape vs domain model
+| Type scope                            | Location                                 |
+|---------------------------------------|------------------------------------------|
+| API request/response shapes           | `shared/http/[name].schema.ts`           |
+| Domain types with logic               | `entities/[name]/model/[name].types.ts`  |
+| Page-local types                      | `pages/[name]/model/[name].types.ts`     |
+| Feature-local types                   | `features/[name]/model/[name].types.ts`  |
+| Generic utility types (`Nullable<T>`) | `shared/lib/common.types.ts` (rare)      |
 
 ```ts
-// shared/http/product.schema.ts — raw API shape (with zod)
+// shared/http/product.schema.ts — the raw API shape
 export const ProductDtoSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -73,7 +103,7 @@ export const ProductDtoSchema = z.object({
 });
 export type ProductDto = z.infer<typeof ProductDtoSchema>;
 
-// entities/product/model/product.types.ts — domain model with logic
+// entities/product/model/product.types.ts — the domain model
 import type { ProductDto } from "@/shared/http";
 
 export interface Product {
@@ -91,24 +121,21 @@ export const fromDto = (dto: ProductDto): Product => ({
 });
 ```
 
-If you have **only** the raw shape and no logic — keep it in `shared/http/`. Don't create an entity for types alone.
+With **only** the raw shape and no logic, stop at `shared/http/`. An entity that holds types alone is a
+slice that pays rent and produces nothing.
 
 ---
 
-## 3. API request handling
-
-### Where each piece lives
+## 5. API classes
 
 ```text
-shared/api/api.ts            ← createApi({ plugins: [reactHooksPlugin()] })
-shared/http/                 ← raw fetch functions + DTOs
+shared/api/api.ts               ← the createApi client instance
+shared/http/                    ← raw fetch functions + DTO schemas
   fetch-current-user.ts
   user.schema.ts
 
-entities/user/model/user.api.ts ← @injectable wrapping resources/commands
+entities/user/model/user.api.ts ← @injectable class exposing resources/commands
 ```
-
-### Pattern: `.api.ts` per entity (or page-local)
 
 ```ts
 // entities/user/model/user.api.ts
@@ -121,70 +148,48 @@ export class UserApi {
 }
 ```
 
-A `*.api.ts` file holds **one** `@injectable` class with the resources/commands for that slice. Place it in:
-
-- `entities/[name]/model/` — when consumed by 2+ slices.
-- `pages/[name]/api/` or `features/[name]/model/` — when single-use.
+One `*.api.ts` file holds **one** `@injectable` class carrying the resources and commands of its slice.
+Entities keep it in `model/`; pages, widgets and features keep it in `api/`.
 
 ---
 
-## 4. State management
+## 6. State placement
 
-### Local UI state (per-component) → `useState` / `Signal.state` in the component
-
-Trivial form/dropdown state doesn't need a `.store.ts`.
-
-### Cross-component or behavior-rich state → `*.store.ts` with `@injectable`
-
-```ts
-// widgets/preferences-panel/model/preferences-panel.store.ts
-@injectable("SCOPED")
-export class PreferencesPanelStore {
-  private _session = inject(SessionStore);
-
-  isOpen$ = LocalSignal.state<boolean>({
-    defaultValue: true,
-    userId: this._session.user$()?.id,
-    key: "preferences_panel_open",
-    zodSchema: z.boolean(),
-  });
-
-  toggle() {
-    this.isOpen$.set(!this.isOpen$());
-  }
-}
-```
-
-The store is provided in the nearest owning layer (a page, layout, or widget root) — see `fozy-labs-di` §3 for scope patterns.
-
-### Server state → resources/commands (not signals)
-
-For data from the backend, use `createResource` / `createCommand`, not `Signal.state`. The cache, SWR fallback, optimistic updates, and broadcast sync live in the rx-api layer.
-
----
-
-## 5. React tooling — `react/` segment
-
-Framework-specific code that isn't a UI component (hooks, contexts, providers) goes in a `react/` segment alongside `ui/`.
+- **Local, single-component state** — `useState` or `Signal.state` in the component. A trivial dropdown or
+  form field does not earn a `*.store.ts`.
+- **Cross-component or behaviour-rich state** — a `*.store.ts` in the `model/` segment of the slice that
+  owns the behaviour, provided by the nearest owning page, layout or widget.
+- **Server state** — `createResource` / `createCommand` in a `*.api.ts`, never `Signal.state`. Caching, SWR
+  fallback, optimistic updates and broadcast sync belong to the rx-api layer.
 
 ```text
-shared/react/                ← framework hooks shared across the app
+widgets/preferences-panel/
+  model/preferences-panel.store.ts   ← @injectable("SCOPED"), panel state + toggles
+  ui/PreferencesPanel.tsx
+  index.ts
+```
+
+Whether that store should be DI-managed at all, and how its inputs flow in, is a DI question — see
+`fozy-labs-di` → `references/architecture.md`. Do not decide it from FSD placement.
+
+---
+
+## 7. React tooling — the `react/` segment
+
+Framework-specific code that renders nothing sits in `react/`, alongside `ui/`.
+
+```text
+shared/react/                  ← generic hooks, no domain knowledge
   use-debounce.ts
   use-media-query.ts
 
 entities/user/
   model/user.types.ts
-  react/use-current-user.ts  ← composes UserApi + SessionStore for components
+  react/use-current-user.ts    ← composes UserApi + SessionStore for components
   react/UserContext.tsx
-  ui/UserAvatar.tsx          ← visual component stays in ui/
+  ui/UserAvatar.tsx            ← visual component stays in ui/
   index.ts
 ```
-
-Distinction:
-
-- `ui/` — visual components (`UserAvatar.tsx`).
-- `react/` — non-component React code that depends on the React API.
-- `lib/` — framework-agnostic utilities.
 
 ```ts
 // entities/user/react/use-current-user.ts
@@ -193,46 +198,24 @@ import { useSignal } from "@fozy-labs/rx-toolkit";
 import { SessionStore } from "@/shared/auth";
 
 export function useCurrentUser() {
-  const session = inject(SessionStore);
-  return useSignal(session.user$);
+  return useSignal(inject(SessionStore).user$);
 }
 ```
 
 ---
 
-## 6. Page composition
+## 8. Page composition
 
-A page composes widgets/features/entities + its own local UI. With the fozy-labs stack, the page typically owns a DI scope keyed on a route param so per-page stores get fresh instances on navigation:
+A page composes widgets, features and entities plus its own local UI. With the fozy-labs stack it typically
+also owns a DI scope keyed on a route param, so per-page stores are rebuilt on navigation:
 
-```tsx
-// pages/[some-route]/ui/SomeRoutePage.tsx
-export function SomeRoutePage() {
-  const { resourceId } = useParams<{ resourceId: string }>();
-  const scope = useScope({ keyName: `some-route:${resourceId}` });
-  const pageStore = inject.provide(SomeRouteStore, scope);
-
-  return (
-    <DiScopeProvider key={resourceId} scope={scope}>
-      <SomeWidget resourceId={resourceId} onOpen={() => pageStore.open()} />
-    </DiScopeProvider>
-  );
-}
+```text
+pages/order/
+  ui/OrderPage.tsx        ← creates the scope, provides OrderDetailsStore, renders widgets
+  model/order.store.ts
+  index.ts
 ```
 
-`key={resourceId}` + scope keyed on the route param means navigating to a different `resourceId` gets a fresh store; `onScopeInit` cleanup tears down the old one.
-
----
-
-## 7. Common placement questions
-
-| You have…                                            | Place it in…                                                   |
-|------------------------------------------------------|----------------------------------------------------------------|
-| A `fetch*` function that hits the backend            | `shared/http/`                                                 |
-| A zod schema for an API response                     | `shared/http/[name].schema.ts`                                 |
-| `createResource` consumed by 2+ pages                | `entities/[name]/model/[name].api.ts`                          |
-| `createResource` consumed by one page                | `pages/[name]/api/[name].api.ts`                               |
-| `@injectable` store touched only by one widget       | `widgets/[name]/model/[name].store.ts`                         |
-| Generic React hook (e.g. `useDebounce`)              | `shared/react/`                                                |
-| Entity-bound React hook (e.g. `useCurrentUser`)      | `entities/[name]/react/`                                       |
-| Route path constants                                 | `shared/config/`                                               |
-| `inject.createTag()` for a DI container              | The slice that owns the container                              |
+The scope-keying mechanics (`useScope`, `inject.provide`, `DiScopeProvider`, disposal) are owned by
+`fozy-labs-di` → `references/scopes-react.md`. FSD only says the scope belongs to the page slice that owns
+the route.

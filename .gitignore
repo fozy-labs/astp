@@ -4,3 +4,5 @@
 **/*.tsbuildinfo
 **/*.obsidian
 coverage
+
+.tmp/

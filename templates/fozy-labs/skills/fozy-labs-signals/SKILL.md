@@ -1,14 +1,23 @@
 ---
 name: fozy-labs-signals
 description: >
-  Reactive state primitives via @fozy-labs/rx-toolkit (Signal / LocalSignal / useSignal).
+  Reactive state primitives via @fozy-labs/rx-toolkit — Signal.state / compute / effect,
+  LocalSignal, RxJS interop and the useSignal React hook.
 ---
 
 # @fozy-labs/rx-toolkit — Signals
 
-Value-based reactive primitives (inspired by SolidJS / Angular Signals), built on RxJS. Use for **local synchronous state** — server state goes through `createResource` (see `fozy-labs-rx-api`).
+Value-based reactive primitives (SolidJS / Angular Signals in spirit), built on RxJS. Reference version: **0.10.2**.
+Use for **local synchronous state** — server state goes through `createResource` (see `fozy-labs-rx-api`).
 
-**Convention:** all signal fields end with a `$` suffix (matches RxJS observable convention).
+Two layers:
+
+- **core** — framework-agnostic (`Signal`, the `State` / `Computed` / `Effect` classes, `signalize`, `Batcher`). Works in Node, workers, tests, any framework.
+- **react** — a single hook, `useSignal`. React ≥ 19 (declared peer), client-only.
+
+Reactivity is by **value, not by event**: every write dedupes with `Object.is`, so writing an equal value notifies nobody.
+
+**Convention:** every signal field ends with a `$` suffix (matches the RxJS observable convention).
 
 ---
 
@@ -17,220 +26,147 @@ Value-based reactive primitives (inspired by SolidJS / Angular Signals), built o
 ```ts
 import { Signal } from "@fozy-labs/rx-toolkit";
 
-user$ = Signal.state<UserDto | null>(null);
-isOpen$ = Signal.state(false);
+class FiltersStore {
+  readonly query$ = Signal.state("");
+  readonly user$ = Signal.state<UserDto | null>(null);
+  readonly isOpen$ = Signal.state(false, "FiltersStore/isOpen$"); // 2nd arg = devtools key
 
-// Read (tracks dependency in compute/effect)
-user$();
-
-// Read without tracking
-user$.peek();
-
-// Write
-user$.set(newUser);
-user$.update((u) => ({ ...u, displayName }));
+  markSeen() {
+    this.user$.update((u) => (u ? { ...u, seen: true } : u));
+  }
+}
 ```
+
+| Call                         | Tracked | Notes                                                            |
+|------------------------------|---------|------------------------------------------------------------------|
+| `s$()` / `s$.get()`          | yes     | Registers a dependency when read inside a `compute` / `effect`.  |
+| `s$.peek()`                  | no      | Current value, no subscription.                                  |
+| `s$.set(v, actionName?)`     | —       | Silently ignored when `Object.is(v, current)`.                   |
+| `s$.update(fn, actionName?)` | —       | `set(fn(peek()))` — the read inside `update` is **not** tracked. |
+| `s$.obs`                     | —       | `Observable<T>`; see `references/rxjs-interop.md`.               |
+| `s$.dispose()`               | —       | Completes the signal; see `references/disposal-and-leaks.md`.    |
+
+- ❌ Mutating an object in place and re-`set`ting the same reference is a no-op — the `Object.is` guard swallows it. Always set a new reference.
+- Every `set` / `update` already opens a batch; `Batcher.run` is only for grouping several writes.
 
 ---
 
-## 2. `Signal.compute` — derived (read-only)
-
-Recomputes lazily; only when a dependency it actually reads has changed. Returns a `DisposableSignal<T>` — call `dispose()` (or use `using`) to stop a long-lived computed and release its subscriptions; most computeds need no explicit teardown (they hold nothing without active subscribers).
+## 2. `Signal.compute` — derived, lazy, read-only
 
 ```ts
-isAuthenticated$ = Signal.compute(() => this.user$() !== null);
+class OrderListStore {
+  private readonly _session = inject(SessionStore);
 
-canEdit$ = Signal.compute(() =>
-  Rights.canEdit(this._session.user$(), this.permissions$()),
-);
+  readonly orders$ = Signal.state<OrderDto[]>([]);
+  readonly archivedIds$ = Signal.state<string[]>([]);
 
-// Derived Set for fast membership lookup
-archivedKeys$ = Signal.compute(() => new Set(this._archivedKeys$()));
+  readonly isAuthenticated$ = Signal.compute(() => this._session.user$() !== null);
+  readonly archivedKeys$ = Signal.compute(() => new Set(this.archivedIds$()));
+  readonly visible$ = Signal.compute(() =>
+    this.orders$().filter((o) => !this.archivedKeys$().has(o.id)),
+  );
+}
 ```
+
+- **Lazy.** With no subscriber it computes on demand and memoizes against the values of the dependencies it read — it holds no subscriptions. A live subscriber (a tracking parent, `obs`, `useSignal`) starts an internal effect that keeps it warm, and stops it when the last subscriber leaves.
+- **Deduped by `Object.is`.** A compute that builds a fresh object / array / `Set` on every run notifies on every run — that is a legitimate result, not a bug, but it is what makes React re-render. See `references/extra-recomputes.md`.
+- Returns `DisposableSignal<T>` — no `set` / `update`.
+- ❌ Never `async` — a promise is not a value. Use `createResource` (`fozy-labs-rx-api`).
 
 ---
 
 ## 3. `Signal.effect` — side effect on dependency change
 
-Runs once on creation, then again whenever a tracked dependency changes. Return a teardown function for cleanup before the next run or on unsubscribe.
-
 ```ts
 const stop = Signal.effect(() => {
-  const resourceId = this.resourceId$();
+  const id = this.resourceId$();     // tracked — read synchronously
   const mode = this.mode$();
-  const ws = openSocket(resourceId, mode);
-  return () => ws.close(); // cleanup before next run or on unsubscribe
+  
+  const ws = openSocket(id, mode);
+  
+  return () => ws.close();           // teardown: before the next run and on unsubscribe
 });
 
-// Stop the effect (e.g. in `onScopeInit` cleanup)
-stop.unsubscribe();
+stop.unsubscribe(); // stop it; `stop.closed` is true afterwards
 ```
 
-**Async caveat:** only signals read **synchronously** during the effect body are tracked. Reads inside `await`/`then` callbacks won't establish subscriptions — capture them first.
-
-> Recommended to create the effect (as well as create the subscription) when mounting, rather than when creating the entity.
+- Runs **immediately and synchronously** at creation, then again on every tracked change.
+- **Only synchronous reads are tracked.** A signal read after `await`, inside `.then`, or in a timer callback establishes nothing — capture it before the async hop.
+- If the body throws, the effect unsubscribes itself and rethrows — it is dead and will never run again.
+- Nothing stops an effect for you. Create it where a teardown hook exists (React `useEffect`, DI `onScopeInit`), never in a constructor. See `references/disposal-and-leaks.md`.
 
 ---
 
-## 4. `LocalSignal.state` — persisted in localStorage
-
-For user preferences that should survive reloads.
+## 4. Types
 
 ```ts
-import { z } from "zod";
-import { LocalSignal } from "@fozy-labs/rx-toolkit";
-
-isOpen$ = LocalSignal.state<boolean>({
-  defaultValue: true,
-  key: "filters_panel_open",         // localStorage key suffix
-  userId: this._session.user$()?.id, // namespaces per-user — required unless truly anonymous
-  zodSchema: z.boolean(),            // validates stored value on hydration
-  devtoolsOptions: "FiltersPanelStore/isOpen$",
-  driver: localStorage,              // optional; defaults to localStorage
-});
-
-// Read/write API identical to Signal.state
-isOpen$.set(false);
-
-// Reset to defaultValue (removes the key)
-isOpen$.clear();
-```
-
-- `userId`: omit only for genuinely anonymous state.
-- `zodSchema`: always provide — guards against stale/corrupt storage.
-- Hydration is synchronous — no waiting step.
-
----
-
-## 5. React: `useSignal`
-
-```tsx
-import { useSignal } from "@fozy-labs/rx-toolkit";
-
-function CurrentUserWidget() {
-  const session = inject(SessionStore);
-  const user = useSignal(session.user$);            // re-renders on change
-  const isAuth = useSignal(session.isAuthenticated$);
-  return <span>{user?.username}</span>;
-}
-```
-
-Subscribes on mount, unsubscribes on unmount. No re-render when the value is referentially equal.
-
----
-
-## 6. RxJS interop
-
-Each signal exposes an `obs: Observable<T>`. Each RxJS observable can be lifted into a signal via `signalize`.
-
-```ts
-// Signal → Observable: apply RxJS operators
-import { filter, take } from "rxjs";
-
-const tenClicks$ = clickCount$.obs.pipe(
-  filter((v) => v === 10),
-  take(1),
-);
-const sub = tenClicks$.subscribe(() => console.log("ten!"));
-// Don't forget to unsubscribe (or use takeUntil(destroyed$)).
-
-// Observable → Signal: bring an event stream into the signal graph
-import { fromEvent } from "rxjs";
-import { signalize } from "@fozy-labs/rx-toolkit";
-
-const clicks$ = signalize(
-  fromEvent(document, "click").pipe(scan((n) => n + 1, 0), startWith(0)),
-  // You can pass `0` istaend of use `startWith(0)` in pipe.
-);
-const doubled$ = Signal.compute(() => clicks$() * 2);
-```
-
-```ts
-// Alternative for Signal.effect (Allowed to track a single signal):
-const sub = doubled$.obs.subscribe((v) => console.log(v));
-
-
-// Don't forget to unsubscribe (or use takeUntil(destroyed$)).
-sub.unsubscribe();
-```
-
-Use signals as the source of truth for **state**; use RxJS operators when you genuinely need stream semantics (debouncing, windowing, taking N events).
-
-`signalize(observable, defaultValue?)`
-
----
-
-## 7. Devtools — actionName / devtoolsOptions
-
-For meaningful entries in Redux DevTools:
-
-```ts
-// At signal creation — `name` shows up in the action log
-count$ = Signal.state(0, "counter");
-
-// On write — appended to the action type
-count$.set(1);                      // "UPDATE"
-count$.set(0, "reset");             // "UPDATE: reset"
-count$.update((v) => v + 1, "inc"); // "UPDATE: inc"
-
-// Disable tracking for a specific signal
-secret$ = Signal.state(null, { isDisabled: true });
-```
-
-`LocalSignal.state` accepts the same via `devtoolsOptions` (string label or object).
-
----
-
-## 7. Batching
-
-You can update reactive signal chains in one cycle.
-This works with any depth.
-The only thing is that with "signal -> observable -> signal" with async or long and variable ones the sequence may double emission of the event.
-A single call to set/update is automatically wrapped in a batch; there is no need to call Batcher.run.
-```ts
-// This will run only once after both count1$ and count2$ have been updated
-Signal.compute/effect(() => {
-    const total = count1$() + count2$();
-});
-
-Batcher.run(() => {
-    count1$.set(1);
-    count2$.update((v) => v + 1);
-});
-```
-
----
-
-## 8. Types reference
-
-```ts
-// Returned by signalize() / SourceSignal.create()
-export interface ReadonlySignal<T> {
+// signalize(), SourceSignal.create()
+interface ReadonlySignal<T> {
   readonly obs: Observable<T>;
   peek(): T;
   get(): T;
   (): T;
 }
 
-// Returned by Signal.compute()
-export interface DisposableSignal<T> extends ReadonlySignal<T> {
-  // Manudal dispose (auto by default) 
+// Signal.compute()
+interface DisposableSignal<T> extends ReadonlySignal<T>, Disposable {
   dispose(): void;
-  [Symbol.dispose](): void;
 }
 
-// Returned by Signal.state()
-export interface StateSignal<T> extends DisposableSignal<T> {
+// Signal.state()
+interface StateSignal<T> extends DisposableSignal<T> {
   set(value: T, actionName?: string): void;
   update(updater: (value: T) => T, actionName?: string): void;
 }
 ```
 
+- `Signal.effect` returns an `Effect`, not a signal — an RxJS `SubscriptionLike` with `unsubscribe()` and `closed`.
+- `LocalSignal.state` returns `LocalStateSignal<T>`: `ReadonlySignal` + `set` / `update` / `clear`, and notably **no**
+  `dispose()` (`references/persisted-state.md`).
+
+---
+
+## 5. Devtools
+
+```ts
+import { DefaultOptions, reduxDevtools } from "@fozy-labs/rx-toolkit";
+
+if (import.meta.env.DEV) {
+  DefaultOptions.update({ DEVTOOLS: reduxDevtools() });
+}
+```
+
+- Name a signal at creation: `Signal.state(0, "counter")` — the string is the `key` of `SignalOptions`. There is no `name` field.
+- Label a write: `count$.set(0, "reset")` → action `UPDATE: reset`; a bare `set` → `UPDATE`.
+- `{scope}` inside a key is replaced by `DefaultOptions.update({ getScopeName })` — wire it to the DI scope name for keys like `"{scope}/CounterStore/value$"`. `{base}` expands to `State` / `Computed`.
+- Opt out per signal: `Signal.state(secret, { isDisabled: true })`.
+- `SignalOptions.hooks` (`onInit` / `onChange` / `onDispose`) is honoured by `Signal.state` only — `Signal.compute` drops it.
+
 ---
 
 ## Rules
 
-- ❌ Don't use `Signal.compute` for async values — use `createResource` (see `fozy-labs-rx-api`).
-- ❌ Don't read signals inside `await`/microtask callbacks in a `compute`/`effect` and expect tracking.
+- ❌ Don't use `Signal.compute` for async values — use `createResource` (see `fozy-labs-rx-api` if exist).
+- ❌ Don't read signals inside `await` / microtask callbacks and expect tracking.
+- ❌ Don't create effects or subscriptions in a constructor — there is no teardown there.
+- ❌ Don't mutate in place and re-`set` the same reference — the write is dropped.
 - ✅ `$` suffix on every signal field.
-- ✅ Always pass `zodSchema` to `LocalSignal.state` — storage can return stale shapes.
+- ✅ Keep derived values as narrow as possible — one signal per thing a consumer reads.
+
+---
+
+## Conditional references
+
+Load these only when the specific situation applies — do **not** preload.
+
+| Situation                                                                          | File                                 |
+|------------------------------------------------------------------------------------|--------------------------------------|
+| Rendering signals in React — `useSignal`, component-local signals, StrictMode, SSR | `references/use-in-react.md`         |
+| Signals outside React — Node, workers, tests, Angular/Svelte/Solid, class style    | `references/use-outside-react.md`    |
+| A compute/effect runs too often, too rarely, or out of order; `Batcher`            | `references/extra-recomputes.md`     |
+| Deciding what must be disposed, effect teardown, leaks, DI scope interaction       | `references/disposal-and-leaks.md`   |
+| An RxJS `Observable` on either side — `obs`, `signalize`, `SourceSignal`           | `references/rxjs-interop.md`         |
+| State that must survive a reload — `LocalSignal`, storage layout, drivers          | `references/persisted-state.md`      |
+| One big object or a keyed collection wakes every reader (experimental APIs)        | `references/fine-grained-state.md`   |
+
+Pick **one** of `use-in-react.md` / `use-outside-react.md` — the one matching the host. Loading both variants of the same topic is redundant.

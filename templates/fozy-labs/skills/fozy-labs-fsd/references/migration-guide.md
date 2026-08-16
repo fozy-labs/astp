@@ -1,233 +1,188 @@
-# Migration Guide
+# Migration guide
 
-Step-by-step instructions for migrating to FSD v2.1 from either FSD v2.0 or
-a non-FSD codebase.
+Moving an existing codebase to FSD v2.1 — either from FSD v2.0, or from no FSD at all. Target folder trees
+live in `layer-structure.md`; this file covers the order of operations.
 
 ---
 
-## Part 1: FSD v2.0 → v2.1 (Non-breaking)
+## Part 1 — FSD v2.0 → v2.1
 
-The v2.1 update emphasizes "start simple, extract when needed." The migration
-is non-breaking — it simplifies your codebase by moving single-use code back
-to where it is consumed.
+v2.1 emphasizes *start simple, extract when needed*. The migration is non-breaking: it mostly moves
+single-use code back to where it is consumed.
 
-### Step 1: Audit existing slices
+### Step 1 — audit existing slices
 
-Identify which features and entities are used in only one place.
+Find features and entities with exactly one consumer.
 
 ```bash
-# Use Steiger to detect single-use slices
 npm install -D @feature-sliced/steiger
 npx steiger src
 
-# Look for these rules:
-# - insignificant-slice: entity/feature used by only one consumer
-# - excessive-slicing: too many slices in a layer
+# Rules that matter here:
+# - insignificant-slice: an entity/feature used by only one consumer
+# - excessive-slicing:   too many slices in a layer
 ```
 
-For each flagged slice, decide:
+For each flagged slice: genuinely reused in 2+ places → keep it; used by one page → mark it for migration.
 
-- Is it genuinely reused in 2+ places? → Keep in features/entities.
-- Used in only one page? → Mark for migration back to that page.
-
-### Step 2: Move page-specific code back to pages
-
-Take single-use features and entities and inline them into the consuming page.
+### Step 2 — move page-specific code back to pages
 
 ```text
-// Before (v2.0): feature used by only one page
+// Before (v2.0) — a feature with one consumer
 features/user-profile-form/
   ui/ProfileForm.tsx
-  model/profile-form.ts
-  api/update-profile.ts
+  model/profile-form.store.ts
+  api/profile.api.ts
   index.ts
 pages/profile/
-  ui/ProfilePage.tsx       ← Thin wrapper, just composes
+  ui/ProfilePage.tsx           ← thin wrapper, just composes
 
-// After (v2.1): code lives in the page that owns it
+// After (v2.1) — the code lives in the page that owns it
 pages/profile/
   ui/
     ProfilePage.tsx
-    ProfileForm.tsx         ← Moved from features
+    ProfileForm.tsx            ← moved from features
   model/
-    profile.ts              ← Merged form logic here
+    profile.store.ts           ← form logic merged in
   api/
-    update-profile.ts       ← Moved from features
+    profile.api.ts             ← moved from features
   index.ts
 ```
 
-**Migration checklist for each moved slice:**
+Per moved slice:
 
-1. Copy all files from the feature/entity into the consuming page.
-2. Update the page's `index.ts` to export what is needed.
-3. Update all imports across the codebase to point to the new location.
-4. Delete the now-empty feature/entity directory.
-5. Run tests to verify nothing broke.
+1. Copy the files into the consuming page.
+2. Update the page's `index.ts` to export what other layers still need.
+3. Repoint every import across the codebase.
+4. Delete the emptied feature/entity directory.
+5. Run the tests.
 
-### Step 3: Move widget-specific code to widgets
+### Step 3 — move widget-specific code into widgets
 
-If a feature or entity is used only within one widget, move it into that
-widget slice.
+A feature or entity used only inside one widget belongs to that widget.
 
 ```text
-// Before: entity used only by the header widget
+// Before
 entities/notification-count/
-  model/notification-count.ts
+  model/notification-count.types.ts
 
-// After: inline into the widget
+// After
 widgets/header/
-  model/
-    notification-count.ts   ← Moved from entities
+  model/notification-count.types.ts
 ```
 
-### Step 4: Keep genuinely reused code in place
+### Step 4 — leave genuinely reused code alone
 
-Code that is confirmed to be used in 2+ places remains in features/entities.
-Do not move it.
+Confirmed 2+ consumers means the slice stays where it is. v2.1 is not an instruction to flatten everything.
 
-### Step 5: Deprecate the processes layer
+### Step 5 — retire the `processes/` layer
 
-The `processes/` layer is deprecated in v2.1. Migrate its code:
+`processes/` is deprecated in v2.1.
 
-**Multi-page workflows** (e.g., checkout flow, onboarding wizard):
+**Multi-page workflows** (checkout, onboarding wizard): move the orchestration into the page that starts the
+workflow; if several pages share the workflow state, it becomes a feature.
 
-- Move orchestration logic to the page that initiates the workflow.
-- If multiple pages share the workflow state, create a feature for it.
-
-**Background processes** (e.g., polling, sync):
-
-- Move to `app/` if truly global (app-wide polling).
-- Move to the relevant page or feature if scoped.
+**Background work** (polling, sync): `app/` if it is genuinely app-wide, otherwise the owning page or
+feature.
 
 ```text
-// Before: processes layer
+// Before
 processes/
   checkout/
-    model/checkout-flow.ts    ← Multi-step checkout orchestration
+    model/checkout-flow.store.ts    ← multi-step orchestration
   sync/
-    model/background-sync.ts  ← Periodic data sync
+    model/background-sync.service.ts
 
-// After: distributed to appropriate layers
+// After
 features/checkout/
-  model/
-    checkout-flow.ts           ← Now a feature (used in 2+ pages)
+  model/checkout-flow.store.ts      ← now a feature (used by 2+ pages)
   index.ts
 app/
   sync/
-    background-sync.ts         ← Global concern → app layer
+    background-sync.service.ts      ← global concern
 ```
 
-### Post-migration verification
+### Verification
 
-After completing the migration:
-
-1. Run `npx steiger src` — all `insignificant-slice` warnings should be gone.
-2. Verify import directions — no upward or same-layer cross-imports.
-3. Check that no empty layer directories remain.
-4. Update documentation to reflect the new structure.
+1. `npx steiger src` — no remaining `insignificant-slice` warnings.
+2. No upward or same-layer cross-imports.
+3. No empty layer directories left behind.
 
 ---
 
-## Part 2: Non-FSD Codebase → FSD
+## Part 2 — non-FSD codebase → FSD
 
-Migrate incrementally. Do not attempt a big-bang rewrite.
+Migrate incrementally. A half-migrated tree is a normal intermediate state; a big-bang rewrite is not.
 
-### Phase 1: Establish shared/ (Week 1-2)
+### Phase 1 — establish `shared/`
 
-Move infrastructure code that has no business logic:
-
-```text
-// Typical targets for shared/
-shared/
-  ui/          ← Existing UI component library
-  lib/         ← Utility functions (formatDate, validators, etc.)
-  api/         ← API client setup, axios/fetch configuration
-  auth/        ← Auth token management, session utilities
-  config/      ← Environment variables, app constants
-  assets/      ← Images, fonts, icons
-```
-
-**Rules during this phase:**
+Move infrastructure that carries no business logic: the existing UI component library, utility functions,
+API client setup, auth/session utilities, config, assets. Target layout: `layer-structure.md` → `shared/`.
 
 - Only move code with zero business logic.
-- Do not refactor the moved code yet — just relocate.
-- Set up path aliases (`@/shared/...`).
+- Relocate, do not refactor.
+- Set up the path aliases now (`segments-and-naming.md`), so later phases import correctly from day one.
 
-### Phase 2: Create pages/ (Week 2-4)
+### Phase 2 — create `pages/`
 
-Organize route-level components into page slices:
+Turn route-level components into page slices.
 
 ```text
-// Before: flat or feature-grouped structure
+// Before — flat or component-grouped
 src/
   components/
     Dashboard.tsx
     Profile.tsx
     Settings.tsx
 
-// After: FSD pages with their own segments
+// After — page slices with segments
 src/
   pages/
     dashboard/
-      ui/Dashboard.tsx
-      model/dashboard.ts
-      api/fetch-dashboard.ts
+      ui/DashboardPage.tsx
+      model/dashboard.store.ts
+      api/dashboard.api.ts
       index.ts
     profile/
-      ui/Profile.tsx
-      model/profile.ts
-      api/fetch-profile.ts
+      ui/ProfilePage.tsx
+      model/profile.store.ts
+      api/profile.api.ts
       index.ts
 ```
 
-**Rules during this phase:**
+- Each page owns its UI, state and API calls.
+- Do not extract features or entities in this phase.
+- Substantial page code is correct v2.1 behaviour, not debt.
 
-- Each page owns its UI, state, and API calls.
-- Do not extract features or entities yet.
-- It is fine for pages to have substantial code — this is v2.1 behavior.
+### Phase 3 — set up `app/`
 
-### Phase 3: Set up app/ (Week 3-4)
+Move global providers, the router, global styles and the entry point into `app/`. Layout:
+`layer-structure.md` → `app/`.
 
-Move global configuration:
+### Phase 4 — extract `features/` and `entities/` (ongoing)
 
-```text
-src/
-  app/
-    providers/      ← Redux store, React Query client, theme
-    router.tsx      ← Route configuration
-    styles/         ← Global CSS, reset styles
-    index.tsx       ← Entry point
-```
-
-### Phase 4: Extract features/ and entities/ (Ongoing)
-
-Only when genuine reuse is observed and the team agrees:
+Only when real reuse shows up and the team agrees:
 
 ```text
-// Signal: "profile form" is now needed in both /profile and /settings pages
-// Team agrees to extract → create a feature
-
+// Signal: the profile form is now needed by /profile and /settings
 features/profile-form/
   ui/ProfileForm.tsx
-  model/profile-form.ts
+  model/profile-form.store.ts
   index.ts
 ```
 
-**Decision criteria for extraction:**
+Criteria: 2+ actual consumers (not anticipated ones), a clear single responsibility, and a net reduction in
+complexity. If any of the three is missing, leave it in the page.
 
-- The code is genuinely used in 2+ places (not hypothetically).
-- The team agrees the extraction reduces net complexity.
-- The extracted slice has a clear, focused responsibility.
+---
 
-### Common pitfalls during migration
+## Common pitfalls
 
-1. **Extracting too early.** Wait for real reuse, not anticipated reuse.
-2. **Creating empty layers.** Do not create `features/`, `entities/`, or
-   `widgets/` directories until you have content for them.
-3. **Refactoring while migrating.** Separate relocation from refactoring.
-   First move files, then improve them in separate commits.
-4. **Ignoring import direction.** Enforce import rules from day one. Use
-   ESLint with `eslint-plugin-import` or Steiger to catch violations.
-5. **Big-bang migration.** Migrate module by module, verifying each step.
-   A hybrid structure (partially FSD, partially legacy) is acceptable
-   during transition.
+1. **Extracting too early.** Wait for real reuse, not planned reuse.
+2. **Creating empty layers.** No `features/`, `entities/` or `widgets/` directory until something lives
+   there.
+3. **Refactoring while migrating.** Move files in one commit, improve them in another — a moved-and-rewritten
+   file is unreviewable.
+4. **Ignoring import direction.** Enforce it mechanically from the first phase, not at the end.
+5. **Big-bang migration.** Module by module, verifying each step. Hybrid structure during the transition is
+   fine.

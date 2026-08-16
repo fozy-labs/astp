@@ -7,7 +7,9 @@
             "version": "1.0.1",
             "description": "Base skill for VSCode Copilot agent orchestration",
             "default": true,
-            "platforms": ["vscode"],
+            "platforms": [
+                "vscode"
+            ],
             "items": [
                 {
                     "source": "base/skills/orchestrate/SKILL.md",
@@ -21,7 +23,9 @@
             "version": "1.1.0",
             "description": "Full RDPI pipeline — agents, instructions, and stage definitions",
             "default": false,
-            "platforms": ["vscode"],
+            "platforms": [
+                "vscode"
+            ],
             "items": [
                 {
                     "source": "rdpi/agents/RDPI-Orchestrator.agent.md",
@@ -137,10 +141,13 @@
         },
         "fozy-labs": {
             "name": "fozy-labs",
-            "version": "1.1.0",
+            "version": "1.2.0",
             "description": "Fozy Labs stack skills — DI, FSD, rx-api, signals (VS Code + Claude Code)",
             "default": false,
-            "platforms": ["vscode", "claude-code"],
+            "platforms": [
+                "vscode",
+                "claude-code"
+            ],
             "items": [
                 {
                     "source": "fozy-labs/skills/fozy-labs-di/SKILL.md",
@@ -203,13 +210,98 @@
                     "category": "skill"
                 },
                 {
+                    "source": "fozy-labs/skills/fozy-labs-fsd/references/segments-and-naming.md",
+                    "target": "skills/fozy-labs-fsd/references/segments-and-naming.md",
+                    "category": "skill"
+                },
+                {
                     "source": "fozy-labs/skills/fozy-labs-rx-api/SKILL.md",
                     "target": "skills/fozy-labs-rx-api/SKILL.md",
                     "category": "skill"
                 },
                 {
+                    "source": "fozy-labs/skills/fozy-labs-rx-api/references/cache-and-invalidation.md",
+                    "target": "skills/fozy-labs-rx-api/references/cache-and-invalidation.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-rx-api/references/cross-tab-sync.md",
+                    "target": "skills/fozy-labs-rx-api/references/cross-tab-sync.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-rx-api/references/error-handling.md",
+                    "target": "skills/fozy-labs-rx-api/references/error-handling.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-rx-api/references/extending-the-api.md",
+                    "target": "skills/fozy-labs-rx-api/references/extending-the-api.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-rx-api/references/lifecycle-hooks.md",
+                    "target": "skills/fozy-labs-rx-api/references/lifecycle-hooks.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-rx-api/references/reading-in-react.md",
+                    "target": "skills/fozy-labs-rx-api/references/reading-in-react.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-rx-api/references/reading-outside-react.md",
+                    "target": "skills/fozy-labs-rx-api/references/reading-outside-react.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-rx-api/references/ssr-hydration.md",
+                    "target": "skills/fozy-labs-rx-api/references/ssr-hydration.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-rx-api/references/writing-mutations.md",
+                    "target": "skills/fozy-labs-rx-api/references/writing-mutations.md",
+                    "category": "skill"
+                },
+                {
                     "source": "fozy-labs/skills/fozy-labs-signals/SKILL.md",
                     "target": "skills/fozy-labs-signals/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-signals/references/disposal-and-leaks.md",
+                    "target": "skills/fozy-labs-signals/references/disposal-and-leaks.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-signals/references/extra-recomputes.md",
+                    "target": "skills/fozy-labs-signals/references/extra-recomputes.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-signals/references/fine-grained-state.md",
+                    "target": "skills/fozy-labs-signals/references/fine-grained-state.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-signals/references/persisted-state.md",
+                    "target": "skills/fozy-labs-signals/references/persisted-state.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-signals/references/rxjs-interop.md",
+                    "target": "skills/fozy-labs-signals/references/rxjs-interop.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-signals/references/use-in-react.md",
+                    "target": "skills/fozy-labs-signals/references/use-in-react.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-signals/references/use-outside-react.md",
+                    "target": "skills/fozy-labs-signals/references/use-outside-react.md",
                     "category": "skill"
                 }
             ]

@@ -1,25 +1,33 @@
 ---
 name: fozy-labs-rx-api
 description: >
-  Server-state layer via @fozy-labs/rx-toolkit (createApi / createResource / createCommand).
+    Server-state layer for js/ts projects based on the Query module of @fozy-labs/rx-toolkit
+    (createApi / createResource / createCommand) — caching, SWR, optimistic updates, React hooks.
 ---
 
-# @fozy-labs/rx-toolkit — Query (server state)
+# @fozy-labs/rx-toolkit — Query
 
-Cache-aware declarative server-state layer. Built on top of `@fozy-labs/rx-toolkit` signals — every resource/command exposes the same `obs` and reactive primitives under the hood, so it composes with `Signal.compute` and `useSignal`.
+Declarative cache-aware server state: one cache entry per serialized args, stale-while-revalidate, optimistic updates,
+SSR snapshots.
+Framework-agnostic core; React binds through a plugin.
+Tracks package version **0.10.2**.
 
 Two primitives:
 
-| Primitive  | Purpose                                          | Returns                                        |
-|------------|--------------------------------------------------|------------------------------------------------|
-| `resource` | **Read** — cached by args, SWR, auto-invalidate. | `useResource(args)`, `trigger`, `refresh`, …  |
-| `command`  | **Write** — mutations, optimistic updates, links to resources. | `useCommand()`, `trigger(args)`. |
+| Primitive        | Purpose                                                        | Reactive surface                          |
+|------------------|----------------------------------------------------------------|-------------------------------------------|
+| `createResource` | **Read** — cached by args, SWR, invalidated by commands.       | `useResource`, `createAgent`, `getEntry$` |
+| `createCommand`  | **Write** — mutations, optimistic patches, links to resources. | `useCommand`, `createAgent`               |
+
+The resource/command objects are plain objects, not signals.
+Everything reactive they expose (`state$`, `machine$`, `getEntry$`) is an rx-toolkit signal,
+so it composes with `Signal.compute` and `useSignal` — see the `fozy-labs-signals` skill.
 
 ---
 
 ## 1. `createApi`
 
-One API instance per app is enough.
+One api instance per app.
 
 ```ts
 // shared/api/api.ts
@@ -31,215 +39,141 @@ export const api = createApi({
 });
 ```
 
+| Option                                  | Default           | Meaning                                                            |
+|-----------------------------------------|-------------------|--------------------------------------------------------------------|
+| `keyPrefix`                             | `undefined`       | Prefixed onto every `key` as `` `${keyPrefix}/${key}` ``.          |
+| `plugins`                               | `[]`              | `reactHooksPlugin()` is what adds the `use*` methods.              |
+| `serializeArgs`                         | `stableStringify` | Args → cache key.                                                  |
+| `resourceRetentionTime`                 | `60_000`          | ms an unsubscribed resource entry survives. `false` = never evict. |
+| `commandRetentionTime`                  | `0`               | Same, for commands.                                                |
+| `mapError`                              | identity          | Normalizes errors and types `TError`.                              |
+| `initialSnapshot` / `snapshotValidTime` | `null` / `false`  | SSR hydration.                                                     |
+| `defaultSync` / `syncDriver`            | `"none"` / —      | Cross-tab sync.                                                    |
+| `onCacheEntryAdded` / `onQueryStarted`  | —                 | Api-wide lifecycle hooks, merged with per-resource ones.           |
+
+The instance exposes exactly four members: `createResource`, `createCommand`, `getSnapshot()` and `resetAll()`.
+
 ---
 
 ## 2. `createResource` — cached read
 
 ```ts
-// entities/user/model/user.api.ts
-@injectable("SCOPED")
-export class UserApi {
-  getCurrentUser = api.createResource({
-    key: "currentUser", // unique — used by devtools, broadcast sync, snapshots
-    queryFn: fetchCurrentUser, // (args, signal) => Promise<UserDto>
-  });
-}
-```
-
-With explicit generics `<TArgs, TData>`:
-
-```ts
+// entities/order/model/order.api.ts
 @injectable("SCOPED")
 export class OrderApi {
-  listOrders = api.createResource<{ status: OrderStatus }, OrdersPage>({
-    key: "ordersByStatus",
-    queryFn: ({ status }, signal) =>
-      fetchOrdersPage({ status, limit: DEFAULT_PAGE_SIZE }, signal),
-  });
+    getCurrentUser = api.createResource({
+        key: "currentUser",
+        queryFn: fetchCurrentUser, // or: `queryFn: (_: void, abortSignal) => fetchCurrentUser(undefined, abortSignal)`
+    });
+
+    getOrders = api.createResource({
+        key: "ordersByStatus",
+        queryFn: fetchOrdersPage, // or: `queryFn: ({ status }: { status: OrderStatus }, abortSignal) => fetchOrdersPage({ status }, abortSignal)`
+    });
 }
 ```
 
-### React hook — `.useResource(args?)`
-
-Auto-fires on mount; refetches when args change; keeps previous data on-screen while loading new args (SWR fallback).
+`queryFn` is the only required option; its second argument is an `AbortSignal` — forward it to `fetch`, 
+    the library aborts on args change and on eviction. 
+`key` is optional, but devtools, snapshots and cross-tab sync all address by it.
 
 ```tsx
-const userApi = inject(UserApi);
-
-// No args
-const { data, isLoading } = userApi.getCurrentUser.useResource();
-
-// With args — refetches when args change
 const orderApi = inject(OrderApi);
-const { data: page } = orderApi.listOrders.useResource({ status });
-
-// Skip until ready
-import { SKIP } from "@fozy-labs/rx-toolkit";
-const { data } = orderApi.listOrders.useResource(status ? { status } : SKIP);
+const { data, isLoading } = orderApi.getCurrentUser.useResource();
+const orders = orderApi.getOrders.useResource(status ? { status } : SKIP);
 ```
 
-#### Returned state
-
-| Field              | Meaning                                                |
-|--------------------|--------------------------------------------------------|
-| `data`             | Latest data or `null`.                                 |
-| `error`            | Error from the last failed fetch.                      |
-| `args`             | Args of the last fetch.                                |
-| `status`           | `idle` \| `pending` \| `success` \| `error` \| `refreshing` \| `refresh-error`. |
-| `isLoading`        | Any in-flight fetch.                                   |
-| `isInitialLoading` | First load (no data yet).                              |
-| `isRefreshing`     | Background refetch (stale data still shown).           |
-| `isSuccess`        | Last fetch succeeded.                                  |
-| `isError`          | Last fetch failed.                                     |
-| `isRefreshError`   | Background refetch failed, stale data still present.   |
-| `retry()`          | Retry the last failed fetch.                           |
-| `refresh()`        | Force a background refresh (keeps current data).       |
-
-### Imperative API
-
-For use in stores / handlers — outside the React render cycle.
-
-```ts
-// Inside a store method:
-await this._api.getCurrentUser.trigger();          // fetch + dedupe with in-flight
-await this._api.listOrders.trigger({ status });
-
-// Background refresh (keeps current data visible to subscribers)
-this._api.getCurrentUser.refresh();
-
-// Read current cache entry / state synchronously
-const entry = this._api.getCurrentUser.getEntry(undefined, /* create */ true);
-const state = this._api.getCurrentUser.getState(undefined);
-```
-
-> Prefer `useResource` in components. Reach for imperative `trigger` only when fetching from non-React code (stores, route loaders, command handlers).
+State is a discriminated union on `status` (`idle | pending | success | error | refreshing | refresh-error`);
+    narrowing on `isSuccess` gives `data: TData` without `| null`.
 
 ---
 
 ## 3. `createCommand` — mutation
 
 ```ts
-@injectable("SCOPED")
-export class OrderApi {
-  createOrder = api.createCommand({
-    key: "createOrder", // shown in devtools
-    queryFn: fetchCreateOrder,
-  });
-
-  cancelOrder = api.createCommand({
-    key: "cancelOrder",
-    queryFn: fetchCancelOrder,
-  });
-}
-```
-
-### React hook — `.useCommand()`
-
-```tsx
-const userApi = inject(UserApi);
-const [save, { isLoading: isSaving, error }] = userApi.updateUser.useCommand();
-
-await save(args); // Promise<TData>, rejects on error
-```
-
-`save` (the trigger) is stable across renders — safe in dependency arrays. The hook **does not** fire on mount; you call `save(args)` explicitly.
-
-### Imperative `.trigger(args)`
-
-In stores / handlers:
-
-```ts
-const order = await this._api.createOrder.trigger({ items, addressId });
-const { url } = await this._api.uploadAttachment.trigger({ file });
-```
-
----
-
-## 4. `links` — optimistic updates & cache wiring
-
-Connect a command to one or more resources so the cache stays consistent after a mutation. `forwardArgs` is **required** — it maps command args → resource args (i.e. which cache entry is affected).
-
-Three independent strategies (combine as needed):
-
-| Strategy            | When                                             |
-|---------------------|--------------------------------------------------|
-| `optimisticUpdate`  | Patch cache **before** server responds (Immer draft). Auto-rolled back on error. |
-| `update`            | Patch cache **after** successful response (receives the server result).          |
-| `invalidate: true`  | Mark cache entry stale on success — next read refreshes.                         |
-
-```ts
-@injectable("SCOPED")
-export class UpdateStatusApi {
-  private userApi = inject(UserApi);
-
-  setStatus = api.createCommand<UserStatus, User>({
-    queryFn: (status) => fetchUpdateCurrentUser({ status }),
-    links: (link) =>
-      link({
-        resource: this.userApi.getCurrentUser,
-        forwardArgs: () => undefined, // getCurrentUser has no args
-        optimisticUpdate: (draft, status) => {
-          if (draft) draft.status = status;
-        },
-      }),
-  });
-}
-```
-
-Multiple links per command (e.g. update one resource and invalidate another):
-
-```ts
-links: (link) => {
-  link({
-    resource: this.userApi.getCurrentUser,
-    forwardArgs: () => undefined,
-    update: (draft, args, response) => Object.assign(draft, response),
-  });
-  link({
-    resource: this.orderApi.listOrders,
-    forwardArgs: () => ({ status: "ALL" }),
-    invalidate: true,
-  });
-},
-```
-
----
-
-## 5. Plugin hooks — `onCacheEntryAdded` / `onQueryStarted`
-
-For per-resource/per-command lifecycle (subscribe to websockets, log, instrument, etc.). Mention briefly — read the package docs before using.
-
-```ts
-getCurrentUser = api.createResource({
-  key: "currentUser",
-  queryFn: fetchCurrentUser,
-  onCacheEntryAdded: async (args, { entry, $cacheDataLoaded, $cacheEntryRemoved }) => {
-    await $cacheDataLoaded; // wait for initial data
-    const sub = wsClient.subscribe("user", (patch) => {
-      entry.createPatch((draft) => Object.assign(draft, patch)); // apply update to cached data
-    });
-    await $cacheEntryRemoved; // wait for last consumer to detach
-    sub.unsubscribe();
-  },
+createOrder = api.createCommand({
+    key: "createOrder",
+    queryFn: postOrder, // or: `queryFn: (dto: CreateOrderDto, requestId) => postOrder(dto, { headers: { "Idempotency-Key": requestId } })`
 });
 ```
 
+The second `queryFn` argument is a **request id**, 
+    not an abort signal — a per-cache-entry idempotency token reused across `retry()`.
+
+```tsx
+const [createOrder, { isLoading }] = orderApi.createOrder.useCommand();
+const result = await createOrder(dto); // never rejects
+if (result.status === "error") show(result.error);
+else navigate(result.data.id);
+```
+
+Hook and agent `trigger` resolve an envelope and never reject (`.unwrap()` restores throwing semantics). 
+The imperative`command.trigger(args, key?)` returns a raw `Promise<TData>` that does reject.
+
 ---
 
-## 6. Agents (advanced)
+## 4. `links` — keeping the cache consistent
 
-`useResource` / `useCommand` are sugar over **agents** — low-level subscribers that own a `status`, `data`, `error` stream. Reach for `resource.createAgent()` / `command.createAgent()` only when you need a reactive observer outside React (e.g. inside a store) **and** the imperative `trigger`/`refresh` is not enough.
+```ts
+setStatus = api.createCommand<UserStatus, User>({
+    queryFn: (status) => putUserStatus(status),
+    links: (link) =>
+        link({
+            resource: this._userApi.getCurrentUser,
+            forwardArgs: () => undefined, // → the entry whose args are `undefined`
+            optimisticUpdate: (draft, status) => {
+                draft.status = status;
+            },
+        }),
+});
+```
 
-Default rule: components use the hooks; stores use `trigger`. Only drop to agents if you genuinely need reactive cache state in non-React code.
+| Field              | Runs                                                         |
+|--------------------|--------------------------------------------------------------|
+| `optimisticUpdate` | Before `queryFn`; Immer recipe, auto-rolled back on failure. |
+| `update`           | After success; also receives the server result.              |
+| `invalidate: true` | After success; background SWR refresh of the entry.          |
+
+`forwardArgs` is required and selects **exactly one** cache entry. It is not a wildcard: if no entry exists for those
+args, the link silently does nothing.
+
+---
+
+## 5. Not built in
+
+| Expectation                        | Reality                                                                         |
+|------------------------------------|---------------------------------------------------------------------------------|
+| Automatic retry / backoff          | None. `retry()` is manual; put a retry policy inside `queryFn`.                 |
+| Polling / `refetchInterval`        | None. Drive `refresh(args)` from your own timer or an `onCacheEntryAdded` hook. |
+| Infinite query / pagination helper | None. One entry per page args; SWR keeps the previous page on screen.           |
+| A built-in fetcher                 | None by design — `queryFn` is any function returning `Promise<TData>`.          |
 
 ---
 
 ## Rules
 
-- ❌ Don't declare resources/commands at module scope — put them on a `@injectable("SCOPED")` API class.
-- ❌ Don't call `.useResource` / `.useCommand` outside a React render.
-- ❌ Don't omit `forwardArgs` in `links` — even when the resource has no args, return `undefined` explicitly.
-- ❌ Don't reach for agents when `trigger`/`refresh`/`useResource` would do.
-- ✅ Every `createResource` / `createCommand` needs a unique `key` (used by devtools, broadcast, snapshots).
-- ✅ Prefer `useResource`/`useCommand` in components; `trigger` in stores.
-- ✅ Use `SKIP` to gate a resource until args are ready.
+- ❌ Don't `try/catch` a hook or agent `trigger` — it never rejects; check `result.status` or use `.unwrap()`.
+- ❌ Don't leave a manual `entry.createPatch(...)` handle uncommitted — a pending patch never reconciles.
+- ✅ Use `ensure` / `fetch` (instead of `await resource.trigger(args)`) when you need the data.
+- ✅ `SKIP` gates a read until args are ready (`useResource` only — `useSuspenseResource` rejects it).
+
+---
+
+## Conditional references
+
+Load these only when the specific situation applies — do **not** preload.
+
+| Situation                                                                          | File                                   |
+|------------------------------------------------------------------------------------|----------------------------------------|
+| Rendering server data — hooks, `SKIP`, state union, Suspense                       | `references/reading-in-react.md`       |
+| Reading from stores, route loaders, workers — `ensure`/`fetch`/`trigger`, agents   | `references/reading-outside-react.md`  |
+| Writing a mutation — options, request id, envelope, retry, command cache keys      | `references/writing-mutations.md`      |
+| The cache did not update after a mutation — `links`, patches, staleness, eviction  | `references/cache-and-invalidation.md` |
+| Typing `error`, `mapError`, retries, cancellation, `CacheEntryRemovedError`        | `references/error-handling.md`         |
+| Websocket/streaming updates, polling, per-entry teardown, per-run instrumentation  | `references/lifecycle-hooks.md`        |
+| Writing a custom plugin, devtools, `DefaultOptions`                                | `references/extending-the-api.md`      |
+| SSR — serializing a snapshot on the server, hydrating it on the client             | `references/ssr-hydration.md`          |
+| Sharing cache between browser tabs — `syncDriver`, `defaultSync`, custom transports | `references/cross-tab-sync.md`         |
+
+Pick **one** reading file matching the target environment — loading both the React and the non-React variant of the same
+topic is redundant.
