@@ -3,6 +3,8 @@
 What belongs in each layer, with a representative folder tree per layer. For the segments *inside* a slice
 and for file naming, see `segments-and-naming.md`.
 
+**Contents:** [`app/`](#app) · [`pages/`](#pages) · [`widgets/`](#widgets) · [`features/`](#features) · [`entities/`](#entities) · [`shared/`](#shared)
+
 ---
 
 ## `app/`

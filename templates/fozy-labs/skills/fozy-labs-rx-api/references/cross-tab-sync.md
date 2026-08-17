@@ -5,6 +5,8 @@ Priming a cold cache entry from another browser tab instead of from the network.
 Pull model: before running `queryFn` for a cold entry, the tab broadcasts a `REQ`; a tab that already holds the data
 answers `RES`, and the entry hydrates as `success` without a round-trip.
 
+**Contents:** [Wiring it up](#wiring-it-up) · [What a responding tab answers with](#what-a-responding-tab-answers-with) · [`broadcastSyncDriver`](#broadcastsyncdriver) · [A custom driver](#a-custom-driver)
+
 ---
 
 ## Wiring it up
@@ -33,7 +35,8 @@ Without a `syncDriver` nothing syncs, whatever `defaultSync` says. A resource-le
 both directions.
 
 **Commands are never synced.** `createCommand` has no `sync` option and never touches the syncer, so `defaultSync: "all"`
-behaves identically to `"resources"` today. Package docs claiming otherwise are stale.
+behaves identically to `"resources"` today. Verified against the 0.11 source: parts of the package docs still list a
+command-level `sync` option — there is none.
 
 ---
 
@@ -46,8 +49,12 @@ behaves identically to `"resources"` today. Package docs claiming otherwise are 
 | `pending` / `error` / `refreshing` / `refresh-error` | nothing        |
 
 On the receiving side the entry appears in `success`, `onCacheEntryAdded` fires, `onQueryStarted` does **not** (no query
-ran — see `lifecycle-hooks.md`), and normal `retentionTime` rules apply. An `updatedAt` comparison prevents a stale
-`RES` from overwriting fresher local data.
+ran — see `lifecycle-hooks.md`), and normal `retentionTime` rules apply.
+
+A `RES` can never clobber local data: the `REQ` is only ever sent for a **cold** entry, and the answer is applied only
+while that entry is still `pending`. There is no freshness comparison — `RES` carries no timestamp, so a tab holding
+older data answers just as readily. Verified against the 0.11 source, against what the package docs claim. If no
+answer arrives within 150 ms the entry falls back to its own `queryFn`.
 
 ---
 

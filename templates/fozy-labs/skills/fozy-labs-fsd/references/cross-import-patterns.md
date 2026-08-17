@@ -4,6 +4,8 @@ Working through the four strategies of `SKILL.md` §5 when two slices on the sam
 code, plus the `@x` mechanics and the entity sprawl that usually causes the problem. For where a slice
 belongs in the first place, see `layer-structure.md`.
 
+**Contents:** [The problem](#the-problem) · [Strategy 1](#strategy-1--merge-the-slices) · [Strategy 2](#strategy-2--extract-shared-logic-to-a-lower-layer) · [Strategy 3](#strategy-3--compose-in-a-higher-layer-ioc) · [Strategy 4](#strategy-4--x-notation-last-resort) · [Excessive entities](#excessive-entities--the-usual-root-cause) · [Decision flow](#decision-flow)
+
 ---
 
 ## The problem

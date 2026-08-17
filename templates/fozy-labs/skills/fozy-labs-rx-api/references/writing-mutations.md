@@ -2,6 +2,8 @@
 
 Declaring a command, running it, and reading its outcome.
 
+**Contents:** [Declaring](#declaring) · [Request id](#the-second-queryfn-argument-is-a-request-id-not-an-abortsignal) · [Running it](#running-it-two-different-contracts) · [Cache keys](#cache-keys-and-shared-state) · [Command state](#command-state) · [`createAgent`](#createagentkey--commands-outside-react) · [`pack`](#packargs-key)
+
 ---
 
 ## Declaring
@@ -37,7 +39,7 @@ There is **no** `sync` option, because commands never participate in cross-tab s
 | Signature | `(args, abortSignal: AbortSignal) => Promise<TData>` | `(args, requestId: string) => Promise<TData>` |
 | Purpose   | cancel a superseded request                          | idempotency token for safe retries            |
 
-The request id is minted **once per cache entry** and reused by every `retry()` of that entry, so a failed-then-retried mutation carries the same token to the backend. A fresh `trigger` creates a new entry and therefore a new id — it is a different logical operation. Forward it as `Idempotency-Key` (or whatever your backend expects); a mutation is not safe to retry blindly without it.
+The request id is minted **once per cache entry** and reused by every `retry()` of that entry, so a failed-then-retried mutation carries the same token to the backend. A fresh run creates a new entry and therefore a new id — it is a different logical operation. Forward it as `Idempotency-Key` (or whatever your backend expects); a mutation is not safe to retry blindly without it.
 
 Override the generator when the token must come from business data or from the server:
 
@@ -55,20 +57,20 @@ Request id ≠ cache key: the cache key addresses state inside the library, the 
 ## Running it: two different contracts
 
 ```ts
-// 1. Hook / agent — envelope. NEVER rejects.
+// 1. Hook / agent `trigger` — envelope. NEVER rejects.
 const [trigger] = orderApi.createOrder.useCommand();
 const result = await trigger(dto);
 if (result.status === "error") show(result.error);
 else navigate(result.data.id);
 
-// 2. Command.trigger — raw promise. DOES reject.
-const order = await orderApi.createOrder.trigger(dto);       // throws on failure
+// 2. command.execute — raw promise. DOES reject.
+const order = await orderApi.createOrder.execute(dto);       // throws on failure
 ```
 
 `TTriggerPromise<TData, TError>` resolves to `{ status: "success", data }` or `{ status: "error", error }`. Both variants declare the opposite field as optional `undefined`, so `result.status === "error"` and `if (result.error)` narrow equally well.
 
 Need throwing semantics from the hook? `await trigger(dto).unwrap()`.
-Need the envelope from the imperative one? `await wrapTrigger(command.trigger(dto))`.
+Need the envelope from the imperative one? `await wrapTrigger(command.execute(dto))`.
 
 Fire-and-forget from a hook needs no defensive `.catch()` — `void trigger(dto)` cannot produce an unhandled rejection.
 
@@ -76,16 +78,16 @@ Fire-and-forget from a hook needs no defensive `.catch()` — `void trigger(dto)
 
 ## Cache keys and shared state
 
-Every `trigger` without an explicit key mints a fresh key (timestamp plus a counter), so each call gets its own entry and its own state. Pass the same key to make several consumers observe one mutation:
+Every run without an explicit key mints a fresh key (`execute`: timestamp plus a counter; agent/hook `trigger`: `crypto.randomUUID()`), so each call gets its own entry and its own state. Pass the same key to make several consumers observe one mutation:
 
 ```ts
-await orderApi.createOrder.trigger(dto, "checkout");     // imperative
+await orderApi.createOrder.execute(dto, "checkout");                  // imperative
 const [trigger, state] = orderApi.createOrder.useCommand("checkout"); // hook binds at hook level
 const agent = orderApi.createOrder.createAgent("checkout");           // agent binds at construction
 agent.setKey("checkout-retry");                                       // or later
 ```
 
-Re-triggering an existing key **completes the previous entry first**. If that mutation was still in flight, its promise rejects with `CacheEntryRemovedError` (passed through `mapError`) — see `error-handling.md`.
+Re-running an existing key **completes the previous entry first**. If that mutation was still in flight, its promise rejects with `CacheEntryRemovedError` (passed through `mapError`) — see `error-handling.md`.
 
 ---
 
@@ -111,7 +113,7 @@ if (isError) return <Failed error={error} onRetry={retry} />;
 return <Button disabled={isLoading} onPress={() => pay({ orderId })}>Pay</Button>;
 ```
 
-`retry()` re-runs the tracked entry — no new entry, same request id. It is a no-op outside `error`. A second `trigger` instead creates a new entry with a new id.
+`retry()` re-runs the tracked entry — no new entry, same request id. It is a no-op outside `error`. A second run (`execute` / hook `trigger`) instead creates a new entry with a new id.
 
 ---
 
@@ -134,8 +136,8 @@ An inert `{ kind: "command", command, args, key }` descriptor that runs nothing.
 
 ```ts
 function run(packed: TPacked<unknown, unknown>) {
-  if (packed.kind === "resource") packed.resource.trigger(packed.args);
-  else void packed.command.trigger(packed.args, packed.key);
+  if (packed.kind === "resource") void packed.resource.prefetch(packed.args);
+  else void packed.command.execute(packed.args, packed.key).catch(() => {}); // execute rejects
 }
 ```
 
@@ -145,6 +147,7 @@ function run(packed: TPacked<unknown, unknown>) {
 
 - ❌ Treating the second `queryFn` argument as an `AbortSignal` — commands never receive one.
 - ❌ `try/catch` around hook or agent `trigger` — dead code; the envelope never rejects.
+- ❌ Leaving `command.execute(...)` unhandled at a fire-and-forget call site — unlike the hook trigger, it rejects.
 - ❌ Forgetting `.unwrap()` and then reading `result.id` — `result` is the envelope, not the data.
 - ❌ `createAgent({ key })` — the parameter is a bare string.
 - ❌ `sync: true` on a command expecting cross-tab propagation — commands are not synced.

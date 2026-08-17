@@ -5,6 +5,8 @@ pick the one matching your host, not both.
 
 React ≥ 19 is the declared peer dependency. Nothing needs wiring up: `useSignal` is the whole binding.
 
+**Contents:** [`useSignal`](#usesignal) · [Stable signal identity](#stable-signal-identity) · [Component-local signals](#component-local-signals) · [Effects in components](#effects-in-components) · [Other exported hooks](#other-exported-hooks) · [Store pattern](#store-pattern)
+
 ---
 
 ## `useSignal`
@@ -36,9 +38,11 @@ an infinite render loop (`The result of getSnapshot should be cached`).
 
 - ✅ `Signal.state` — returns the stored value.
 - ✅ `Signal.compute` — memoises, cold and warm alike.
-- ❌ `signalize(...)` over a cold or non-replaying observable — **every** `peek()` re-subscribes the source and re-runs
-  the pipeline, so a `map` that builds objects yields a new reference each call. Read `rxjs-interop.md` before putting a
-  `signalize`d signal into `useSignal`.
+- ✅ `Signal.from` — while mounted, `useSignal`'s own subscription keeps the upstream hot, so `peek()` is a replay-cache
+  hit. Prefer `keepAlive: "forever"` for a stateful pipeline (`scan`): the very first `getSnapshot` runs during render,
+  before React subscribes, and a shorter window lets the source restart in between.
+- ❌ `SourceSignal.create(...)` over a cold or non-replaying source — **every** `peek()` re-subscribes and re-runs the
+  body, so a `map` that builds objects yields a new reference each call. Use `Signal.from` (`rxjs-interop.md`).
 
 ### Server rendering
 

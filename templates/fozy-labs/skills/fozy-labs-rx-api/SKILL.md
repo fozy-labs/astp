@@ -10,7 +10,7 @@ description: >
 Declarative cache-aware server state: one cache entry per serialized args, stale-while-revalidate, optimistic updates,
 SSR snapshots.
 Framework-agnostic core; React binds through a plugin.
-Tracks package version **0.10.2**.
+Tracks package version **0.11.1**.
 
 Two primitives:
 
@@ -108,7 +108,7 @@ else navigate(result.data.id);
 ```
 
 Hook and agent `trigger` resolve an envelope and never reject (`.unwrap()` restores throwing semantics). 
-The imperative`command.trigger(args, key?)` returns a raw `Promise<TData>` that does reject.
+The imperative `command.execute(args, key?)` returns a raw `Promise<TData>` that does reject.
 
 ---
 
@@ -121,9 +121,7 @@ setStatus = api.createCommand<UserStatus, User>({
         link({
             resource: this._userApi.getCurrentUser,
             forwardArgs: () => undefined, // → the entry whose args are `undefined`
-            optimisticUpdate: (draft, status) => {
-                draft.status = status;
-            },
+            optimisticUpdate: (draft, status) => { draft.status = status; },
         }),
 });
 ```
@@ -144,7 +142,7 @@ args, the link silently does nothing.
 | Expectation                        | Reality                                                                         |
 |------------------------------------|---------------------------------------------------------------------------------|
 | Automatic retry / backoff          | None. `retry()` is manual; put a retry policy inside `queryFn`.                 |
-| Polling / `refetchInterval`        | None. Drive `refresh(args)` from your own timer or an `onCacheEntryAdded` hook. |
+| Polling / `refetchInterval`        | None. `refresh(args)` from an `onCacheEntryAdded` hook, or `prefetch(args, { force: true })` from your own timer. |
 | Infinite query / pagination helper | None. One entry per page args; SWR keeps the previous page on screen.           |
 | A built-in fetcher                 | None by design — `queryFn` is any function returning `Promise<TData>`.          |
 
@@ -154,7 +152,7 @@ args, the link silently does nothing.
 
 - ❌ Don't `try/catch` a hook or agent `trigger` — it never rejects; check `result.status` or use `.unwrap()`.
 - ❌ Don't leave a manual `entry.createPatch(...)` handle uncommitted — a pending patch never reconciles.
-- ✅ Use `ensure` / `fetch` (instead of `await resource.trigger(args)`) when you need the data.
+- ✅ Use `ensure` / `fetch` when you need the data, `prefetch` when you only want the cache warm.
 - ✅ `SKIP` gates a read until args are ready (`useResource` only — `useSuspenseResource` rejects it).
 
 ---
@@ -166,14 +164,15 @@ Load these only when the specific situation applies — do **not** preload.
 | Situation                                                                          | File                                   |
 |------------------------------------------------------------------------------------|----------------------------------------|
 | Rendering server data — hooks, `SKIP`, state union, Suspense                       | `references/reading-in-react.md`       |
-| Reading from stores, route loaders, workers — `ensure`/`fetch`/`trigger`, agents   | `references/reading-outside-react.md`  |
-| Writing a mutation — options, request id, envelope, retry, command cache keys      | `references/writing-mutations.md`      |
+| Reading from stores, route loaders, workers — `ensure`/`fetch`/`prefetch`, agents  | `references/reading-outside-react.md`  |
+| Writing a mutation — `execute`, request id, envelope, retry, command cache keys    | `references/writing-mutations.md`      |
 | The cache did not update after a mutation — `links`, patches, staleness, eviction  | `references/cache-and-invalidation.md` |
 | Typing `error`, `mapError`, retries, cancellation, `CacheEntryRemovedError`        | `references/error-handling.md`         |
 | Websocket/streaming updates, polling, per-entry teardown, per-run instrumentation  | `references/lifecycle-hooks.md`        |
 | Writing a custom plugin, devtools, `DefaultOptions`                                | `references/extending-the-api.md`      |
 | SSR — serializing a snapshot on the server, hydrating it on the client             | `references/ssr-hydration.md`          |
 | Sharing cache between browser tabs — `syncDriver`, `defaultSync`, custom transports | `references/cross-tab-sync.md`         |
+| Existing code uses a name this skill does not describe (`trigger`, `getDevtoolsKey`) | `references/migrations.md`             |
 
 Pick **one** reading file matching the target environment — loading both the React and the non-React variant of the same
 topic is redundant.

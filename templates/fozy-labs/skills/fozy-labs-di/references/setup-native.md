@@ -3,6 +3,8 @@
 Wiring `@fozy-labs/simplest-di` outside React: Node services, CLIs, workers, and unit tests.
 For the React binding see `setup-react.md`.
 
+**Contents:** [Install](#install) · [`tsconfig.json`](#tsconfigjson) · [How the current scope is resolved](#how-the-current-scope-is-resolved) · [Minimal bootstrap](#minimal-bootstrap) · [Tests](#tests) · [Checklist](#checklist)
+
 ---
 
 ## Install

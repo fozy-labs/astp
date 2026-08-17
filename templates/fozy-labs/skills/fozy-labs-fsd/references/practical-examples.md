@@ -10,6 +10,8 @@ Tool-level *how* belongs to the sibling skills, not here:
 - `fozy-labs-signals` — `Signal.state`, `Signal.compute`, `LocalSignal`.
 - `fozy-labs-rx-api` — `createResource`, `createCommand`, `links`.
 
+**Contents:** [1. Single use vs shared](#1-single-use-vs-shared) · [2. Artefact → path](#2-artefact--path) · [3. Authentication](#3-authentication) · [4. Raw API shape vs domain model](#4-raw-api-shape-vs-domain-model) · [5. API classes](#5-api-classes) · [6. State placement](#6-state-placement) · [7. React tooling](#7-react-tooling--the-react-segment) · [8. Page composition](#8-page-composition)
+
 ---
 
 ## 1. Single use vs shared

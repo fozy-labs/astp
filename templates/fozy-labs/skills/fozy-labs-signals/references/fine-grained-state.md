@@ -9,6 +9,8 @@ state, stay with `Signal.state` + `Signal.compute` (core `SKILL.md`).
 | A normalised map / cache with per-entry readers and frequent O(1) writes.    | `unstable_KeyedSignal`   |
 | Anything else — a handful of fields, a list rendered as a whole.             | `Signal.state`           |
 
+**Contents:** [`unstable_ProxySignal`](#unstable_proxysignal--subscribe-to-a-path) · [`unstable_KeyedSignal`](#unstable_keyedsignal--subscribe-to-a-key) · [In React](#in-react)
+
 ---
 
 ## `unstable_ProxySignal` — subscribe to a path

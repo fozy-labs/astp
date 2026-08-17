@@ -3,6 +3,8 @@
 Moving an existing codebase to FSD v2.1 — either from FSD v2.0, or from no FSD at all. Target folder trees
 live in `layer-structure.md`; this file covers the order of operations.
 
+**Contents:** [Part 1](#part-1--fsd-v20--v21) · [Part 2](#part-2--non-fsd-codebase--fsd) · [Common pitfalls](#common-pitfalls)
+
 ---
 
 ## Part 1 — FSD v2.0 → v2.1

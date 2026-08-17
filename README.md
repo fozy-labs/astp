@@ -71,7 +71,7 @@ Compare installed file versions against the remote manifest and display a status
 |--------|-------|-------------|-----------|---------|
 | `base` | 1 | Base skill for VSCode Copilot agent orchestration | `vscode` | Yes |
 | `rdpi` | 22 | Full RDPI pipeline — agents, instructions, and stage definitions | `vscode` | No |
-| `fozy-labs` | 31 | Fozy Labs stack skills (DI, FSD, rx-api, signals) | `vscode`, `claude-code` | No |
+| `fozy-labs` | 33 | Fozy Labs stack skills (DI, FSD, rx-api, signals) | `vscode`, `claude-code` | No |
 
 - **base** includes the orchestration skill (`skills/orchestrate/SKILL.md`) that enables multi-agent coordination.
 - **rdpi** includes 17 specialized agents, 1 instruction file, and 4 stage definitions for the Research → Design → Plan → Implement workflow.

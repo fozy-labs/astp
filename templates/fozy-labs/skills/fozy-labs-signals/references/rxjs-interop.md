@@ -1,9 +1,11 @@
 # RxJS interop
 
-Moving values between signals and RxJS: `obs`, `signalize`, `SourceSignal`.
+Moving values between signals and RxJS: `obs`, `Signal.from`, `SourceSignal`.
 
 Rule of thumb: signals are the source of truth for **state**; RxJS is for **stream semantics** — debounce, throttle,
 take N, window, retry, merge.
+
+**Contents:** [1. Signal → Observable](#1-signal--observable) · [2. Observable → Signal](#2-observable--signal--signalfrom) · [3. `SourceSignal.create`](#3-sourcesignalcreate--custom-read-only-sources) · [4. Round trips leave the batch](#4-round-trips-leave-the-batch) · [Checklist](#checklist)
 
 ---
 
@@ -22,57 +24,75 @@ sub.unsubscribe(); // or takeUntil(destroyed$)
 
 ---
 
-## 2. Observable → Signal — `signalize`
+## 2. Observable → Signal — `Signal.from`
 
 ```ts
-signalize<T>(observable: Observable<T>): ReadonlySignal<T>;
-signalize<T>(observable: Observable<T>, defaultValue: T): ReadonlySignal<T>;
+Signal.from<T>(source: Observable<T>, options?: {
+  default?: T;                                          // no default → reads may throw
+  keepAlive?: "none" | "microtask" | "task" | "forever" | number; // default "microtask"
+  key?: string;                                         // devtools key
+}): DisposableSignal<T>;
 ```
 
-The result is a `ReadonlySignal` — `()`, `get()`, `peek()`, `obs`, and **no** `dispose()`.
+Returns a `DisposableSignal` — `()`, `get()`, `peek()`, `obs`, `dispose()`, `[Symbol.dispose]`.
+Class form: `FromSignal.create(source, options)`.
 
-### The read model, and why it decides everything
+Internally: `distinctUntilChanged(Object.is)` → `share({ connector: ReplaySubject(1) })`. So **one** upstream
+subscription is shared by every consumer, and while it is hot every read is a replay-cache hit — a stable reference, no
+re-subscription, no pipeline restart.
 
-`signalize` stores no value. Every `peek()` / `get()` **subscribes to the source, takes whatever it emits
-synchronously, and unsubscribes again**. If nothing arrives synchronously, the signal returns `defaultValue` — or throws
-`Error: No value emitted` when none was supplied.
+### `keepAlive` — how long the upstream survives the last consumer
 
-Two consequences, and both bite:
+A "consumer" is an `obs` subscriber *or* a pull read (`get()` / `peek()`).
+
+| Mode                    | Upstream is torn down…                                       | Use for                                             |
+|-------------------------|---------------------------------------------------------------|-----------------------------------------------------|
+| `"none"`                | immediately, at every refcount-zero (`of(null)` notifier).   | Nothing — it restores the per-read re-subscribe.    |
+| `"microtask"` (default) | when the current microtask queue drains.                     | Replaying sources; reads inside one sync burst.     |
+| `"task"`                | on the next macrotask (`timer(0)`).                          | Reads spread across a single tick.                  |
+| *number* (ms)           | after N ms idle; **renewed** by every new consumer.          | Bursty polling / imperative reads.                  |
+| `"forever"`             | never — only `dispose()` ends it.                            | Stateful cold pipelines (`scan`), hot event sources.|
+
+An error always resets the cycle immediately (`resetOnError: true`), regardless of `keepAlive`.
+
+### Read model
+
+| Call                     | Behaviour                                                                                          |
+|--------------------------|-----------------------------------------------------------------------------------------------------|
+| `get()`                  | Registers the dependency **before** reading, so inside a `compute` / `effect` the read is always hot.|
+| `peek()`                 | No tracking. Hot → cache hit. Cold → subscribes, takes a synchronous emission, unsubscribes.       |
+| no value, no `default`   | Throws `Error: No value emitted`.                                                                  |
+| no value, with `default` | Returns `default`. Presence is checked with `in`, so `{ default: undefined }` is a real default.    |
+| source errored           | The error is rethrown from `get()` / `peek()`; the next read re-subscribes (retry).                 |
+
+Because `get()` registers the dependency before reading, an async source (`debounceTime`, `interval`, a `Subject`)
+never wakes a consumer while still handing it `default` — the subscription is already established by then.
 
 ```ts
-// ❌ Cold pipeline: each read re-subscribes and restarts it.
-const clicks$ = signalize(
+// ✅ Stateful cold pipeline — one subscription, scan keeps its state.
+const clicks$ = Signal.from(
   fromEvent(document, "click").pipe(scan((n) => n + 1, 0), startWith(0)),
+  { keepAlive: "forever" },
 );
-clicks$(); // always 0 — startWith replays on every fresh subscription
 
-// ❌ Nothing synchronous: every read throws "No value emitted".
-const debounced$ = signalize(query$.obs.pipe(debounceTime(300)));
+// ✅ Async source — default covers the window before the first emission.
+const debounced$ = Signal.from(query$.obs.pipe(debounceTime(300)), { default: "" });
 ```
 
-`defaultValue` only silences the throw; it does not add memory. Over a non-replaying source (`Subject`, `interval`,
-`fromEvent`, anything after `debounceTime`) the signal returns the default **forever**, even after the source has
-emitted.
+### Lifetime
 
-Each tracking consumer also subscribes independently, so three computeds reading one `signalize`d `fromEvent` mean three
-DOM listeners.
+- `dispose()` snapshots the cached value first, then tears the upstream down: later reads return that **frozen** value
+  and `obs` completes. With nothing cached at that moment, reads fall back to `default` / throw.
+- `dispose()` also cancels a pending grace window, so `keepAlive: 30_000` never outlives the signal.
+- A **completed** source keeps serving its last value for the rest of the keepAlive window, then restarts cold on the
+  next read. Under `"forever"` it is served from cache indefinitely — a completed source is never re-subscribed.
+- On the cold path a read restarts the source, so `keepAlive: "none"` over a `fromEvent` still means one listener
+  attach/detach per read. That is the reason the default is `"microtask"`.
 
-### What to signalize
+### When a `Signal.state` is still the better bridge
 
-✅ A source that replays its current value synchronously to every new subscriber:
-
-```ts
-const source$ = new BehaviorSubject(0);          // or ReplaySubject(1)
-const value$ = signalize(source$);
-```
-
-`shareReplay({ bufferSize: 1, refCount: false })` also qualifies, at the cost of a source subscription that is never
-released. `refCount: true` does **not** — the buffer resets whenever a `peek()` drops the refcount to zero.
-
-### The robust bridge: write into a `Signal.state`
-
-For anything asynchronous or operator-heavy, do not signalize it. Let RxJS carry the events and land the result in a
-real state signal:
+Reach for an explicit subscription when the value must be **written** as well as read, must survive independently of any
+subscription, or feeds a long-lived store:
 
 ```ts
 readonly debouncedQuery$ = Signal.state("");
@@ -85,21 +105,19 @@ const sub = this.query$.obs
 return () => sub.unsubscribe();
 ```
 
-This gives a stable stored value, correct `peek()`, working `Object.is` dedupe, and one subscription regardless of how
-many consumers read it.
-
 ---
 
 ## 3. `SourceSignal.create` — custom read-only sources
 
-`signalize` is a one-liner over `SourceSignal.create`, which takes an RxJS-style subscribe function. Use it directly to
-wrap an imperative source, and always emit synchronously on subscribe so reads work:
+Takes an RxJS-style subscribe function and reads by subscribing, taking a synchronous emission and unsubscribing — a
+fresh subscription per read, with no shared upstream. Use it only for a genuinely synchronous imperative source;
+otherwise wrap the observable in `Signal.from`.
 
 ```ts
 import { SourceSignal } from "@fozy-labs/rx-toolkit";
 
 const isOnline$ = SourceSignal.create<boolean>((subscriber) => {
-  subscriber.next(navigator.onLine);             // synchronous initial value
+  subscriber.next(navigator.onLine);             // synchronous initial value — mandatory
   const push = () => subscriber.next(navigator.onLine);
   window.addEventListener("online", push);
   window.addEventListener("offline", push);
@@ -109,8 +127,6 @@ const isOnline$ = SourceSignal.create<boolean>((subscriber) => {
   };
 });
 ```
-
-`SourceSignal` was named `ReadonlySignal` before 0.10; that name is now the public **type**, not the class.
 
 ---
 
@@ -124,9 +140,10 @@ updates for one logical change. Keep async hops at the edge of a derived chain, 
 
 ## Checklist
 
-- ✅ `signalize` only replaying sources (`BehaviorSubject`, `ReplaySubject(1)`, `shareReplay` without refCount).
-- ✅ Everything async or operator-heavy: subscribe and `set` into a `Signal.state`.
+- ✅ `Signal.from` for every `Observable → signal` bridge.
+- ✅ `default` on any source that does not replay synchronously — otherwise the first read throws.
+- ✅ `keepAlive: "forever"` for stateful (`scan`, `startWith`) or expensive-to-attach sources; `dispose()` owns the end.
+- ✅ Everything that must also be writable: subscribe and `set` into a `Signal.state`.
 - ✅ `SourceSignal.create` bodies emit synchronously on subscribe.
-- ❌ Don't `signalize` a cold `fromEvent` / `interval` / `debounceTime` pipeline and read it.
-- ❌ Don't feed a `signalize`d non-replaying signal to `useSignal` — see `use-in-react.md`.
-- ❌ Don't look for `dispose()` on the result; lifetime belongs to the consumer's subscription.
+- ❌ Don't leave a `Signal.from` over a hot resource undisposed when you chose `"forever"` — nothing else releases it.
+- ❌ Don't expect `dispose()` on a `SourceSignal` result; it has none.

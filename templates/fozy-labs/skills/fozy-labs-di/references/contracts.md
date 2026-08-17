@@ -3,6 +3,8 @@
 An interface-shaped token whose implementation is chosen at wiring time. Use for **platform-swappable or mockable**
 dependencies only — not for ordinary DI, where the class itself is a perfectly good token.
 
+**Contents:** [Declaring and binding](#declaring-and-binding) · [Rules](#rules) · [Object-shaped provider](#object-shaped-provider) · [Scoped contracts](#scoped-contracts) · [Test substitution](#test-substitution) · [When to use / not use](#when-to-use--not-use)
+
 ---
 
 ## Declaring and binding

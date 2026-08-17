@@ -66,7 +66,7 @@ DefaultOptions.update({
 
 `reduxDevtools(options?)` targets the Redux DevTools browser extension. `batchStrategy` is `"sync"` / `"microtask"` (default) / `"task"`, with `taskDelay` for the last. Any `DevtoolsLike` implementation works — `combineDevtools(...)` fans out to several at once.
 
-Per-resource, `getDevtoolsKey: (args: Keyed<TArgs>) => string` controls how an entry is labelled. A resource or command with no `key` is largely invisible in devtools.
+Entries are labelled `` `${resourceKey}:${entryKey}` `` and there is no per-resource override, so a resource or command with no `key` is largely invisible in devtools.
 
 ---
 

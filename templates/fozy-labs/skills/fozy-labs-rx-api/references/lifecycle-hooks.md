@@ -5,12 +5,17 @@ exists, and instrumenting every individual query run.
 
 Both are accepted at two levels — on `createApi(...)` (api-wide) and on `createResource` / `createCommand` (local).
 
+**Contents:** [`onCacheEntryAdded`](#oncacheentryadded--once-per-cache-entry) · [`onQueryStarted`](#onquerystarted--once-per-query-run) · [Both levels run](#both-levels-run) · [Polling and retry](#not-a-substitute-for-polling-or-retry)
+
 ---
 
 ## `onCacheEntryAdded` — once per cache entry
 
 Fires when an entry is created for a given set of args. Use it for anything whose lifetime should match the entry's:
 a websocket, an SSE stream, a polling timer.
+
+On a **command** it fires once per run, not once per key: every `execute` completes the previous entry for that key and
+builds a new one.
 
 | `ctx` field          | Type               | Resolves                                                                    |
 |----------------------|--------------------|-----------------------------------------------------------------------------|
@@ -86,6 +91,11 @@ export const api = createApi({
 
 The package ships neither. `onCacheEntryAdded` is where you build them: start an interval that calls `refresh(args)`
 and clear it after `$cacheEntryRemoved`. Retry policy belongs inside `queryFn` — see `error-handling.md`.
+
+Use `refresh(args)` here, not `prefetch(args, { force: true })`: `prefetch` re-arms the entry's `retentionTime` on
+every call, so a poll faster than the retention window keeps the entry alive forever and `$cacheEntryRemoved` never
+resolves. The trade-off is that `refresh` no-ops (with a console warning) while the entry sits in `pending`,
+`refreshing` or `error` — a tick that lands there is simply skipped.
 
 ---
 

@@ -6,6 +6,8 @@ pick the one matching your host, not both.
 There is **nothing to set up**. Signals carry no ambient context, no scheduler and no global registry: creating one is
 just constructing an object, and everything it does is synchronous.
 
+**Contents:** [Reading a signal](#reading-a-signal) · [Class style](#class-style) · [Other frameworks](#other-frameworks) · [Tests](#tests) · [Node / worker caveats](#node--worker-caveats) · [Checklist](#checklist)
+
 ---
 
 ## Reading a signal
@@ -30,8 +32,9 @@ Outside React, teardown is entirely yours — see `disposal-and-leaks.md`.
 
 ## Class style
 
-`Signal.state` / `compute` / `effect` are thin wrappers over `State.create` / `Computed.create` / `Effect.create`. The
-classes are exported too, and are the better fit when you subclass or want an explicit, RxJS-like shape:
+`Signal.state` / `compute` / `effect` / `from` are thin wrappers over `State.create` / `Computed.create` /
+`Effect.create` / `FromSignal.create`. The classes are exported too, and are the better fit when you subclass or want an
+explicit, RxJS-like shape:
 
 ```ts
 import { Computed, Effect, State } from "@fozy-labs/rx-toolkit";
@@ -66,8 +69,8 @@ const count = count$.obs;                // then `$count` in markup
 `State.obs` is a `BehaviorSubject` stream and `Computed.obs` replays its current value on subscribe, so all three
 bindings get an initial value synchronously.
 
-Going the other direction — an existing `Observable` into the signal graph — is `signalize`, with important read
-semantics: see `rxjs-interop.md`.
+Going the other direction — an existing `Observable` into the signal graph — is `Signal.from`, whose `keepAlive` option
+decides how long the shared upstream subscription survives: see `rxjs-interop.md`.
 
 ---
 
@@ -115,8 +118,9 @@ the experimental collections reap idle nodes in a microtask (`fine-grained-state
 
 ## Node / worker caveats
 
-- `LocalSignal.state` has no storage: the default driver resolves to `null` and any read or write throws
-  `[LocalSignal]: localStorage does not exist and no driver was passed.` Pass a `driver` — see `persisted-state.md`.
+- `LocalSignal.state` has no storage: the default driver resolves to `null` and **construction** throws
+  `[LocalSignal]: localStorage does not exist and no driver was passed.` Pass a `driver` (give it `keys()` if you want
+  its GC to run) — see `persisted-state.md`.
 - `reduxDevtools()` without an explicit `driver` throws `Redux Devtools extension is not installed` when there is no
   `window`. Guard the `DefaultOptions.update({ DEVTOOLS })` call with an environment check.
 - Nothing else in the signals layer touches browser globals.

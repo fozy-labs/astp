@@ -2,6 +2,8 @@
 
 `DiScopeProvider`, `useScope`, keying, and tags inside a React tree.
 
+**Contents:** [`DiScopeProvider`](#discopeprovider) · [Pattern A](#pattern-a--inline-provide) · [Pattern B](#pattern-b--usescope--injectprovide) · [Keying](#keying--recreate-on-input-change) · [Nesting](#nesting) · [Tags](#tags--register-into-an-ancestor-scope) · [Lifecycle](#lifecycle) · [Pitfalls](#pitfalls)
+
 ---
 
 ## `DiScopeProvider`

@@ -7,12 +7,12 @@ description: >
 
 # @fozy-labs/rx-toolkit — Signals
 
-Value-based reactive primitives (SolidJS / Angular Signals in spirit), built on RxJS. Reference version: **0.10.2**.
+Value-based reactive primitives (SolidJS / Angular Signals in spirit), built on RxJS. Reference version: **0.11.1**.
 Use for **local synchronous state** — server state goes through `createResource` (see `fozy-labs-rx-api`).
 
 Two layers:
 
-- **core** — framework-agnostic (`Signal`, the `State` / `Computed` / `Effect` classes, `signalize`, `Batcher`). Works in Node, workers, tests, any framework.
+- **core** — framework-agnostic (`Signal`, the `State` / `Computed` / `Effect` / `FromSignal` classes, `Batcher`). Works in Node, workers, tests, any framework.
 - **react** — a single hook, `useSignal`. React ≥ 19 (declared peer), client-only.
 
 Reactivity is by **value, not by event**: every write dedupes with `Object.is`, so writing an equal value notifies nobody.
@@ -97,10 +97,27 @@ stop.unsubscribe(); // stop it; `stop.closed` is true afterwards
 
 ---
 
-## 4. Types
+## 4. `Signal.from` — RxJS Observable → signal
 
 ```ts
-// signalize(), SourceSignal.create()
+readonly online$ = Signal.from(navigatorOnline$, { default: true });
+readonly clicks$ = Signal.from(clickStream$, { keepAlive: "forever" }); // stateful pipeline
+```
+
+One **shared** upstream subscription behind a replay cache: while it is hot every read is a cache hit, not a
+re-subscription. `keepAlive` (`"none" | "microtask" | "task" | "forever" | number`, default `"microtask"`) decides how
+long that subscription outlives the last consumer.
+
+- Returns `DisposableSignal<T>` — `dispose()` freezes the last value and drops the upstream.
+- A read with nothing emitted returns `default`, or throws `Error: No value emitted` when no `default` was given.
+- Picking a `keepAlive`, error and complete behaviour: `references/rxjs-interop.md`.
+
+---
+
+## 5. Types
+
+```ts
+// Signal.from(), SourceSignal.create()
 interface ReadonlySignal<T> {
   readonly obs: Observable<T>;
   peek(): T;
@@ -108,7 +125,7 @@ interface ReadonlySignal<T> {
   (): T;
 }
 
-// Signal.compute()
+// Signal.compute(), Signal.from()
 interface DisposableSignal<T> extends ReadonlySignal<T>, Disposable {
   dispose(): void;
 }
@@ -126,7 +143,7 @@ interface StateSignal<T> extends DisposableSignal<T> {
 
 ---
 
-## 5. Devtools
+## 6. Devtools
 
 ```ts
 import { DefaultOptions, reduxDevtools } from "@fozy-labs/rx-toolkit";
@@ -165,8 +182,9 @@ Load these only when the specific situation applies — do **not** preload.
 | Signals outside React — Node, workers, tests, Angular/Svelte/Solid, class style    | `references/use-outside-react.md`    |
 | A compute/effect runs too often, too rarely, or out of order; `Batcher`            | `references/extra-recomputes.md`     |
 | Deciding what must be disposed, effect teardown, leaks, DI scope interaction       | `references/disposal-and-leaks.md`   |
-| An RxJS `Observable` on either side — `obs`, `signalize`, `SourceSignal`           | `references/rxjs-interop.md`         |
-| State that must survive a reload — `LocalSignal`, storage layout, drivers          | `references/persisted-state.md`      |
+| An RxJS `Observable` on either side — `obs`, `Signal.from`, `keepAlive`, `SourceSignal`         | `references/rxjs-interop.md`         |
+| State that must survive a reload — `LocalSignal`, storage layout, GC, drivers      | `references/persisted-state.md`      |
 | One big object or a keyed collection wakes every reader (experimental APIs)        | `references/fine-grained-state.md`   |
+| Existing code uses a name this skill does not describe (`signalize`, `LocalState`) | `references/migrations.md`           |
 
 Pick **one** of `use-in-react.md` / `use-outside-react.md` — the one matching the host. Loading both variants of the same topic is redundant.

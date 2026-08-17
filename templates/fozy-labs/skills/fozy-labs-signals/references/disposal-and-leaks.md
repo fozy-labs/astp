@@ -11,8 +11,9 @@ What holds a subscription, what must be stopped by hand, and what cleans itself 
 | `Signal.state`                              | One `BehaviorSubject` plus its subscribers.                    | Usually nothing. `dispose()` completes it.                   |
 | `Signal.compute`                            | Nothing while cold; an internal effect + dependency subs while warm. | Automatic at the last unsubscribe. `dispose()` for good. |
 | `Signal.effect`                             | One subscription per tracked dependency + your teardown.       | **You must** call `unsubscribe()`.                           |
-| `signalize` / `SourceSignal`                | A fresh subscription per read and per tracking consumer.       | Ends with the consumer; the signal itself owns nothing.      |
-| `LocalSignal.state`                         | An internal state + computed. **No `dispose()` exists.**       | Nothing to call.                                             |
+| `Signal.from`                               | One shared upstream subscription while hot; nothing when cold. | Refcount + `keepAlive`. `dispose()` ends it for good.        |
+| `SourceSignal.create`                       | A fresh subscription per read and per tracking consumer.       | Ends with the consumer; the signal itself owns nothing.      |
+| `LocalSignal.state`                         | An internal state + computed, plus a page-lifetime storage manager. **No `dispose()`.** | Nothing to call.        |
 | `unstable_KeyedSignal` / `unstable_ProxySignal` | Lazily materialised per-key / per-path nodes.               | `dispose()`; idle nodes are reaped on their own.             |
 | `s$.obs.subscribe(...)`                     | A plain RxJS subscription.                                     | `sub.unsubscribe()` or `takeUntil(destroyed$)`.              |
 
@@ -53,6 +54,9 @@ count$.set(5);      // silently notifies nobody — the signal is completed
 - `dispose()` completes the underlying subject: current subscribers receive `complete`, and later writes reach no one.
   It is not an error, and it is not loud — so dispose **last**, during teardown, never speculatively.
 - `Computed.dispose()` also stops its internal effect and drops the memo cache.
+- `Signal.from(...).dispose()` snapshots the cached value, then tears the upstream down: reads keep returning that
+  frozen value and `obs` completes immediately, for existing and new subscribers alike. Disposed while cold, it has
+  nothing to freeze and falls back to `default` (or throws). It is the only way to end a `keepAlive: "forever"` signal.
 - Most signals no explicit disposal: cold, they hold nothing; warm, they release at the last unsubscribe.
   Dispose one when you built it for a bounded piece of work and want its cached value released immediately.
   Or to release the key into redux devtools immediately (it usually takes time) so as not to receive console.warnings about key-collisions.
@@ -89,5 +93,6 @@ but they linger until GC if you never dispose.
 - ✅ Every manual `s$.obs.subscribe(...)` has a matching `unsubscribe()` (or `takeUntil`).
 - ✅ Effects start in `onScopeInit` (DI) or `useEffect` (React), never in a constructor.
 - ✅ Teardown functions are idempotent — React StrictMode runs the mount/unmount pair twice.
+- ✅ Every `Signal.from(..., { keepAlive: "forever" })` has an owner that calls `dispose()`.
 - ❌ Don't `dispose()` a signal you still write to; writes after dispose are silently dropped.
-- ❌ Don't hunt for a `dispose()` on `LocalSignal` or `signalize` results — they have none.
+- ❌ Don't hunt for a `dispose()` on `LocalSignal` or `SourceSignal` results — they have none.

@@ -2,6 +2,8 @@
 
 `useResource`, `useSuspenseResource`, `SKIP`, and the state union, for components rendering server data.
 
+**Contents:** [`useResource`](#useresourceargs) · [The state union](#the-state-union) · [`SKIP`](#skip--conditional-queries) · [`useSuspenseResource`](#usesuspenseresourceargs) · [`useCommand`](#usecommandkey) · [Standalone forms](#standalone-forms)
+
 The hooks exist (as a method) **only** when the api was built with `reactHooksPlugin()`:
 
 ```ts
@@ -24,10 +26,10 @@ const page = userApi.getOrders.useResource({ status, page });
 
 Behaviour:
 
-1. Subscribes on mount and calls `trigger(args)` in a layout effect — a cold entry starts loading.
+1. Records the args during render, then starts in a layout effect (`agent.start()` → `getEntry(args, true)`) — a cold entry is created and begins loading.
 2. On an args change it switches entries; the previous entry's data stays visible (SWR).
 3. On unmount it unsubscribes; the entry survives `retentionTime` (default 60 000 ms), so a remount inside that window renders from cache instantly.
-4. It never refetches an entry that already holds data — `trigger` without `doForce` is a no-op on a warm entry.
+4. It never refetches an entry that already holds data — a warm entry is reused as-is. For fresh data call `state.refresh()`, or `prefetch(args, { force: true })` from outside the component.
 
 Passing a fresh object literal every render is fine: entries are addressed by the **serialized** key, not by reference. There is no dependency array to maintain.
 

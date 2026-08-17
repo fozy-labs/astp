@@ -2,6 +2,8 @@
 
 Typing `error`, where a failure surfaces, what the library retries (almost nothing) and what it aborts.
 
+**Contents:** [`error` is `unknown`](#by-default-error-is-unknown) · [Channels that stay raw](#channels-that-stay-raw) · [`CacheEntryRemovedError`](#cacheentryremovederror) · [Where a failure shows up](#where-a-failure-shows-up) · [Retrying](#retrying) · [Cancellation](#cancellation)
+
 ---
 
 ## By default `error` is `unknown`
@@ -58,7 +60,7 @@ So a `catch` around `ensure` must handle `TError`, a raw `CacheEntryRemovedError
 
 Exported from the package. Thrown when an entry is removed before an async operation settles:
 
-- a command re-triggered with the **same key** while the first run is in flight;
+- a command re-run (`execute` / hook `trigger`) with the **same key** while the first run is in flight;
 - `api.resetAll()` during a mutation;
 - retention GC dropping an entry that `ensure` / `fetch` was waiting on.
 
@@ -73,9 +75,9 @@ On the command path it passes through `mapError` (so the typed envelope holds), 
 | `useResource`                       | `status: "error"` / `"refresh-error"`, `isError`, `error`         |
 | `useSuspenseResource`               | Initial error thrown to the nearest Error Boundary; a refresh error stays as `isRefreshError` with stale data |
 | `resource.ensure/fetch`             | Promise rejection                                                 |
-| `resource.trigger` / `prefetch` / `refresh` | Nothing — swallowed; read the state instead                 |
+| `resource.prefetch` / `refresh`     | Nothing — swallowed; read `getState(args)` instead                |
 | `useCommand` / `agent.trigger`      | `{ status: "error", error }` envelope **and** `state.isError`      |
-| `command.trigger`                   | Promise rejection                                                  |
+| `command.execute`                   | Promise rejection                                                  |
 
 `error` and `refresh-error` are different: the first has no data, the second keeps the last good response in `data`. Rendering an error screen on `refresh-error` throws away data the user could still use.
 
@@ -85,12 +87,13 @@ On the command path it passes through `mapError` (so the typed envelope holds), 
 
 There is **no automatic retry or backoff.** Retries are explicit:
 
-| Call                          | Semantics                                                                 |
-|-------------------------------|---------------------------------------------------------------------------|
-| `state.retry()` (resource)    | Re-runs the failed query. Only meaningful from `error`.                   |
-| `state.retry()` (command)     | Re-runs the same entry, reusing its request id. No-op outside `error`.    |
-| `state.refresh()`             | Background SWR refresh; keeps stale data on screen.                        |
-| `command.trigger(args)` again | A **new** entry and a **new** request id — a different logical operation.  |
+| Call                              | Semantics                                                                 |
+|-----------------------------------|---------------------------------------------------------------------------|
+| `state.retry()` (resource)        | Re-runs the failed query. No-op outside `error`.                          |
+| `state.retry()` (command)         | Re-runs the same entry, reusing its request id. No-op outside `error`.    |
+| `state.refresh()`                 | Background SWR refresh; keeps stale data on screen. No-op outside `success` / `refresh-error`. |
+| `ensure` / `fetch` / `prefetch`   | Retry an entry sitting in `error` before awaiting it — in both `prefetch` modes. |
+| `command.execute(args)` again     | A **new** entry and a **new** request id — a different logical operation. |
 
 Automatic retry policy belongs inside `queryFn`, where you also control backoff and which status codes are retryable. Doing it there keeps the request id stable, so the backend can still deduplicate.
 

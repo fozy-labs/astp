@@ -141,7 +141,7 @@
         },
         "fozy-labs": {
             "name": "fozy-labs",
-            "version": "1.2.0",
+            "version": "1.3.0",
             "description": "Fozy Labs stack skills — DI, FSD, rx-api, signals (VS Code + Claude Code)",
             "default": false,
             "platforms": [
@@ -245,6 +245,11 @@
                     "category": "skill"
                 },
                 {
+                    "source": "fozy-labs/skills/fozy-labs-rx-api/references/migrations.md",
+                    "target": "skills/fozy-labs-rx-api/references/migrations.md",
+                    "category": "skill"
+                },
+                {
                     "source": "fozy-labs/skills/fozy-labs-rx-api/references/reading-in-react.md",
                     "target": "skills/fozy-labs-rx-api/references/reading-in-react.md",
                     "category": "skill"
@@ -282,6 +287,11 @@
                 {
                     "source": "fozy-labs/skills/fozy-labs-signals/references/fine-grained-state.md",
                     "target": "skills/fozy-labs-signals/references/fine-grained-state.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-signals/references/migrations.md",
+                    "target": "skills/fozy-labs-signals/references/migrations.md",
                     "category": "skill"
                 },
                 {

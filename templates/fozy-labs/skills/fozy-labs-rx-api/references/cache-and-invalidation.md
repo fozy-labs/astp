@@ -2,13 +2,15 @@
 
 Cache keys, `links`, optimistic patches, staleness, eviction — and why a mutation sometimes leaves the UI unchanged.
 
+**Contents:** [Cache keys](#the-cache-key-is-the-serialized-args) · [`links`](#links--wiring-a-command-to-resources) · [`forwardArgs`](#forwardargs-addresses-exactly-one-entry) · [Why nothing happened](#why-nothing-happened--checklist) · [Manual patches](#manual-patches) · [Staleness and eviction](#staleness-and-eviction)
+
 ---
 
 ## The cache key is the serialized args
 
 One entry per `serializeArgs(args)` result, defaulting to `stableStringify` (so key order does not matter).
 
-`stableStringify` handles plain objects, arrays, primitives, `null` and `undefined`. It does **not** handle `Date`, `Map`, `Set` or `RegExp`; args containing them collapse to indistinguishable keys. Pass a custom `serializeArgs` on the api or on the resource in that case.
+`stableStringify` handles plain objects, arrays, primitives, `null` and `undefined`. `Map`, `Set` and `RegExp` all serialize to `{}`, so args differing only in one of those collapse onto a **single** entry — pass a custom `serializeArgs` on the api or the resource. A `Date` is not in that group despite the package's own note: `JSON.stringify` calls its `toJSON`, so it keys by ISO string and stays distinguishable (it only collides with the equal ISO string as a value).
 
 `key` (the resource/command name) is separate from the args key. It is combined with the api's `keyPrefix` as `` `${keyPrefix}/${key}` `` and is what devtools, snapshots and cross-tab sync address.
 
@@ -49,7 +51,7 @@ setStatus = api.createCommand<UserStatus, User>({
 Timing:
 
 ```
-trigger(args)
+execute(args)
   ├─ optimisticUpdate   ← applied immediately, patch stays "pending"
   │     └─ throws → every patch applied so far is rolled back, entry fails
   ├─ queryFn(args, requestId)
@@ -81,7 +83,7 @@ Consequences:
 3. **Did the command actually succeed?** `update` and `invalidate` only run on success; only `optimisticUpdate` runs before the response.
 4. **Was the entry evicted?** With no subscriber it is gone after `retentionTime` (60 000 ms for resources, `0` for commands).
 5. **Does the recipe mutate the draft?** `optimisticUpdate` / `update` are Immer recipes — mutate `draft`, do not return a new value.
-6. **Did `invalidate` fire on a subscriber-less entry?** `refresh` marks it stale and re-runs the query only if someone is listening; otherwise the new data arrives on the next read.
+6. **Was the entry in a state `refresh` accepts?** `invalidate` calls `resource.refresh(args)`, which is valid **only** from `success` / `refresh-error`. From `pending`, `refreshing` or `error` it logs `refresh() called in invalid state: …` and does nothing. Subscribers are irrelevant — when the state is valid, `queryFn` re-runs immediately whether or not anything is listening.
 
 ---
 
@@ -103,14 +105,14 @@ While any patch is pending the machine state carries `patchState`: `originalData
 
 ## Staleness and eviction
 
-| Trigger                        | Effect                                                                       |
-|--------------------------------|------------------------------------------------------------------------------|
-| `link({ invalidate: true })`   | `resource.refresh(args)` after success — background SWR on an existing entry |
-| `resource.refresh(args)`       | Same, called by hand. No-op if the entry does not exist.                     |
-| `state.refresh()` (hook/agent) | Refresh of the entry currently observed.                                     |
-| `resource.trigger(args, true)` | Force path: refresh if warm, create and run if cold.                         |
-| `retentionTime` elapsed        | Entry dropped; `$cacheEntryRemoved` resolves and `queryFn` is aborted.       |
-| `api.resetAll()`               | Clears every resource and command entry and resets sync state.               |
+| Cause                                  | Effect                                                                                  |
+|----------------------------------------|-----------------------------------------------------------------------------------------|
+| `link({ invalidate: true })`           | `resource.refresh(args)` after success — background SWR on an existing entry            |
+| `resource.refresh(args)`               | Same, called by hand. No-op with no entry, and from `pending` / `refreshing` / `error`. |
+| `state.refresh()` (hook/agent)         | Refresh of the entry currently observed.                                                |
+| `prefetch(args, { force: true })`      | Refreshes a warm entry, retries a failed one, creates and runs a cold one.              |
+| `retentionTime` elapsed                | Entry dropped; `$cacheEntryRemoved` resolves and `queryFn` is aborted.                  |
+| `api.resetAll()`                       | Clears every resource and command entry and resets sync state.                          |
 
 ---
 
@@ -119,8 +121,8 @@ While any patch is pending the machine state carries `patchState`: `originalData
 - ❌ Expecting `forwardArgs: () => undefined` to hit every entry — it hits the `undefined`-args entry only.
 - ❌ Returning a value from an `optimisticUpdate` / `update` recipe instead of mutating `draft`.
 - ❌ Calling `entry.createPatch(...)` and never `commit()` / `abort()`.
-- ❌ Args containing `Date` / `Map` / `Set` under the default `serializeArgs`.
-- ❌ Assuming `invalidate` refetches immediately — it refetches now only if the entry has subscribers.
+- ❌ Args carrying a `Map` / `Set` / `RegExp` under the default `serializeArgs` — each serializes to `{}`, so every value shares one entry.
+- ❌ Assuming `invalidate` always refetches — it is a silent no-op when the entry is missing or sits in `pending` / `refreshing` / `error`. When the state is valid it refetches at once, subscribers or not.
 - ✅ Combine `optimisticUpdate` with `invalidate: true` when you want instant feedback plus server reconciliation.
 - ✅ One `link({ … })` call per affected resource; several calls inside one `links` callback is the normal shape.
 - ✅ Check `serialize(args)` on both sides when a link appears inert.

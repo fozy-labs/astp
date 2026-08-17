@@ -3,6 +3,8 @@
 Why a `compute` or `effect` runs more often, less often, or in a different order than expected — and how the batcher
 decides. 
 
+**Contents:** [1. What actually gets tracked](#1-what-actually-gets-tracked) · [2. Dedupe is `Object.is`, in three places](#2-dedupe-is-objectis-in-three-places) · [3. Cold vs warm computeds](#3-cold-vs-warm-computeds) · [4. Batching](#4-batching) · [5. Checklist](#5-checklist)
+
 ---
 
 ## 1. What actually gets tracked
@@ -81,7 +83,7 @@ A `Signal.compute` has two regimes, and they cost different things:
 A computed recomputes only when a dependency changes — cold reads revalidate the memo with `Object.is`, warm ones wake
 on a dependency emission. So "my computed recalculates too often" is one of: a dependency that changes more often than
 the output needs (split it, or `peek()` the noisy part); a dependency whose `peek()` is not `Object.is`-stable — a
-`signalize`d observable handing back a fresh object, say — so every read counts as a change; or a computed cycling
+`SourceSignal` handing back a fresh object on each re-subscribe, say — so every read counts as a change; or a computed cycling
 warm → cold, which is the one recompute that is not caused by a dependency at all: warming up always runs `computeFn`
 and drops the memo cache.
 
