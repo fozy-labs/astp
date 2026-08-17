@@ -3,7 +3,7 @@
 Changing what every resource and command *is*, rather than what an individual one does.
 
 For `onCacheEntryAdded` / `onQueryStarted` — the callbacks that run alongside a cache entry — see
-`lifecycle-hooks.md`; they are a per-resource option, not an extension point.
+[lifecycle-hooks.md](lifecycle-hooks.md); they are a per-resource option, not an extension point.
 
 ---
 
@@ -61,7 +61,7 @@ DefaultOptions.update({
 | Option         | Type                       | Purpose                                                     |
 |----------------|----------------------------|--------------------------------------------------------------|
 | `DEVTOOLS`     | `DevtoolsLike \| null`     | Sink for signal, resource and command state. `null` disables. |
-| `onQueryError` | `(error: unknown) => void` | Global failure sink — see `error-handling.md`.                |
+| `onQueryError` | `(error: unknown) => void` | Global failure sink — see [error-handling.md](error-handling.md).                |
 | `getScopeName` | `() => string \| null`     | Resolves `{scope}` in signal names, e.g. from the DI scope.   |
 
 `reduxDevtools(options?)` targets the Redux DevTools browser extension. `batchStrategy` is `"sync"` / `"microtask"` (default) / `"task"`, with `taskDelay` for the last. Any `DevtoolsLike` implementation works — `combineDevtools(...)` fans out to several at once.
@@ -73,6 +73,6 @@ Entries are labelled `` `${resourceKey}:${entryKey}` `` and there is no per-reso
 ## Pitfalls
 
 - ❌ Typing the api's plugin list as `IPlugin[]` — the augmentation types vanish.
-- ❌ Writing a plugin to do per-entry work — that is `onCacheEntryAdded`, see `lifecycle-hooks.md`.
+- ❌ Writing a plugin to do per-entry work — that is `onCacheEntryAdded`, see [lifecycle-hooks.md](lifecycle-hooks.md).
 - ✅ Give a `key` to anything you intend to inspect in devtools.
 - ✅ Set `DefaultOptions` once at bootstrap, before the api is created.

@@ -1,6 +1,6 @@
 # Signals in React
 
-Reading and owning signals from components. For Node, workers, tests and other frameworks see `use-outside-react.md` —
+Reading and owning signals from components. For Node, workers, tests and other frameworks see [use-outside-react.md](use-outside-react.md) —
 pick the one matching your host, not both.
 
 React ≥ 19 is the declared peer dependency. Nothing needs wiring up: `useSignal` is the whole binding.
@@ -24,7 +24,7 @@ function CurrentUserWidget() {
 ```
 
 - Accepts anything shaped `{ obs, peek }` — every signal type, plus the `unstable_ProxySignal` /
-  `unstable_KeyedSignal` controllers (`fine-grained-state.md`).
+  `unstable_KeyedSignal` controllers ([fine-grained-state.md](fine-grained-state.md)).
 - Implemented as `useSyncExternalStore(subscribe, () => signal$.peek())`. Subscribes on mount, unsubscribes on unmount.
 - Re-renders only when the snapshot changes — React compares with `Object.is`.
 - A burst of synchronous writes is coalesced into one `queueMicrotask` notification, so a batch produces one re-render.
@@ -42,7 +42,7 @@ an infinite render loop (`The result of getSnapshot should be cached`).
   hit. Prefer `keepAlive: "forever"` for a stateful pipeline (`scan`): the very first `getSnapshot` runs during render,
   before React subscribes, and a shorter window lets the source restart in between.
 - ❌ `SourceSignal.create(...)` over a cold or non-replaying source — **every** `peek()` re-subscribes and re-runs the
-  body, so a `map` that builds objects yields a new reference each call. Use `Signal.from` (`rxjs-interop.md`).
+  body, so a `map` that builds objects yields a new reference each call. Use `Signal.from` ([rxjs-interop.md](rxjs-interop.md)).
 
 ### Server rendering
 

@@ -1,7 +1,7 @@
 # Setup — React binding
 
 Wiring `@fozy-labs/simplest-di` into a React app. Requires **React ≥ 19** (`React.use` is used to read the scope context).
-Install, peer deps, and `tsconfig` rules are identical to the core setup — see `setup-native.md` if DI is not wired yet at all.
+Install, peer deps, and `tsconfig` rules are identical to the core setup — see [setup-native.md](setup-native.md) if DI is not wired yet at all.
 
 ---
 
@@ -61,7 +61,7 @@ it("renders the order list", () => {
 ```
 
 - Put `setupReactDi()` in the vitest setup file, not in each test — it mutates a module-level hook.
-- Swapping an implementation (fake API, in-memory transport) goes through contracts: `contracts.md`.
+- Swapping an implementation (fake API, in-memory transport) goes through contracts: [contracts.md](contracts.md).
 - The DOM environment must be `jsdom` (or similar) for `@testing-library/react`.
 
 ---
@@ -70,5 +70,5 @@ it("renders the order list", () => {
 
 - ✅ `setupReactDi()` runs once, before the first render, in the app entry point.
 - ✅ React ≥ 19; `experimentalDecorators` **not** enabled.
-- ✅ Every SCOPED consumer sits under a `DiScopeProvider` that registers it (`scopes-react.md`).
+- ✅ Every SCOPED consumer sits under a `DiScopeProvider` that registers it ([scopes-react.md](scopes-react.md)).
 - ✅ Tests: `setupReactDi()` in setup file, `resetRegistry()` in `beforeEach`.

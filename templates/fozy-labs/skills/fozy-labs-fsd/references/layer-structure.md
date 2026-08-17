@@ -1,7 +1,7 @@
 # Layer structure
 
 What belongs in each layer, with a representative folder tree per layer. For the segments *inside* a slice
-and for file naming, see `segments-and-naming.md`.
+and for file naming, see [segments-and-naming.md](segments-and-naming.md).
 
 **Contents:** [`app/`](#app) · [`pages/`](#pages) · [`widgets/`](#widgets) · [`features/`](#features) · [`entities/`](#entities) · [`shared/`](#shared)
 
@@ -199,7 +199,7 @@ entities/product/
 
 Entity UI raises coupling risk: other entities start wanting to import it, which pushes the project toward
 `@x` dependencies. Entity UI is consumed by features, widgets and pages only. When two entities do want each
-other's code, treat it as a cross-import problem — `cross-import-patterns.md`.
+other's code, treat it as a cross-import problem — [cross-import-patterns.md](cross-import-patterns.md).
 
 ---
 

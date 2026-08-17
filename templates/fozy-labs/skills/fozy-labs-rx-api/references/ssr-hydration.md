@@ -60,7 +60,7 @@ clear the stored snapshot. Do not build on those behaviours.
 ## Rendering under SSR
 
 `useSuspenseResource` is client-only — it inherits `useSignal`, which has no `getServerSnapshot`. For streaming SSR use
-`useResource`; see `reading-in-react.md`.
+`useResource`; see [reading-in-react.md](reading-in-react.md).
 
 ---
 

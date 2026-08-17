@@ -1,6 +1,6 @@
 # Signals outside React
 
-Using signals in Node, workers, CLIs, unit tests and non-React frameworks. For the React hook see `use-in-react.md` —
+Using signals in Node, workers, CLIs, unit tests and non-React frameworks. For the React hook see [use-in-react.md](use-in-react.md) —
 pick the one matching your host, not both.
 
 There is **nothing to set up**. Signals carry no ambient context, no scheduler and no global registry: creating one is
@@ -26,7 +26,7 @@ const stop = Signal.effect(() => {
 stop.unsubscribe();
 ```
 
-Outside React, teardown is entirely yours — see `disposal-and-leaks.md`.
+Outside React, teardown is entirely yours — see [disposal-and-leaks.md](disposal-and-leaks.md).
 
 ---
 
@@ -70,7 +70,7 @@ const count = count$.obs;                // then `$count` in markup
 bindings get an initial value synchronously.
 
 Going the other direction — an existing `Observable` into the signal graph — is `Signal.from`, whose `keepAlive` option
-decides how long the shared upstream subscription survives: see `rxjs-interop.md`.
+decides how long the shared upstream subscription survives: see [rxjs-interop.md](rxjs-interop.md).
 
 ---
 
@@ -112,7 +112,7 @@ it("runs a batched effect once", () => {
 - Unsubscribe every effect the test created; a leaked effect keeps running across cases in the same file.
 
 The only asynchrony in the library is deliberate and elsewhere: `useSignal` coalesces notifications in a microtask, and
-the experimental collections reap idle nodes in a microtask (`fine-grained-state.md`).
+the experimental collections reap idle nodes in a microtask ([fine-grained-state.md](fine-grained-state.md)).
 
 ---
 
@@ -120,7 +120,7 @@ the experimental collections reap idle nodes in a microtask (`fine-grained-state
 
 - `LocalSignal.state` has no storage: the default driver resolves to `null` and **construction** throws
   `[LocalSignal]: localStorage does not exist and no driver was passed.` Pass a `driver` (give it `keys()` if you want
-  its GC to run) — see `persisted-state.md`.
+  its GC to run) — see [persisted-state.md](persisted-state.md).
 - `reduxDevtools()` without an explicit `driver` throws `Redux Devtools extension is not installed` when there is no
   `window`. Guard the `DefaultOptions.update({ DEVTOOLS })` call with an environment check.
 - Nothing else in the signals layer touches browser globals.

@@ -163,16 +163,16 @@ Load these only when the specific situation applies — do **not** preload.
 
 | Situation                                                                          | File                                   |
 |------------------------------------------------------------------------------------|----------------------------------------|
-| Rendering server data — hooks, `SKIP`, state union, Suspense                       | `references/reading-in-react.md`       |
-| Reading from stores, route loaders, workers — `ensure`/`fetch`/`prefetch`, agents  | `references/reading-outside-react.md`  |
-| Writing a mutation — `execute`, request id, envelope, retry, command cache keys    | `references/writing-mutations.md`      |
-| The cache did not update after a mutation — `links`, patches, staleness, eviction  | `references/cache-and-invalidation.md` |
-| Typing `error`, `mapError`, retries, cancellation, `CacheEntryRemovedError`        | `references/error-handling.md`         |
-| Websocket/streaming updates, polling, per-entry teardown, per-run instrumentation  | `references/lifecycle-hooks.md`        |
-| Writing a custom plugin, devtools, `DefaultOptions`                                | `references/extending-the-api.md`      |
-| SSR — serializing a snapshot on the server, hydrating it on the client             | `references/ssr-hydration.md`          |
-| Sharing cache between browser tabs — `syncDriver`, `defaultSync`, custom transports | `references/cross-tab-sync.md`         |
-| Existing code uses a name this skill does not describe (`trigger`, `getDevtoolsKey`) | `references/migrations.md`             |
+| Rendering server data — hooks, `SKIP`, state union, Suspense                       | [references/reading-in-react.md](references/reading-in-react.md)       |
+| Reading from stores, route loaders, workers — `ensure`/`fetch`/`prefetch`, agents  | [references/reading-outside-react.md](references/reading-outside-react.md)  |
+| Writing a mutation — `execute`, request id, envelope, retry, command cache keys    | [references/writing-mutations.md](references/writing-mutations.md)      |
+| The cache did not update after a mutation — `links`, patches, staleness, eviction  | [references/cache-and-invalidation.md](references/cache-and-invalidation.md) |
+| Typing `error`, `mapError`, retries, cancellation, `CacheEntryRemovedError`        | [references/error-handling.md](references/error-handling.md)         |
+| Websocket/streaming updates, polling, per-entry teardown, per-run instrumentation  | [references/lifecycle-hooks.md](references/lifecycle-hooks.md)        |
+| Writing a custom plugin, devtools, `DefaultOptions`                                | [references/extending-the-api.md](references/extending-the-api.md)      |
+| SSR — serializing a snapshot on the server, hydrating it on the client             | [references/ssr-hydration.md](references/ssr-hydration.md)          |
+| Sharing cache between browser tabs — `syncDriver`, `defaultSync`, custom transports | [references/cross-tab-sync.md](references/cross-tab-sync.md)         |
+| Existing code uses a name this skill does not describe (`trigger`, `getDevtoolsKey`) | [references/migrations.md](references/migrations.md)             |
 
 Pick **one** reading file matching the target environment — loading both the React and the non-React variant of the same
 topic is redundant.

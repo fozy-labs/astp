@@ -2,7 +2,7 @@
 
 Concrete placement answers for recurring situations, using the fozy-labs stack (`simplest-di` +
 `rx-toolkit`) as the default. This file covers **where the code goes**; the structural rules behind the
-answers are in `layer-structure.md` and `segments-and-naming.md`.
+answers are in [layer-structure.md](layer-structure.md) and [segments-and-naming.md](segments-and-naming.md).
 
 Tool-level *how* belongs to the sibling skills, not here:
 
@@ -172,7 +172,7 @@ widgets/preferences-panel/
 ```
 
 Whether that store should be DI-managed at all, and how its inputs flow in, is a DI question — see
-`fozy-labs-di` → `references/architecture.md`. Do not decide it from FSD placement.
+[fozy-labs-di / architecture.md](../../fozy-labs-di/references/architecture.md). Do not decide it from FSD placement.
 
 ---
 
@@ -219,5 +219,5 @@ pages/order/
 ```
 
 The scope-keying mechanics (`useScope`, `inject.provide`, `DiScopeProvider`, disposal) are owned by
-`fozy-labs-di` → `references/scopes-react.md`. FSD only says the scope belongs to the page slice that owns
+[fozy-labs-di / scopes-react.md](../../fozy-labs-di/references/scopes-react.md). FSD only says the scope belongs to the page slice that owns
 the route.

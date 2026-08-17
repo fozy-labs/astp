@@ -61,7 +61,7 @@ if (!state.data) return null;                                                   
 return <OrderList items={state.data} isStale={state.isRefreshing} />;
 ```
 
-`error` is `unknown` unless the api declares `mapError` — see `error-handling.md`.
+`error` is `unknown` unless the api declares `mapError` — see [error-handling.md](error-handling.md).
 
 ---
 
@@ -100,7 +100,7 @@ Constraints:
 
 - `SKIP` is **not** accepted — the arg type is `ArgsOrVoid<TArgs>`. A component that may suspend must always have args; use `useResource` for conditional reads.
 - The query starts **during render**, not in an effect (a suspended render never runs effects).
-- Client-only: it inherits `useSignal`, which has no `getServerSnapshot`. For streaming SSR use `useResource` — see `ssr-hydration.md`.
+- Client-only: it inherits `useSignal`, which has no `getServerSnapshot`. For streaming SSR use `useResource` — see [ssr-hydration.md](ssr-hydration.md).
 
 ---
 
@@ -118,7 +118,7 @@ async function onSubmit(dto: CreateOrderDto) {
 - The hook does **not** fire on mount; nothing runs until you call the trigger.
 - The trigger is stable across renders (`useEventHandler`) — safe in props and dependency arrays.
 - It returns `TTriggerPromise` — an envelope that never rejects. `try/catch` around `await` is dead code; use `result.status` or `.unwrap()`.
-- The optional `key` binds the hook to a named cache entry, so several components can observe the same mutation. Full semantics: `writing-mutations.md`.
+- The optional `key` binds the hook to a named cache entry, so several components can observe the same mutation. Full semantics: [writing-mutations.md](writing-mutations.md).
 
 ---
 

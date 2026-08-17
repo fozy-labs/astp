@@ -103,7 +103,7 @@ export class OrderListStore {
 
 ## 5. DI is opt-in, not mandatory
 
-Full rationale, plus the unidirectional-data-flow rule: `references/architecture.md`.
+Full rationale, plus the unidirectional-data-flow rule: [references/architecture.md](references/architecture.md).
 
 --- 
 
@@ -122,11 +122,11 @@ Load these only when the specific situation applies — do **not** preload.
 
 | Situation                                                                    | File                          |
 |------------------------------------------------------------------------------|-------------------------------|
-| Wiring DI into a React app, `setupReactDi`, StrictMode, testing components   | `references/setup-react.md`   |
-| Wiring DI outside React — Node, CLI, workers, unit tests, `resetRegistry`    | `references/setup-native.md`  |
-| `DiScopeProvider`, `useScope`, scope keying and tags in a React tree         | `references/scopes-react.md`  |
-| `Scope` by hand, cascade dispose, `runInScope`, `unstable_createScopesStore` | `references/scopes-native.md` |
-| `inject.define` contracts, `bind`, platform/mock swapping                    | `references/contracts.md`     |
-| Deciding whether DI belongs here at all; store-input data flow               | `references/architecture.md`  |
+| Wiring DI into a React app, `setupReactDi`, StrictMode, testing components   | [references/setup-react.md](references/setup-react.md)   |
+| Wiring DI outside React — Node, CLI, workers, unit tests, `resetRegistry`    | [references/setup-native.md](references/setup-native.md)  |
+| `DiScopeProvider`, `useScope`, scope keying and tags in a React tree         | [references/scopes-react.md](references/scopes-react.md)  |
+| `Scope` by hand, cascade dispose, `runInScope`, `unstable_createScopesStore` | [references/scopes-native.md](references/scopes-native.md) |
+| `inject.define` contracts, `bind`, platform/mock swapping                    | [references/contracts.md](references/contracts.md)     |
+| Deciding whether DI belongs here at all; store-input data flow               | [references/architecture.md](references/architecture.md)  |
 
 Pick **one** setup file and **one** scopes file matching the target environment — loading both the native and React variants of the same topic is redundant.

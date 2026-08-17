@@ -48,10 +48,10 @@ getChatMessages = api.createResource({
 ```
 
 Two things bite here: `$cacheDataLoaded` rejects on removal, so wrap it and clean up in the `catch`; and `createPatch`
-returns a handle that must be committed or aborted (see `cache-and-invalidation.md`).
+returns a handle that must be committed or aborted (see [cache-and-invalidation.md](cache-and-invalidation.md)).
 
 An entry hydrated from cross-tab sync fires `onCacheEntryAdded` but **not** `onQueryStarted` — no `queryFn` ran.
-See `cross-tab-sync.md`.
+See [cross-tab-sync.md](cross-tab-sync.md).
 
 ---
 
@@ -90,7 +90,7 @@ export const api = createApi({
 ## Not a substitute for polling or retry
 
 The package ships neither. `onCacheEntryAdded` is where you build them: start an interval that calls `refresh(args)`
-and clear it after `$cacheEntryRemoved`. Retry policy belongs inside `queryFn` — see `error-handling.md`.
+and clear it after `$cacheEntryRemoved`. Retry policy belongs inside `queryFn` — see [error-handling.md](error-handling.md).
 
 Use `refresh(args)` here, not `prefetch(args, { force: true })`: `prefetch` re-arms the entry's `retentionTime` on
 every call, so a poll faster than the retention window keeps the entry alive forever and `$cacheEntryRemoved` never

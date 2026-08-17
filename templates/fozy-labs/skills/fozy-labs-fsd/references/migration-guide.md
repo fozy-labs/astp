@@ -1,7 +1,7 @@
 # Migration guide
 
 Moving an existing codebase to FSD v2.1 — either from FSD v2.0, or from no FSD at all. Target folder trees
-live in `layer-structure.md`; this file covers the order of operations.
+live in [layer-structure.md](layer-structure.md); this file covers the order of operations.
 
 **Contents:** [Part 1](#part-1--fsd-v20--v21) · [Part 2](#part-2--non-fsd-codebase--fsd) · [Common pitfalls](#common-pitfalls)
 
@@ -119,11 +119,11 @@ Migrate incrementally. A half-migrated tree is a normal intermediate state; a bi
 ### Phase 1 — establish `shared/`
 
 Move infrastructure that carries no business logic: the existing UI component library, utility functions,
-API client setup, auth/session utilities, config, assets. Target layout: `layer-structure.md` → `shared/`.
+API client setup, auth/session utilities, config, assets. Target layout: [layer-structure.md](layer-structure.md) → `shared/`.
 
 - Only move code with zero business logic.
 - Relocate, do not refactor.
-- Set up the path aliases now (`segments-and-naming.md`), so later phases import correctly from day one.
+- Set up the path aliases now ([segments-and-naming.md](segments-and-naming.md)), so later phases import correctly from day one.
 
 ### Phase 2 — create `pages/`
 
@@ -159,7 +159,7 @@ src/
 ### Phase 3 — set up `app/`
 
 Move global providers, the router, global styles and the entry point into `app/`. Layout:
-`layer-structure.md` → `app/`.
+[layer-structure.md](layer-structure.md) → `app/`.
 
 ### Phase 4 — extract `features/` and `entities/` (ongoing)
 

@@ -116,7 +116,7 @@ Batcher.run(() => {
 A `signal → observable → signal` round trip through an asynchronous operator (`debounceTime`, `delay`, `switchMap`, an
 HTTP call) leaves the synchronous flush. The value re-enters the graph in a later tick as an independent update, so
 consumers downstream of both the original signal and the round-tripped one can see two updates for one logical change.
-Keep such round trips out of the middle of a derived chain — see `rxjs-interop.md`.
+Keep such round trips out of the middle of a derived chain — see [rxjs-interop.md](rxjs-interop.md).
 
 ---
 

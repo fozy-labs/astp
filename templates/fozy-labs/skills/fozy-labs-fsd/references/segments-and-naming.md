@@ -1,7 +1,7 @@
 # Segments and naming
 
 The inside of a slice: which segment a file goes in, what to call it, what `index.ts` exports, and how path
-aliases are wired. For which layer and slice a file belongs to, see `layer-structure.md`.
+aliases are wired. For which layer and slice a file belongs to, see [layer-structure.md](layer-structure.md).
 
 **Contents:** [Segments](#segments) · [Domain-based file names](#domain-based-file-names) · [`index.ts`](#indexts--the-public-api) · [Path aliases](#path-aliases)
 

@@ -103,7 +103,7 @@ Automatic retry policy belongs inside `queryFn`, where you also control backoff 
 
 - A resource's `queryFn` receives an `AbortSignal`; forward it to `fetch`. The library aborts on args change, on the last unsubscribe, and when retention collects the entry.
 - A command's `queryFn` gets **no** signal — mutations are not cancelled.
-- The `signal` passed to `ensure` / `fetch` detaches the **caller**, it does not abort a shared in-flight query. See `reading-outside-react.md`.
+- The `signal` passed to `ensure` / `fetch` detaches the **caller**, it does not abort a shared in-flight query. See [reading-outside-react.md](reading-outside-react.md).
 - A synchronous `throw` from a non-async `queryFn` is handled like any other rejection: the entry is created and moves to `error` / `refresh-error`.
 
 ---

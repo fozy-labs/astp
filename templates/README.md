@@ -16,12 +16,15 @@ templates/
 │   ├── agents/
 │   ├── instructions/
 │   └── skills/
-└── fozy-labs/             ← bundle: fozy-labs (vscode + claude-code)
+├── fozy-labs/             ← bundle: fozy-labs (vscode + claude-code)
+│   └── skills/
+│       ├── fozy-labs-di/
+│       ├── fozy-labs-fsd/
+│       ├── fozy-labs-rx-api/
+│       └── fozy-labs-signals/
+└── docs/                  ← bundle: docs (vscode + claude-code)
     └── skills/
-        ├── fozy-labs-di/
-        ├── fozy-labs-fsd/
-        ├── fozy-labs-rx-api/
-        └── fozy-labs-signals/
+        └── markdown-craft/
 ```
 
 Each bundle directory's internal structure mirrors the install target structure. For example, `rdpi/agents/rdpi-approve.agent.md` installs to `<install-root>/agents/rdpi-approve.agent.md`.

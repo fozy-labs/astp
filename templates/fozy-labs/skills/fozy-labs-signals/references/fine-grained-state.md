@@ -151,4 +151,4 @@ function UserList() {
 ```
 
 `useConstant` does not dispose the previous computed when `deps` change — dispose it in a `useEffect` cleanup if the
-component churns (`use-in-react.md`, `disposal-and-leaks.md`).
+component churns ([use-in-react.md](use-in-react.md), [disposal-and-leaks.md](disposal-and-leaks.md)).

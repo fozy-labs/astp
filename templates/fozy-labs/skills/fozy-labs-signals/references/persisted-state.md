@@ -27,16 +27,16 @@ isOpen$.set(false); // write-through to storage
 isOpen$.clear();    // drop the stored value, fall back to defaultValue
 ```
 
-| Option            | Required | Meaning                                                                                     |
-|-------------------|----------|----------------------------------------------------------------------------------------------|
-| `key`             | yes      | Slot key. Becomes `` `__LSValue__:${key}` `` (see below).                                    |
-| `defaultValue`    | yes      | Used when nothing is stored, the stored blob is invalid, or `checkEffect` rejects the value. |
-| `zodSchema`       | no       | Zod v4 schema validating **this slot's** value at construction.                              |
-| `userId`          | no       | Puts the value in its own per-user slot. Omit only for genuinely anonymous state.            |
-| `checkEffect`     | no       | `(value) => boolean` — a **read-time** filter; see below.                                    |
-| `driver`          | no       | `StorageLike`. Defaults to `localStorage` when reachable.                                    |
-| `gc`              | no       | `boolean \| { enabled?, maxUnreadTime? }` — auto-cleanup policy for this slot. Default `true`.|
-| `devtoolsOptions` | no       | `SignalOptionsOrKey` — a devtools key string or an options object.                           |
+| Option            | Required | Meaning                                                                                           |
+|-------------------|----------|---------------------------------------------------------------------------------------------------|
+| `key`             | yes      | Slot key. Becomes `` `__LSValue__:${key}` `` — [Storage layout](#storage-layout).                 |
+| `defaultValue`    | yes      | Used when nothing is stored, the stored blob is invalid, or `checkEffect` rejects the value.      |
+| `zodSchema`       | no       | Zod v4 schema validating **this slot's** value at construction.                                   |
+| `userId`          | no       | Puts the value in its own per-user slot. Omit only for genuinely anonymous state.                 |
+| `checkEffect`     | no       | `(value) => boolean` — a **read-time** filter; [Hydration and bad data](#hydration-and-bad-data). |
+| `driver`          | no       | `StorageLike`. Defaults to `localStorage` when reachable.                                         |
+| `gc`              | no       | `boolean \| { enabled?, maxUnreadTime? }` — auto-cleanup policy for this slot. Default `true`.    |
+| `devtoolsOptions` | no       | `SignalOptionsOrKey` — a devtools key string or an options object.                                |
 
 Returns a `LocalStateSignal<T>`: `()`, `get()`, `peek()`, `obs`, `set`, `update`, `clear`. There is **no `dispose()`**
 and nothing to tear down.

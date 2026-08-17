@@ -27,7 +27,7 @@ re-subscribes on every read, so it had two failure modes that the default `keepA
 - a stateful cold pipeline (`scan`, `startWith`, `fromEvent`) restarts on each read, so its accumulated state is lost
   and the listener is re-attached per read.
 
-Keeping `keepAlive: "none"` reproduces both. See `rxjs-interop.md` for what to pick instead.
+Keeping `keepAlive: "none"` reproduces both. See [rxjs-interop.md](rxjs-interop.md) for what to pick instead.
 
 ### `LocalSignal` storage was rewritten — upgrading wipes
 
@@ -46,9 +46,9 @@ Two hazards of the old single-record layout are gone, so any workaround written 
 - two tabs writing different slots of the same key clobbered each other through read-modify-write — a write is now a
   single atomic `setItem` of one key.
 
-Garbage collection is new in this release: unread slots expire (60 days by default), tuned globally through
+Garbage collection was added in 0.11.0: unread slots expire (60 days by default), tuned globally through
 `LocalSignal.GC_OPTIONS` or per slot through the `gc` option. A driver that cannot enumerate its keys is swept lazily
-instead. Details in `persisted-state.md`.
+instead. Details in [persisted-state.md](persisted-state.md).
 
 ---
 

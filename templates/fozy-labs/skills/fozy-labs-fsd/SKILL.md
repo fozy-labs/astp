@@ -46,7 +46,7 @@ Imports flow downward only. Same-layer cross-imports between slices are forbidde
 5. App-wide config / providers? → `app/`.
 
 **Golden rule:** when in doubt, keep it in `pages/`.
-Worked single-use vs shared placements: `references/practical-examples.md`.
+Worked single-use vs shared placements: [references/practical-examples.md](references/practical-examples.md).
 
 ---
 
@@ -105,7 +105,7 @@ Every file except the exceptions below carries a **domain-prefixed** type suffix
 
 ### State management
 
-Whether a store deserves DI at all is answered by `fozy-labs-di` → `references/architecture.md`, not here. 
+Whether a store deserves DI at all is answered by [fozy-labs-di / architecture.md](../fozy-labs-di/references/architecture.md), not here. 
 Placement is orthogonal to the state-management choice — §1–§3 apply identically with Redux Toolkit, TanStack Query, or anything else.
 
 ---
@@ -155,11 +155,11 @@ Load these only when the specific situation applies — do **not** preload.
 
 | Situation                                                                                                                                | File                                  |
 |------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------|
-| Creating or reorganizing layers and slices; what belongs in each layer                                                                   | `references/layer-structure.md`       |
-| Picking a segment, naming a file, writing `index.ts`, path aliases                                                                       | `references/segments-and-naming.md`   |
-| Two same-layer slices need each other; `@x`; too many thin entities                                                                      | `references/cross-import-patterns.md` |
-| `references/migration-guide.md`                                                                                                          |
-| Concrete placement lookups — auth, DTO vs domain type, `*Moving a non-FSD codebase onto FSD, or FSD v2.0 → v2.1, .api.ts`, stores, hooks | `references/practical-examples.md`    |
+| Creating or reorganizing layers and slices; what belongs in each layer                                                                   | [references/layer-structure.md](references/layer-structure.md)       |
+| Picking a segment, naming a file, writing `index.ts`, path aliases                                                                       | [references/segments-and-naming.md](references/segments-and-naming.md)   |
+| Two same-layer slices need each other; `@x`; too many thin entities                                                                      | [references/cross-import-patterns.md](references/cross-import-patterns.md) |
+| [references/migration-guide.md](references/migration-guide.md)                                                                                                          |
+| Concrete placement lookups — auth, DTO vs domain type, `*Moving a non-FSD codebase onto FSD, or FSD v2.0 → v2.1, .api.ts`, stores, hooks | [references/practical-examples.md](references/practical-examples.md)    |
 
 `layer-structure.md` and `segments-and-naming.md` are the two halves of one lookup — the first answers *which layer and slice*, the second *which segment and filename*. Load one; load both only when scaffolding a project from scratch.
 

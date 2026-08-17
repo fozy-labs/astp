@@ -1,7 +1,7 @@
 # Setup — framework-agnostic (core)
 
 Wiring `@fozy-labs/simplest-di` outside React: Node services, CLIs, workers, and unit tests.
-For the React binding see `setup-react.md`.
+For the React binding see [setup-react.md](setup-react.md).
 
 **Contents:** [Install](#install) · [`tsconfig.json`](#tsconfigjson) · [How the current scope is resolved](#how-the-current-scope-is-resolved) · [Minimal bootstrap](#minimal-bootstrap) · [Tests](#tests) · [Checklist](#checklist)
 
@@ -81,7 +81,7 @@ appScope.dispose();
 ```
 
 `init$` / `destroyed$` are **not** created by the `Scope` constructor. Skip them and any `@injectable` with `onScopeInit` throws
-`Error: Scope for X does not support initialization callbacks` on first resolution. Details and the store-based alternative: `scopes-native.md`.
+`Error: Scope for X does not support initialization callbacks` on first resolution. Details and the store-based alternative: [scopes-native.md](scopes-native.md).
 
 ---
 
@@ -119,7 +119,7 @@ it("loads orders", () => {
 });
 ```
 
-To substitute a dependency in tests, bind a contract to a fake implementation before the first resolution — see `contracts.md`.
+To substitute a dependency in tests, bind a contract to a fake implementation before the first resolution — see [contracts.md](contracts.md).
 
 ---
 

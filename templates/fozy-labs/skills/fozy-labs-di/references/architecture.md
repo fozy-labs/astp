@@ -10,7 +10,7 @@ sharing. For everything else, plain classes and functions are simpler and easier
 - **Cross-cutting singletons** — `SessionStore`, `ThemeStore`, the shared api client.
 - **Per-scope identity** — a store or API that lives exactly as long as a page/widget subtree (`OrderApi`, `FeedStore`).
 - **Resources needing cleanup** tied to a subtree, via `onScopeInit`.
-- **Swappable implementations** behind an interface → contracts (`contracts.md`).
+- **Swappable implementations** behind an interface → contracts ([contracts.md](contracts.md)).
 
 ## 2. When **not** to use DI
 

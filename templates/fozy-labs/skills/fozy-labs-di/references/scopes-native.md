@@ -1,7 +1,7 @@
 # Scopes — framework-agnostic (core)
 
 Managing `Scope` by hand: hierarchy, lifecycle, tags, and the imperative scopes store.
-For scopes owned by a React tree see `scopes-react.md`.
+For scopes owned by a React tree see [scopes-react.md](scopes-react.md).
 
 **Contents:** [Creating a scope](#creating-a-scope) · [Resolution and shadowing](#resolution-and-shadowing) · [`init()` / `dispose()`](#init--dispose) · [`runInScope`](#runinscope--ambient-resolution) · [Tags](#tags) · [`unstable_createScopesStore`](#unstable_createscopesstore--scopes-keyed-by-string) · [Pitfalls](#pitfalls)
 

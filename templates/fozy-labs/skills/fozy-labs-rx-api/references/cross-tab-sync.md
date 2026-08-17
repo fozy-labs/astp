@@ -35,7 +35,7 @@ Without a `syncDriver` nothing syncs, whatever `defaultSync` says. A resource-le
 both directions.
 
 **Commands are never synced.** `createCommand` has no `sync` option and never touches the syncer, so `defaultSync: "all"`
-behaves identically to `"resources"` today. Verified against the 0.11 source: parts of the package docs still list a
+behaves identically to `"resources"`. Verified against the 0.11 source: parts of the package docs still list a
 command-level `sync` option — there is none.
 
 ---
@@ -49,7 +49,7 @@ command-level `sync` option — there is none.
 | `pending` / `error` / `refreshing` / `refresh-error` | nothing        |
 
 On the receiving side the entry appears in `success`, `onCacheEntryAdded` fires, `onQueryStarted` does **not** (no query
-ran — see `lifecycle-hooks.md`), and normal `retentionTime` rules apply.
+ran — see [lifecycle-hooks.md](lifecycle-hooks.md)), and normal `retentionTime` rules apply.
 
 A `RES` can never clobber local data: the `REQ` is only ever sent for a **cold** entry, and the answer is applied only
 while that entry is still `pending`. There is no freshness comparison — `RES` carries no timestamp, so a tab holding

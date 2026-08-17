@@ -23,10 +23,10 @@ export class OrderApi {
 |----------------------------------------|-----------------------|--------------------------------------------------------------------------|
 | `queryFn`                              | **required**          | `(args: TArgs, requestId: string) => Promise<TData>`                     |
 | `key`                                  | —                     | Prefix for cache keys and devtools. Combined with the api's `keyPrefix`. |
-| `links`                                | —                     | Cache wiring — `cache-and-invalidation.md`.                              |
+| `links`                                | —                     | Cache wiring — [cache-and-invalidation.md](cache-and-invalidation.md).                              |
 | `retentionTime`                        | `0`                   | ms an entry survives with no subscribers. `false` = never evict.         |
 | `generateRequestId`                    | `crypto.randomUUID()` | `(args) => string \| Promise<string>`, called once per cache entry.      |
-| `onCacheEntryAdded` / `onQueryStarted` | —                     | Lifecycle hooks — `lifecycle-hooks.md`.                                  |
+| `onCacheEntryAdded` / `onQueryStarted` | —                     | Lifecycle hooks — [lifecycle-hooks.md](lifecycle-hooks.md).                                  |
 
 There is **no** `sync` option, because commands never participate in cross-tab sync.
 
@@ -87,7 +87,7 @@ const agent = orderApi.createOrder.createAgent("checkout");           // agent b
 agent.setKey("checkout-retry");                                       // or later
 ```
 
-Re-running an existing key **completes the previous entry first**. If that mutation was still in flight, its promise rejects with `CacheEntryRemovedError` (passed through `mapError`) — see `error-handling.md`.
+Re-running an existing key **completes the previous entry first**. If that mutation was still in flight, its promise rejects with `CacheEntryRemovedError` (passed through `mapError`) — see [error-handling.md](error-handling.md).
 
 ---
 

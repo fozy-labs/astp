@@ -43,8 +43,8 @@ class FiltersStore {
 | `s$.peek()`                  | no      | Current value, no subscription.                                  |
 | `s$.set(v, actionName?)`     | —       | Silently ignored when `Object.is(v, current)`.                   |
 | `s$.update(fn, actionName?)` | —       | `set(fn(peek()))` — the read inside `update` is **not** tracked. |
-| `s$.obs`                     | —       | `Observable<T>`; see `references/rxjs-interop.md`.               |
-| `s$.dispose()`               | —       | Completes the signal; see `references/disposal-and-leaks.md`.    |
+| `s$.obs`                     | —       | `Observable<T>`; see [references/rxjs-interop.md](references/rxjs-interop.md).               |
+| `s$.dispose()`               | —       | Completes the signal; see [references/disposal-and-leaks.md](references/disposal-and-leaks.md).    |
 
 - ❌ Mutating an object in place and re-`set`ting the same reference is a no-op — the `Object.is` guard swallows it. Always set a new reference.
 - Every `set` / `update` already opens a batch; `Batcher.run` is only for grouping several writes.
@@ -69,7 +69,7 @@ class OrderListStore {
 ```
 
 - **Lazy.** With no subscriber it computes on demand and memoizes against the values of the dependencies it read — it holds no subscriptions. A live subscriber (a tracking parent, `obs`, `useSignal`) starts an internal effect that keeps it warm, and stops it when the last subscriber leaves.
-- **Deduped by `Object.is`.** A compute that builds a fresh object / array / `Set` on every run notifies on every run — that is a legitimate result, not a bug, but it is what makes React re-render. See `references/extra-recomputes.md`.
+- **Deduped by `Object.is`.** A compute that builds a fresh object / array / `Set` on every run notifies on every run — that is a legitimate result, not a bug, but it is what makes React re-render. See [references/extra-recomputes.md](references/extra-recomputes.md).
 - Returns `DisposableSignal<T>` — no `set` / `update`.
 - ❌ Never `async` — a promise is not a value. Use `createResource` (`fozy-labs-rx-api`).
 
@@ -93,7 +93,7 @@ stop.unsubscribe(); // stop it; `stop.closed` is true afterwards
 - Runs **immediately and synchronously** at creation, then again on every tracked change.
 - **Only synchronous reads are tracked.** A signal read after `await`, inside `.then`, or in a timer callback establishes nothing — capture it before the async hop.
 - If the body throws, the effect unsubscribes itself and rethrows — it is dead and will never run again.
-- Nothing stops an effect for you. Create it where a teardown hook exists (React `useEffect`, DI `onScopeInit`), never in a constructor. See `references/disposal-and-leaks.md`.
+- Nothing stops an effect for you. Create it where a teardown hook exists (React `useEffect`, DI `onScopeInit`), never in a constructor. See [references/disposal-and-leaks.md](references/disposal-and-leaks.md).
 
 ---
 
@@ -110,7 +110,7 @@ long that subscription outlives the last consumer.
 
 - Returns `DisposableSignal<T>` — `dispose()` freezes the last value and drops the upstream.
 - A read with nothing emitted returns `default`, or throws `Error: No value emitted` when no `default` was given.
-- Picking a `keepAlive`, error and complete behaviour: `references/rxjs-interop.md`.
+- Picking a `keepAlive`, error and complete behaviour: [references/rxjs-interop.md](references/rxjs-interop.md).
 
 ---
 
@@ -139,7 +139,7 @@ interface StateSignal<T> extends DisposableSignal<T> {
 
 - `Signal.effect` returns an `Effect`, not a signal — an RxJS `SubscriptionLike` with `unsubscribe()` and `closed`.
 - `LocalSignal.state` returns `LocalStateSignal<T>`: `ReadonlySignal` + `set` / `update` / `clear`, and notably **no**
-  `dispose()` (`references/persisted-state.md`).
+  `dispose()` ([references/persisted-state.md](references/persisted-state.md)).
 
 ---
 
@@ -178,13 +178,13 @@ Load these only when the specific situation applies — do **not** preload.
 
 | Situation                                                                          | File                                 |
 |------------------------------------------------------------------------------------|--------------------------------------|
-| Rendering signals in React — `useSignal`, component-local signals, StrictMode, SSR | `references/use-in-react.md`         |
-| Signals outside React — Node, workers, tests, Angular/Svelte/Solid, class style    | `references/use-outside-react.md`    |
-| A compute/effect runs too often, too rarely, or out of order; `Batcher`            | `references/extra-recomputes.md`     |
-| Deciding what must be disposed, effect teardown, leaks, DI scope interaction       | `references/disposal-and-leaks.md`   |
-| An RxJS `Observable` on either side — `obs`, `Signal.from`, `keepAlive`, `SourceSignal`         | `references/rxjs-interop.md`         |
-| State that must survive a reload — `LocalSignal`, storage layout, GC, drivers      | `references/persisted-state.md`      |
-| One big object or a keyed collection wakes every reader (experimental APIs)        | `references/fine-grained-state.md`   |
-| Existing code uses a name this skill does not describe (`signalize`, `LocalState`) | `references/migrations.md`           |
+| Rendering signals in React — `useSignal`, component-local signals, StrictMode, SSR | [references/use-in-react.md](references/use-in-react.md)         |
+| Signals outside React — Node, workers, tests, Angular/Svelte/Solid, class style    | [references/use-outside-react.md](references/use-outside-react.md)    |
+| A compute/effect runs too often, too rarely, or out of order; `Batcher`            | [references/extra-recomputes.md](references/extra-recomputes.md)     |
+| Deciding what must be disposed, effect teardown, leaks, DI scope interaction       | [references/disposal-and-leaks.md](references/disposal-and-leaks.md)   |
+| An RxJS `Observable` on either side — `obs`, `Signal.from`, `keepAlive`, `SourceSignal`         | [references/rxjs-interop.md](references/rxjs-interop.md)         |
+| State that must survive a reload — `LocalSignal`, storage layout, GC, drivers      | [references/persisted-state.md](references/persisted-state.md)      |
+| One big object or a keyed collection wakes every reader (experimental APIs)        | [references/fine-grained-state.md](references/fine-grained-state.md)   |
+| Existing code uses a name this skill does not describe (`signalize`, `LocalState`) | [references/migrations.md](references/migrations.md)           |
 
 Pick **one** of `use-in-react.md` / `use-outside-react.md` — the one matching the host. Loading both variants of the same topic is redundant.

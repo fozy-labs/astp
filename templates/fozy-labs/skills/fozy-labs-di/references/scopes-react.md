@@ -72,7 +72,7 @@ point the ambient scope is still the *parent's*. Passing `scope` explicitly is w
 ```
 
 Changing `routeId` disposes the old scope (cleanups run) and builds a fresh `PageStore`. This is the intended way to reset
-per-entity state — prefer it over pushing new inputs into a long-lived store (see `architecture.md`).
+per-entity state — prefer it over pushing new inputs into a long-lived store (see [architecture.md](architecture.md)).
 
 An explicit React `key` on the provider achieves the same for the whole subtree:
 
@@ -147,7 +147,7 @@ Unmount:
 1. `scope.dispose()` → cleanup functions returned from `onScopeInit` run, children cascade first;
 2. both subjects `complete()`.
 
-StrictMode double-mount is absorbed — `init()` happens once, no spurious dispose. See `setup-react.md`.
+StrictMode double-mount is absorbed — `init()` happens once, no spurious dispose. See [setup-react.md](setup-react.md).
 
 ---
 
