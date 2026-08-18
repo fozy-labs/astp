@@ -11,25 +11,52 @@ Applies to every md file you write, edit, restructure, or review.
 
 Every fact lives in exactly one place; everything else references it.
 
-| Fact                                        | Home                                                           |
-|---------------------------------------------|----------------------------------------------------------------|
-| who/whom/when/order, branching, concurrency | diagram                                                        |
-| rationale, invariants, trade-offs           | prose                                                          |
-| numbers: limits, TTLs, quotas, thresholds   | tables                                                         |
-| failure dispositions                        | failure table; diagrams reference it via `⚠§N` (see reference) |
-| exact formats / data schemas                | code blocks / prose                                            |
+| Fact                                                                                  | Home                                                                 |
+|---------------------------------------------------------------------------------------|----------------------------------------------------------------------|
+| who/whom/when/order, branching, concurrency, flows, lifecycle, state machines and etc | diagrams                                                             |
+| invariants and trade-offs the reader acts on                                          | prose                                                                |
+| numbers: limits, TTLs, quotas, thresholds                                             | tables                                                               |
+| failure dispositions                                                                  | failure tables                                                       |
+| exact formats / data schemas                                                          | code blocks or diagrams                                              |
+| derivation: why not otherwise, refuted alternatives, boths costs; discutions          | Not icluded or outside (link to issue, PR, external document or etc) |
 
-- **Diagram-first for flows.** Any multi-actor flow, lifecycle, or state machine is
-  specified by a diagram by default.
-- **A restatement is a copy, and copies drift.** Link to the home instead of retelling
-  it. If a copy must exist (e.g. a summary for outside readers), mark it as a copy and
-  name its home.
+- **A restatement is a copy, and copies drift.** Link to the home instead of retelling it. 
+  If a copy must exist (e.g. a summary for outside readers), mark it as a copy and name its home.
 - **Complement test.** A sentence deletable because a diagram or table already carries
   the fact — delete it. Referencing an element (step number, arrow name, table row) is
   encouraged — it anchors rationale to structure; re-describing the element is the
   violation, not naming it.
+- **Avoid overuse the link**. So you can rephrase to get away from them,
+  but this can still create problems in large documents.
+  In general, for large documents, it is recommended to consider breaking them
+  into smaller ones when they begin to actively quote their parts.
 
-## 2. Structure
+## 2. One reader per document
+
+A document has one reader. Every sentence exists because someone asked a question, and
+the question decides which document answers it:
+
+| Question            | Asked by                           | Home                                                |
+|---------------------|------------------------------------|-----------------------------------------------------|
+| What do I do?       | whoever implements it              | this document                                       |
+| Is this still true? | whoever re-checks it on an upgrade | this document, one line                             |
+| Why not otherwise?  | whoever reopens the decision       | outside, linked                                     |
+| Are you sure?       | whoever challenged you last round  | nowhere — a fact about the process, not the subject |
+
+**Documents bloat problem**. A review round invents a reader the document does
+not have, and the answer to that reader lands in the document — true, not a copy, not a
+restatement, so every rule in One home per fact passes it. Repeat over several rounds and
+a two-line rule carries fifty lines of defence.
+
+**Counterfactual test.** Would you have written this sentence if nobody had challenged
+you? If no, it is addressed to the challenger, and its home is wherever the challenge was
+raised.
+
+This does not ban rationale. What the reader must act on stays, at full length: a caveat
+that changes what someone does — "flip this flag and you inherit that obligation" — is a
+decision, not derivation, and never compresses to a marker.
+
+## 3. Structure
 
 - Reference documents longer than ~100 lines start with a contents list — partial
   reads must still reveal the full scope.
@@ -39,27 +66,33 @@ Every fact lives in exactly one place; everything else references it.
   inside diagram text), backed by an explicitly frozen numbering.
 - Brevity is IMPORTANT: assume a competent reader, cut scaffolding prose.
 
-## 3. Links and anchors
+## 4. Links and anchors
 
 - Every link target must exist at write time — the file AND the `#anchor`. Anchors
-  derive from heading text, so a heading rename is an API break: before renaming a
-  heading or moving/deleting a file, grep for inbound links and fix referrers.
-- Never "see above/below" — link the section.
+  derive from heading text, so a heading rename is an API break: 
+  found inbound links and fix referrers.
+- "see above/below" — must be links.
 
-## 4. Maintenance
+## 5. Maintenance
 
 Editing scope is the fact, not the dry diff:
 
 - A changed, moved, or deleted fact invalidates every restatement of it — sweep the
   document set for copies and reconcile (per One home per fact, the out-of-home copy
-  is the suspect; substantive divergence goes to the user).
-- One term per concept, document-wide. Synonym rotation ("field" / "box" / "element")
-  reads as three different concepts.
+  is the suspect; substantive divergence can go to the user).
+- One term per concept, document-wide. Synonym rotation reads as different concepts.
+  Be sure to use the glossary if it is defined.
 - No self-aging phrasing: "currently", "new", "recently", "will soon" rot silently.
   State the version or date explicitly, or state the timeless fact.
-- Deleting a section is a heading rename with zero targets — run the same
-  inbound-link sweep as in Links and anchors.
 
-## 5. Diagrams — load the reference
+## 6. Diagrams — load the reference
 
 Before writing or editing ANY Mermaid diagram, load [references/mermaid-craft.md](references/mermaid-craft.md).
+
+## 7. Specifications — load the reference
+
+A specification, design doc, or any long technical document under revision has failure
+modes the rules above do not cover. Before working on one, load the matching file:
+
+- writing, compressing or restructuring it: [references/spec-writing.md](references/spec-writing.md)
+- reviewing it, or acting on review findings: [references/spec-reviewing.md](references/spec-reviewing.md)

@@ -318,7 +318,7 @@
         },
         "docs": {
             "name": "docs",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "description": "Markdown and Mermaid authoring rules for agent-written documents",
             "default": false,
             "platforms": [
@@ -334,6 +334,16 @@
                 {
                     "source": "docs/skills/markdown-craft/references/mermaid-craft.md",
                     "target": "skills/markdown-craft/references/mermaid-craft.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "docs/skills/markdown-craft/references/spec-reviewing.md",
+                    "target": "skills/markdown-craft/references/spec-reviewing.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "docs/skills/markdown-craft/references/spec-writing.md",
+                    "target": "skills/markdown-craft/references/spec-writing.md",
                     "category": "skill"
                 }
             ]
