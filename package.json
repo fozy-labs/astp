@@ -26,15 +26,17 @@
     "scripts": {
         "build": "rimraf ./dist && tsc && tsc-alias",
         "build:watch": "npm run build && (concurrently \"tsc -w\" \"tsc-alias -w\")",
-        "ts-check": "tsc --noEmit",
+        "ts-check": "tsc --noEmit && tsc -p scripts/tsconfig.json",
+        "generate:skills": "node --experimental-strip-types scripts/generate-skills-marketplace.ts",
+        "generate:skills:check": "node --experimental-strip-types scripts/generate-skills-marketplace.ts --check",
         "test": "tsc -p tsconfig.test.json && vitest run",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
-        "lint": "eslint src/",
-        "lint:fix": "eslint src/ --fix",
-        "format": "prettier --write src/",
-        "format:check": "prettier --check src/",
-        "check:all": "npm run ts-check && npm run lint && npm run format:check && npm run test"
+        "lint": "eslint src/ scripts/",
+        "lint:fix": "eslint src/ scripts/ --fix",
+        "format": "prettier --write src/ scripts/",
+        "format:check": "prettier --check src/ scripts/",
+        "check:all": "npm run ts-check && npm run lint && npm run format:check && npm run generate:skills:check && npm run test"
     },
     "dependencies": {
         "@clack/prompts": "^1.1.0",

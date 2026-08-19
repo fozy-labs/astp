@@ -79,6 +79,21 @@ Compare installed file versions against the remote manifest and display a status
 - **fozy-labs** ships four skills covering the `@fozy-labs` stack — `simplest-di`, Feature-Sliced Design v2.1, `rx-toolkit` server state, and `rx-toolkit` signals. All four use progressive disclosure: a short `SKILL.md` plus `references/*.md` loaded only when the situation calls for them. It installs identically under `.github/skills/` for VS Code Copilot or under `.claude/skills/` for Claude Code.
 - **docs** ships `markdown-craft` — stack-agnostic rules for the Markdown an agent writes: one home per fact, one reader per document, diagram-first flows, and link hygiene, with references loaded on demand for Mermaid diagrams and for writing or reviewing a specification.
 
+## Installing skills with `npx skills`
+
+The `docs` and `fozy-labs` bundles are also published for the [`skills` CLI](https://github.com/vercel-labs/skills), which installs Agent Skills into Claude Code, Cursor, Copilot and other agents:
+
+```bash
+npx skills add fozy-labs/astp                          # choose interactively
+npx skills add fozy-labs/astp --list                   # preview what is available
+npx skills add fozy-labs/astp --skill markdown-craft   # install one skill
+```
+
+Discovery is driven by `.claude-plugin/marketplace.json`, generated from `templates/manifest.json`. Only bundles that support `claude-code` **and** ship skills are published — `base` and `rdpi` are not, because the `skills` CLI installs skills only and would leave their agents and instructions behind.
+
+> **Pick one installer per project.** `npx skills` symlinks skills from its own cache and tracks them in `skills-lock.json`; `astp` writes real files and tracks them through `astp-*` frontmatter. Neither sees the other's installs: `astp check`, `astp update` and `astp delete` ignore skills added by `npx skills`, and installing the same skill both ways leaves a file and a symlink fighting over one path.
+
+
 ## CI/CD
 
 For CI environments or scripted usage, pass `--platform` and `--target` to avoid interactive prompts:
@@ -120,3 +135,18 @@ astp-hash: <sha256>
 ```
 
 These fields enable version tracking, update detection, and local modification detection without requiring a separate lock file.
+
+## Maintaining
+
+### Regenerating the skills marketplace
+
+`.claude-plugin/marketplace.json` is generated — never edit it by hand:
+
+```bash
+npm run generate:skills        # rewrite it from templates/manifest.json
+npm run generate:skills:check  # fail if the committed file is stale
+```
+
+Run it after any change to the skill entries of `templates/manifest.json`. The generator refuses to write when the manifest and `templates/` disagree — a skill listed without its `SKILL.md`, a `source` that does not mirror its `target`, a `SKILL.md` whose frontmatter `name` differs from its directory, or one skill name claimed by two bundles (the `skills` CLI keeps a single flat namespace and would silently drop the duplicate). Skill directories on disk that the manifest never mentions are reported as warnings.
+
+`npm run check:all` includes the staleness check, and `tests/scripts/skills-marketplace.test.ts` fails if the committed file drifts from the manifest. The script runs on Node's TypeScript type stripping and needs Node >= 22.6.

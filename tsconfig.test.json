@@ -2,9 +2,11 @@
     "extends": ["./tsconfig.json", "@fozy-labs/js-configs/typescript/test"],
     "compilerOptions": {
         "rootDir": ".",
+        "allowImportingTsExtensions": true,
     },
     "include": [
       "src/**/__tests__/**/*.ts",
+      "tests/scripts/**/*.ts",
       "vitest.config.ts"
     ],
     "exclude": [
