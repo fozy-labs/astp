@@ -1,9 +1,8 @@
 # Hard spec
 
-Applies to a specification, design doc, or any long technical document under revision.
-[One reader per document](../SKILL.md#2-one-reader-per-document) states the defect and its
-test; this file is the loop mechanics — what the reviewer and the author each owe so that
-the test can be applied at all.
+What the general rules do not cover: where derivation lives once it leaves the document, what
+survives compression, and what each side of a review round owes so that
+[One reader per document](../SKILL.md#2-one-reader-per-document) can be applied at all.
 
 ## 1. The outside home
 
@@ -23,10 +22,12 @@ What its "outside, linked" row does not carry:
 
 ## 2. What does not compress
 
-- **An obligation the code violates right now.** Compressed to a marker ("remainder not
-  closed") it hands the next reader an invisible debt. It stays whole.
-- **Deleting derivation is not compressing it.** The next reader reopens the same questions
-  with the same chance of answering them wrong. Move it out; do not burn it.
+- **An obligation the code violates right now** — the sharp case of the caveat rule in
+  [One reader per document](../SKILL.md#2-one-reader-per-document): a marker ("remainder not
+  closed") hands the next reader a debt they cannot see.
+- **Once written, derivation is moved, not deleted.** "Not included" in
+  [One home per fact](../SKILL.md#1-one-home-per-fact) is a choice made while writing; deleting
+  it later costs the next reader the same questions and the same chance of getting them wrong.
 
 ## 3. Reviewing
 
@@ -41,8 +42,8 @@ What its "outside, linked" row does not carry:
   author write a defensive clause, and that clause is the growth.
 - **A round must be able to delete.** A round whose only possible output is "add" is a growth
   mechanism regardless of what it finds.
-- **Report the line delta per round.** Accretion never announces itself — each edit looks
-  right, so the delta is the only signal that fires while it is happening.
+- **The line delta is the only signal that fires.** Accretion never announces itself: every
+  individual edit looks right, so nothing but the size of the round exposes it.
 
 ## 4. Acting on findings
 

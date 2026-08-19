@@ -89,8 +89,9 @@ Editing scope is the fact, not the dry diff:
 
 Before writing or editing ANY Mermaid diagram, load [references/mermaid-craft.md](references/mermaid-craft.md).
 
-## 7. Hard Specifications — load the reference
+## 7. Hard specs — load the reference
 
-A specification, design doc, or any long technical document under revision has failure modes
-the rules above do not cover. Before writing, compressing, restructuring, reviewing
-or acting on a review finding against one — load [references/hard-spec.md](references/hard-spec.md).
+A **hard spec** — a specification, design doc, or any long technical document under revision —
+has failure modes the rules above do not cover. Before writing, compressing, restructuring,
+reviewing or acting on a review finding against one, load
+[references/hard-spec.md](references/hard-spec.md).
