@@ -342,6 +342,83 @@
                     "category": "skill"
                 }
             ]
+        },
+        "design": {
+            "name": "design",
+            "version": "1.0.0",
+            "description": "Design decision derivation — gated procedure for interface, layout, and visual design choices",
+            "default": false,
+            "platforms": [
+                "vscode",
+                "claude-code"
+            ],
+            "items": [
+                {
+                    "source": "design/skills/design-derivation/SKILL.md",
+                    "target": "skills/design-derivation/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "design/skills/design-derivation/references/anti-patterns.md",
+                    "target": "skills/design-derivation/references/anti-patterns.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "design/skills/design-derivation/references/argument.md",
+                    "target": "skills/design-derivation/references/argument.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "design/skills/design-derivation/references/axes.md",
+                    "target": "skills/design-derivation/references/axes.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "design/skills/design-derivation/references/carriers.md",
+                    "target": "skills/design-derivation/references/carriers.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "design/skills/design-derivation/references/charges.md",
+                    "target": "skills/design-derivation/references/charges.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "design/skills/design-derivation/references/derivations.md",
+                    "target": "skills/design-derivation/references/derivations.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "design/skills/design-derivation/references/frame.md",
+                    "target": "skills/design-derivation/references/frame.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "design/skills/design-derivation/references/glossary.md",
+                    "target": "skills/design-derivation/references/glossary.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "design/skills/design-derivation/references/limits.md",
+                    "target": "skills/design-derivation/references/limits.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "design/skills/design-derivation/references/operations.md",
+                    "target": "skills/design-derivation/references/operations.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "design/skills/design-derivation/references/sign.md",
+                    "target": "skills/design-derivation/references/sign.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "design/skills/design-derivation/references/surface.md",
+                    "target": "skills/design-derivation/references/surface.md",
+                    "category": "skill"
+                }
+            ]
         }
     }
 }

@@ -9,6 +9,15 @@
     },
     "plugins": [
         {
+            "name": "design",
+            "source": "./templates/design",
+            "description": "Design decision derivation — gated procedure for interface, layout, and visual design choices",
+            "version": "1.0.0",
+            "skills": [
+                "./skills/design-derivation"
+            ]
+        },
+        {
             "name": "docs",
             "source": "./templates/docs",
             "description": "Markdown and Mermaid authoring rules for agent-written documents",

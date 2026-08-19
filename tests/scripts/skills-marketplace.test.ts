@@ -341,9 +341,9 @@ describe("committed marketplace", () => {
         expect(normalizeLineEndings(committed)).toBe(expected);
     });
 
-    it("publishes the docs and fozy-labs bundles", async () => {
+    it("publishes the claude-code bundles", async () => {
         const marketplace = buildMarketplace(await readRepoManifest());
-        expect(marketplace.plugins.map((plugin) => plugin.name)).toEqual(["docs", "fozy-labs"]);
+        expect(marketplace.plugins.map((plugin) => plugin.name)).toEqual(["design", "docs", "fozy-labs"]);
     });
 
     it("keeps templates/manifest.json internally consistent", async () => {
