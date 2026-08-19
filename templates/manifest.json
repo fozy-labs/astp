@@ -337,13 +337,8 @@
                     "category": "skill"
                 },
                 {
-                    "source": "docs/skills/markdown-craft/references/spec-reviewing.md",
-                    "target": "skills/markdown-craft/references/spec-reviewing.md",
-                    "category": "skill"
-                },
-                {
-                    "source": "docs/skills/markdown-craft/references/spec-writing.md",
-                    "target": "skills/markdown-craft/references/spec-writing.md",
+                    "source": "docs/skills/markdown-craft/references/hard-spec.md",
+                    "target": "skills/markdown-craft/references/hard-spec.md",
                     "category": "skill"
                 }
             ]
