@@ -7,7 +7,7 @@ description: >
 
 # @fozy-labs/rx-toolkit — Signals
 
-Value-based reactive primitives (SolidJS / Angular Signals in spirit), built on RxJS. Reference version: **0.11.1**.
+Value-based reactive primitives (SolidJS / Angular Signals in spirit), built on RxJS. Reference version: **0.11.2**.
 Use for **local synchronous state** — server state goes through `createResource` (see `fozy-labs-rx-api`).
 
 Two layers:
@@ -155,6 +155,14 @@ if (import.meta.env.DEV) {
 
 - Name a signal at creation: `Signal.state(0, "counter")` — the string is the `key` of `SignalOptions`. There is no `name` field.
 - Label a write: `count$.set(0, "reset")` → action `UPDATE: reset`; a bare `set` → `UPDATE`.
+- A flush carries the whole batch as one action, so its label describes the batch, not a single key: the event types it
+  holds, joined by `+` in `CREATE → RECREATE → UPDATE → CLEAR` order, then the names collected (the first per key,
+  deduped, five at most, then `+N more`) — `CREATE+UPDATE: reset, increment`. Which keys moved is in the **Diff** tab.
+- A signal created under a key its predecessor still holds is `RECREATE`, not a collision: the newcomer owns the key,
+  and late events from the superseded instance — its `dispose()`, its GC finaliser — are ignored. Never `dispose()` a
+  signal merely to keep devtools clean.
+- The key-collision warning fires only when a superseded instance keeps **writing** — two live signals on one key. That
+  write is dropped so the tree keeps the owner's value; give one of them a unique key.
 - `{scope}` inside a key is replaced by `DefaultOptions.update({ getScopeName })` — wire it to the DI scope name for keys like `"{scope}/CounterStore/value$"`. `{base}` expands to `State` / `Computed`.
 - Opt out per signal: `Signal.state(secret, { isDisabled: true })`.
 - `SignalOptions.hooks` (`onInit` / `onChange` / `onDispose`) is honoured by `Signal.state` only — `Signal.compute` drops it.

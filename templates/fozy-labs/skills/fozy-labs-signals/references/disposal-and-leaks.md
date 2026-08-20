@@ -59,7 +59,6 @@ count$.set(5);      // silently notifies nobody — the signal is completed
   nothing to freeze and falls back to `default` (or throws). It is the only way to end a `keepAlive: "forever"` signal.
 - Most signals no explicit disposal: cold, they hold nothing; warm, they release at the last unsubscribe.
   Dispose one when you built it for a bounded piece of work and want its cached value released immediately.
-  Or to release the key into redux devtools immediately (it usually takes time) so as not to receive console.warnings about key-collisions.
 
 ### `using`
 
@@ -84,6 +83,9 @@ A `State` created with a devtools key or with custom `SignalOptions.hooks` is re
 its devtools entry is closed when the signal is garbage-collected. An explicit `dispose()` unregisters the finaliser and
 closes the entry immediately — no double `$COMPLETED`. Practical consequence: devtools entries do not leak either way,
 but they linger until GC if you never dispose.
+
+Neither case calls for a devtools-motivated `dispose()`: a key still held by a dead-but-uncollected signal is taken over
+by its successor as a `RECREATE` — see [Devtools](../SKILL.md#6-devtools).
 
 ---
 

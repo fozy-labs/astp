@@ -10,7 +10,7 @@ description: >
 Declarative cache-aware server state: one cache entry per serialized args, stale-while-revalidate, optimistic updates,
 SSR snapshots.
 Framework-agnostic core; React binds through a plugin.
-Tracks package version **0.11.1**.
+Tracks package version **0.11.2**.
 
 Two primitives:
 
