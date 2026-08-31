@@ -71,15 +71,15 @@ Compare installed file versions against the remote manifest and display a status
 |--------|-------|-------------|-----------|---------|
 | `base` | 1 | Base skill for VSCode Copilot agent orchestration | `vscode` | Yes |
 | `rdpi` | 22 | Full RDPI pipeline — agents, instructions, and stage definitions | `vscode` | No |
-| `fozy-labs` | 33 | Fozy Labs stack skills (DI, FSD, rx-api, signals) | `vscode`, `claude-code` | No |
-| `docs` | 4 | Markdown and Mermaid authoring rules for agent-written documents | `vscode`, `claude-code` | No |
+| `fozy-labs` | 34 | Fozy Labs stack skills (DI, FSD, rx-api, signals) | `vscode`, `claude-code` | No |
+| `docs` | 6 | Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas | `vscode`, `claude-code` | No |
 | `design` | 13 | Design decision derivation — gated procedure for interface, layout, and visual design choices | `vscode`, `claude-code` | No |
 
 - **base** includes the orchestration skill (`skills/orchestrate/SKILL.md`) that enables multi-agent coordination.
 - **rdpi** includes 17 specialized agents, 1 instruction file, and 4 stage definitions for the Research → Design → Plan → Implement workflow.
 - **fozy-labs** ships four skills covering the `@fozy-labs` stack — `simplest-di`, Feature-Sliced Design v2.1, `rx-toolkit` server state, and `rx-toolkit` signals. All four use progressive disclosure: a short `SKILL.md` plus `references/*.md` loaded only when the situation calls for them. It installs identically under `.github/skills/` for VS Code Copilot or under `.claude/skills/` for Claude Code.
 - **design** ships `design-derivation` — a gated procedure for deriving visual and interface decisions (frame, value, scenario → charge and sign → surface and accuracy) instead of picking a remembered look. It carries no styles, palettes, or component recipes; references are loaded on demand per gate.
-- **docs** ships `markdown-craft` — stack-agnostic rules for the Markdown an agent writes: one home per fact, one reader per document, diagram-first flows, and link hygiene, with references loaded on demand for Mermaid diagrams and for writing or reviewing a specification.
+- **docs** ships two skills. `markdown-craft` carries stack-agnostic rules for the Markdown an agent writes: one home per fact, one reader per document, diagram-first flows, and link hygiene, with references loaded on demand for Mermaid diagrams and for writing or reviewing a specification. `statechart-craft` covers the other kind of Mermaid an agent writes — a `.mmd` statechart schema: the `stateDiagram-v2` subset, the `%% @…` directives, the `statechart-convert` CLI and the typed file it emits, with references for the live visualizer and for the `toMermaid()` round trip.
 
 ## Installing skills with `npx skills`
 

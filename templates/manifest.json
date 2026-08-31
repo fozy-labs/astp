@@ -141,7 +141,7 @@
         },
         "fozy-labs": {
             "name": "fozy-labs",
-            "version": "1.3.2",
+            "version": "1.4.0",
             "description": "Fozy Labs stack skills — DI, FSD, rx-api, signals (VS Code + Claude Code)",
             "default": false,
             "platforms": [
@@ -305,6 +305,11 @@
                     "category": "skill"
                 },
                 {
+                    "source": "fozy-labs/skills/fozy-labs-signals/references/statechart.md",
+                    "target": "skills/fozy-labs-signals/references/statechart.md",
+                    "category": "skill"
+                },
+                {
                     "source": "fozy-labs/skills/fozy-labs-signals/references/use-in-react.md",
                     "target": "skills/fozy-labs-signals/references/use-in-react.md",
                     "category": "skill"
@@ -318,8 +323,8 @@
         },
         "docs": {
             "name": "docs",
-            "version": "1.1.0",
-            "description": "Markdown and Mermaid authoring rules for agent-written documents",
+            "version": "1.2.0",
+            "description": "Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas",
             "default": false,
             "platforms": [
                 "vscode",
@@ -339,6 +344,21 @@
                 {
                     "source": "docs/skills/markdown-craft/references/hard-spec.md",
                     "target": "skills/markdown-craft/references/hard-spec.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "docs/skills/statechart-craft/SKILL.md",
+                    "target": "skills/statechart-craft/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "docs/skills/statechart-craft/references/viz.md",
+                    "target": "skills/statechart-craft/references/viz.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "docs/skills/statechart-craft/references/round-trip.md",
+                    "target": "skills/statechart-craft/references/round-trip.md",
                     "category": "skill"
                 }
             ]
