@@ -357,6 +357,11 @@
                     "category": "skill"
                 },
                 {
+                    "source": "docs/skills/markdown-craft/references/changelog.md",
+                    "target": "skills/markdown-craft/references/changelog.md",
+                    "category": "skill"
+                },
+                {
                     "source": "docs/skills/statechart-craft/SKILL.md",
                     "target": "skills/statechart-craft/SKILL.md",
                     "category": "skill"

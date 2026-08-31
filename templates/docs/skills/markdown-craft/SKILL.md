@@ -117,3 +117,8 @@ A **hard spec** — a specification, design doc, or any long technical document 
 has failure modes the rules above do not cover. Before writing, compressing, restructuring,
 reviewing or acting on a review finding against one, load
 [references/hard-spec.md](references/hard-spec.md).
+
+## 9. Changelogs — load the reference
+
+Before writing or editing an changelog, or closing a release section, load
+[references/changelog.md](references/changelog.md).
