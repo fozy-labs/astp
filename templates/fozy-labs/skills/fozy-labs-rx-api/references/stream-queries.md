@@ -1,9 +1,8 @@
-# Stream queries — an `Observable` in `queryFn`
+# Stream queries
 
 A **resource** `queryFn` may return `Observable<TData>` instead of a promise (`TQueryFnResult<TData> =
-Promise<TData> | Observable<TData>`, branched at runtime via `isObservable`). The cache entry then becomes *live*:
-the first emission completes the load, every later emission updates the data in place. The natural fit for
-WebSocket, SSE and polling streams. Commands stay promise-only — a mutation is a one-shot operation.
+Promise<TData> | Observable<TData>`). The cache entry then becomes *live*: the first emission completes the load,
+every later emission updates the data in place. Commands stay promise-only.
 
 ```ts
 import { webSocket } from "rxjs/webSocket";
@@ -30,8 +29,8 @@ Agents, `useResource` / `useSuspenseResource`, SWR, `ensure` / `fetch` / `prefet
   kept. Goes through `mapError`.
 - **`complete`** after data just ends the live phase — the entry stays in `success` under normal cache rules.
   Completing with **zero emissions** is an `EmptyStreamError` (exported), so the entry cannot hang in `pending`.
-- **`refresh()` / `retry()` / `fetch()`** unsubscribe from the current stream and resubscribe (refresh for a stream
-  *is* resubscription); the new run's first emission arrives through the rebase path.
+- **`refresh()` / `retry()` / `fetch()`** unsubscribe from the current stream and resubscribe; the new run's first
+  emission arrives through the rebase path.
 - **Eviction** (retention GC, `resetAll`) unsubscribes — the producer teardown (socket close) runs; the `AbortSignal`
   passed to `queryFn` fires at the same moment.
 - One subscription per cache entry regardless of how many components read the same args; different args — different
@@ -41,11 +40,10 @@ Agents, `useResource` / `useSuspenseResource`, SWR, `ensure` / `fetch` / `prefet
 
 ## Optimistic patches on an open stream
 
-`createPatch` works — emissions replay active patches. But a **committed** patch dissolves into the next emission
-(the server is the source of truth): if the stream does not echo your mutation back, the optimistic value reverts.
-The library warns once on the first patch over an open stream; if the combination is deliberate, set the resource
-option `allowStreamPatches: true`. Also remember Immer patches are absolute replaces: replaying "`likes = 6`" on a
-new base gives `6`, not "+1".
+`createPatch` works — emissions replay active patches. But a **committed** patch dissolves into the next emission: if
+the stream does not echo your mutation back, the optimistic value reverts. The library warns once on the first patch
+over an open stream; if the combination is deliberate, set the resource option `allowStreamPatches: true`. Immer
+patches are absolute replaces: replaying "`likes = 6`" on a new base gives `6`, not "+1".
 
 ---
 

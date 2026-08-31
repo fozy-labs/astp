@@ -1,8 +1,7 @@
-# Projection resource — collections by id, item-level cache
+# Projection resource
 
-`api.unstable_createProjectionResource` (**experimental**) wraps an existing resource that can fetch items by a list
-of ids and adds a shared **per-item cache**: a plain resource treats `[1, 2, 3]` and `[1, 2, 4]` as two independent
-full requests, a projection fetches only the missing `4`.
+`api.unstable_createProjectionResource` wraps an existing resource that fetches items by a list of ids and adds a
+shared **per-item cache**.
 
 ```ts
 usersProjection = api.unstable_createProjectionResource({
@@ -59,7 +58,7 @@ feed.reset();            // drop all pages after the first
 ```
 
 Loaded pages never flicker while the tail loads (their entries are not recreated), items are deduplicated across
-pages for free (shared item cache), and a refresh of any overlapping set re-emits the affected pages. Changing
+pages (shared item cache), and a refresh of any overlapping set re-emits the affected pages. Changing
 `initialArgs` (by cache key) resets the feed to the new first page. `SKIP` as `initialArgs` → `isIdle`.
 
 ---

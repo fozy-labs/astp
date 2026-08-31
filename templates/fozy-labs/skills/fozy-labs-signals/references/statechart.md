@@ -1,17 +1,10 @@
-# Statecharts — `unstable_MachineSignal`
+# Statecharts
 
 State machines in the **XState v5 config format** (a strict subset, `xstate` is not a dependency), executed by an
 rx-toolkit runtime on top of signals: nested, parallel, final and history states, `entry` / `exit`, `always`, `after`,
 `onDone`, guards and actions. The machine snapshot is an ordinary signal.
 
-The entry points are exported with an `unstable_` prefix — `unstable_createMachine`, `unstable_MachineSignal`,
-`unstable_Statechart` — and are conventionally aliased on import. Authoring a machine as a `.mmd` Mermaid schema and
-rendering a live diagram is the `statechart-craft` skill, not this document.
-
-**Contents:** [Definition vs instance](#definition-vs-instance) · [Config format](#config-format) ·
-[Implementations](#implementations-actions-guards-delays) · [`MachineSignal.state`](#machinesignalstate) ·
-[Errors and timers](#errors-and-timers) · [With signals and React](#with-signals-and-react) ·
-[Devtools](#devtools) · [Testing](#testing)
+Authoring a machine as Mermaid and rendering a live diagram is the `statechart-craft` skill.
 
 ---
 
@@ -20,7 +13,7 @@ rendering a live diagram is the `statechart-craft` skill, not this document.
 | | `createMachine()` → `MachineDefinition` | `MachineSignal.state()` → instance |
 |---|---|---|
 | Holds | pure config data + implementation table | current state, event queue, timers |
-| Created | once per module; validates the config | any number per definition |
+| Created | once; validates the config | any number per definition |
 | Gives | type inference anchor, `provide()`, `toMermaid()` | the snapshot signal, `send()`, lifecycle |
 
 ```ts
@@ -47,7 +40,7 @@ export const trafficLight = createMachine(
 
 const light$ = MachineSignal.state(trafficLight, { key: "trafficLight" }); // starts immediately (autoStart: true)
 
-light$().value;                    // "green" — tracked read (registers a dependency)
+light$().value;                    // "green" — tracked read
 light$.peek().context.cycles;      // untracked read
 light$.send({ type: "TIMER" });    // synchronous: one macrostep, one snapshot publication
 light$.matches("green");           // partial match by parent, "a.b" path or nested object
@@ -55,8 +48,7 @@ light$.can({ type: "TIMER" });     // would any transition fire on the current s
 light$.dispose();                  // clear timers, complete the signal, drop devtools
 ```
 
-Actions and guards in the config are **string names**; the implementations live in the second argument. That keeps the
-config serializable — it can be diagrammed, exported and shown in devtools.
+Naming actions and guards instead of inlining them keeps the config serializable.
 
 ---
 
@@ -92,7 +84,7 @@ narrows to that union member; in `entry` / `exit` / `always` / `after` it is the
 
 ---
 
-## Implementations: actions, guards, delays
+## Implementations
 
 Second argument of `createMachine` (and of `provide()`): `{ actions?, guards?, delays? }`. Every implementation gets
 `args = { context, event }` and `params` from a `{ type, params }` reference in the config (annotate the `params`
@@ -175,14 +167,12 @@ An error thrown by an action, guard, delay, `output` mapper or the microstep lim
 `status: "error"` and the `error` field is published on top of the last good `value` / `context`, timers are cleared,
 the engine stops, further events are ignored. With `options.onError` the error goes there after the batch; without it
 it throws from `send()` / `start()` (or from the constructor under `autoStart`; a timer-delivered error surfaces as an
-unhandled timer-callback exception). After an error `start()` reinitializes from scratch — restarting from `onError`
-or from an effect watching for `status: "error"` is supported.
+unhandled timer-callback exception). `start()` then reinitializes from scratch — restart from `onError` or from an
+effect watching `status: "error"`.
 
 ---
 
 ## With signals and React
-
-The snapshot is an ordinary signal: read it in `Computed` / `Effect`, combine through RxJS, render with `useSignal`.
 
 - ⚠️ `matches()` / `can()` read the snapshot **without** registering a dependency. Inside a `Signal.compute`, read the
   signal explicitly (`light$()`) or derive from its value — otherwise the compute never recomputes.
