@@ -250,6 +250,11 @@
                     "category": "skill"
                 },
                 {
+                    "source": "fozy-labs/skills/fozy-labs-rx-api/references/projection-resource.md",
+                    "target": "skills/fozy-labs-rx-api/references/projection-resource.md",
+                    "category": "skill"
+                },
+                {
                     "source": "fozy-labs/skills/fozy-labs-rx-api/references/reading-in-react.md",
                     "target": "skills/fozy-labs-rx-api/references/reading-in-react.md",
                     "category": "skill"
@@ -262,6 +267,11 @@
                 {
                     "source": "fozy-labs/skills/fozy-labs-rx-api/references/ssr-hydration.md",
                     "target": "skills/fozy-labs-rx-api/references/ssr-hydration.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-rx-api/references/stream-queries.md",
+                    "target": "skills/fozy-labs-rx-api/references/stream-queries.md",
                     "category": "skill"
                 },
                 {

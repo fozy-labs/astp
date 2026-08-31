@@ -7,7 +7,7 @@ description: >
 
 # @fozy-labs/rx-toolkit — Signals
 
-Value-based reactive primitives (SolidJS / Angular Signals in spirit), built on RxJS. Reference version: **0.11.2**.
+Value-based reactive primitives (SolidJS / Angular Signals in spirit), built on RxJS. Reference version: **0.12.0**.
 Use for **local synchronous state** — server state goes through `createResource` (see `fozy-labs-rx-api`).
 
 Two layers:

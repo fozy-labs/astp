@@ -38,11 +38,9 @@ class LoggingPlugin implements IPlugin {
 ```
 
 - `install(context)` runs once at `createApi`; `context` carries `keyPrefix`.
-- `augmentResource` / `augmentCommand` run per `createResource` / `createCommand` and return a plain object that is `Object.assign`-ed onto the instance. Later plugins overwrite earlier keys.
-- Typing goes through `PluginHKT`: the phantom members `_TArgs` / `_TData` / `_TError` are substituted at the application site, and `CombinePluginResourceAugments` intersects every plugin's contribution. A plugin without `_hkt` still works at runtime but contributes `{}` to the type.
+- `augmentResource` / `augmentCommand` / `augmentProjectionResource` run per `createResource` / `createCommand` / `unstable_createProjectionResource` and return a plain object that is `Object.assign`-ed onto the instance. Later plugins overwrite earlier keys.
+- Typing goes through `PluginHKT`: the phantom members `_TArgs` / `_TData` / `_TError` are substituted at the application site, and `CombinePluginResourceAugments` intersects every plugin's contribution. The HKT slots are `resourceType`, `commandType` and `projectionResourceType`. A plugin without `_hkt` still works at runtime but contributes `{}` to the type.
 - Keep the `plugins` array literal (or `as const`) so the tuple type survives inference — a widened `IPlugin[]` yields no augmentation at all, and `.useResource` disappears from the type.
-
-> The package's `docs/query/usage/plugins.md` still describes an older `PluginResourceContributions` conditional-type scheme. The shipped typings use the HKT protocol above.
 
 ---
 
@@ -58,11 +56,12 @@ DefaultOptions.update({
 });
 ```
 
-| Option         | Type                       | Purpose                                                     |
-|----------------|----------------------------|--------------------------------------------------------------|
-| `DEVTOOLS`     | `DevtoolsLike \| null`     | Sink for signal, resource and command state. `null` disables. |
-| `onQueryError` | `(error: unknown) => void` | Global failure sink — see [error-handling.md](error-handling.md).                |
-| `getScopeName` | `() => string \| null`     | Resolves `{scope}` in signal names, e.g. from the DI scope.   |
+| Option            | Type                          | Purpose                                                     |
+|-------------------|-------------------------------|--------------------------------------------------------------|
+| `DEVTOOLS`        | `DevtoolsLike \| null`        | Sink for signal, resource and command state. `null` disables. |
+| `MACHINE_DEVTOOLS`| `MachineDevtoolsLike \| null` | State-machine inspector (`statelyInspector()`); `combineDevtools` does not apply. See the `fozy-labs-signals` skill, `references/statechart.md`. |
+| `onQueryError`    | `(error: unknown) => void`    | Global failure sink — see [error-handling.md](error-handling.md).                |
+| `getScopeName`    | `() => string \| null`        | Resolves `{scope}` in signal names, e.g. from the DI scope.   |
 
 `reduxDevtools(options?)` targets the Redux DevTools browser extension. `batchStrategy` is `"sync"` / `"microtask"` (default) / `"task"`, with `taskDelay` for the last. Any `DevtoolsLike` implementation works — `combineDevtools(...)` fans out to several at once.
 

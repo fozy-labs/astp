@@ -28,6 +28,8 @@ export const api = createApi({
 
 - resources only — commands are never serialized;
 - resources with a `key` only — an unkeyed resource cannot be matched on hydration;
+- resources with `snapshotable` left `true` — `snapshotable: false` excludes a resource from both serialization and
+  hydration (for derived resources whose data belongs to another resource; projection resources set it automatically);
 - entries in `success` **and** `refresh-error` (the latter's data is last-known-good);
 - the **confirmed base**: when optimistic patches are pending it writes `patchState.originalData`, not the patched `data`.
 
@@ -51,7 +53,7 @@ and runs nothing.
 `snapshotValidTime` is `false` by default (snapshot data never expires) and can be set per resource, which wins over the
 api-level value.
 
-**Verified against the 0.11 source, against what the package docs claim:** there is no `version` / `keyPrefix` validation and
+**Verified against the 0.12 source, against what the package docs claim:** there is no `version` / `keyPrefix` validation and
 nothing is thrown on a mismatch; the slice is not consumed or deleted after hydration; and `api.resetAll()` does not
 clear the stored snapshot. Do not build on those behaviours.
 
@@ -69,7 +71,8 @@ clear the stored snapshot. Do not build on those behaviours.
 - ❌ Relying on snapshot `version` / `keyPrefix` validation to catch a bad payload — there is none.
 - ❌ Expecting `resetAll()` to drop `initialSnapshot`.
 - ❌ Using `useSuspenseResource` under SSR.
-- ❌ Snapshotting a resource with no `key` — it is silently omitted.
+- ❌ Snapshotting a resource with no `key` — it is silently omitted (as is one with `snapshotable: false`).
+- ❌ Expecting a hydrated stream resource to be live — hydration revives data only; the stream reconnects on the next real run (see [stream-queries.md](stream-queries.md)).
 - ❌ Reading `snapshotValidTime` as "refresh when someone looks at it" — every stale entry refetches the moment its resource is created.
 - ✅ Give every resource you intend to snapshot an explicit `key`.
 - ✅ Set `snapshotValidTime` so server data that sat in an HTML cache refreshes instead of sticking.

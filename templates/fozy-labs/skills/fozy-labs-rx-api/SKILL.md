@@ -10,7 +10,7 @@ description: >
 Declarative cache-aware server state: one cache entry per serialized args, stale-while-revalidate, optimistic updates,
 SSR snapshots.
 Framework-agnostic core; React binds through a plugin.
-Tracks package version **0.11.2**.
+Tracks package version **0.12.0**.
 
 Two primitives:
 
@@ -76,6 +76,8 @@ export class OrderApi {
 `queryFn` is the only required option; its second argument is an `AbortSignal` — forward it to `fetch`, 
     the library aborts on args change and on eviction. 
 `key` is optional, but devtools, snapshots and cross-tab sync all address by it.
+A resource `queryFn` may also return an `Observable<TData>` — the entry goes live and updates on every emission
+    (WebSocket, SSE); see [references/stream-queries.md](references/stream-queries.md).
 
 ```tsx
 const orderApi = inject(OrderApi);
@@ -143,8 +145,8 @@ args, the link silently does nothing.
 |------------------------------------|---------------------------------------------------------------------------------|
 | Automatic retry / backoff          | None. `retry()` is manual; put a retry policy inside `queryFn`.                 |
 | Polling / `refetchInterval`        | None. `refresh(args)` from an `onCacheEntryAdded` hook, or `prefetch(args, { force: true })` from your own timer. |
-| Infinite query / pagination helper | None. One entry per page args; SWR keeps the previous page on screen.           |
-| A built-in fetcher                 | None by design — `queryFn` is any function returning `Promise<TData>`.          |
+| Infinite query / pagination helper | Cursor pagination: none — one entry per page args, SWR keeps the previous page on screen. Id-based collections: `unstable_createProjectionResource` + `useInfiniteResource` (see [references/projection-resource.md](references/projection-resource.md)). |
+| A built-in fetcher                 | None by design — `queryFn` is any function returning `Promise<TData>` (or `Observable<TData>` for streams). |
 
 ---
 
@@ -168,7 +170,9 @@ Load these only when the specific situation applies — do **not** preload.
 | Writing a mutation — `execute`, request id, envelope, retry, command cache keys    | [references/writing-mutations.md](references/writing-mutations.md)      |
 | The cache did not update after a mutation — `links`, patches, staleness, eviction  | [references/cache-and-invalidation.md](references/cache-and-invalidation.md) |
 | Typing `error`, `mapError`, retries, cancellation, `CacheEntryRemovedError`        | [references/error-handling.md](references/error-handling.md)         |
-| Websocket/streaming updates, polling, per-entry teardown, per-run instrumentation  | [references/lifecycle-hooks.md](references/lifecycle-hooks.md)        |
+| Live data — an `Observable` in `queryFn` (WebSocket, SSE), patches over a stream   | [references/stream-queries.md](references/stream-queries.md)        |
+| Loading collections by id lists, per-item cache, infinite feed (`useInfiniteResource`) | [references/projection-resource.md](references/projection-resource.md) |
+| Polling, per-entry teardown, per-run instrumentation, `composeHooks`               | [references/lifecycle-hooks.md](references/lifecycle-hooks.md)        |
 | Writing a custom plugin, devtools, `DefaultOptions`                                | [references/extending-the-api.md](references/extending-the-api.md)      |
 | SSR — serializing a snapshot on the server, hydrating it on the client             | [references/ssr-hydration.md](references/ssr-hydration.md)          |
 | Sharing cache between browser tabs — `syncDriver`, `defaultSync`, custom transports | [references/cross-tab-sync.md](references/cross-tab-sync.md)         |
