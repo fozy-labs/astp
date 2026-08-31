@@ -6,6 +6,11 @@ rx-toolkit runtime on top of signals: nested, parallel, final and history states
 
 Authoring a machine as Mermaid and rendering a live diagram is the `statechart-craft` skill.
 
+**Contents:** [Definition vs instance](#definition-vs-instance) · [Config format](#config-format) ·
+[Implementations](#implementations) · [`MachineSignal.state`](#machinesignalstate) ·
+[Errors and timers](#errors-and-timers) · [With signals and React](#with-signals-and-react) ·
+[Devtools](#devtools) · [Testing](#testing) · [Pitfalls](#pitfalls)
+
 ---
 
 ## Definition vs instance

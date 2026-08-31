@@ -21,7 +21,7 @@
             "name": "docs",
             "source": "./templates/docs",
             "description": "Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas",
-            "version": "1.2.0",
+            "version": "1.3.0",
             "skills": [
                 "./skills/markdown-craft",
                 "./skills/statechart-craft"

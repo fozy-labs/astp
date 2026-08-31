@@ -17,7 +17,7 @@ What its "outside, linked" row does not carry:
   ones, and a link into a superseded answer is worse than no link — point at the turn that
   settled it, or state the outcome in the same line as the link.
 - **Moving material out removes it from the copy sweep** of
-  [Maintenance](../SKILL.md#5-maintenance) — a sweep of the document set can report an
+  [Maintenance](../SKILL.md#6-maintenance) — a sweep of the document set can report an
   outside copy, never reconcile it. Accepted knowingly, stated here rather than discovered.
 
 ## 2. What does not compress
