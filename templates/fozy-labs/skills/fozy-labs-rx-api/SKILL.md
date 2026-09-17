@@ -10,7 +10,7 @@ description: >
 Declarative cache-aware server state: one cache entry per serialized args, stale-while-revalidate, optimistic updates,
 SSR snapshots.
 Framework-agnostic core; React binds through a plugin.
-Tracks package version **0.12.0**.
+Tracks package version **0.12.3**.
 
 Two primitives:
 
@@ -86,7 +86,9 @@ const orders = orderApi.getOrders.useResource(status ? { status } : SKIP);
 ```
 
 State is a discriminated union on `status` (`idle | pending | success | error | refreshing | refresh-error`);
-    narrowing on `isSuccess` gives `data: TData` without `| null`.
+    narrowing on `isSuccess` gives `data: TData` without `| null`. `dataArgs` names the args `data` belongs to;
+    `isSwitching` tells an args change under SWR apart from a `refresh()` of the same entry; `isRetrying` marks a
+    load started by `retry()`.
 
 ---
 
@@ -166,6 +168,7 @@ Load these only when the specific situation applies — do **not** preload.
 | Situation                                                                          | File                                   |
 |------------------------------------------------------------------------------------|----------------------------------------|
 | Rendering server data — hooks, `SKIP`, state union, Suspense                       | [references/reading-in-react.md](references/reading-in-react.md)       |
+| Deciding what the UI shows per state — skeleton, dimming, error loudness, `invalidate` policy | [references/ui-states.md](references/ui-states.md)         |
 | Reading from stores, route loaders, workers — `ensure`/`fetch`/`prefetch`, agents  | [references/reading-outside-react.md](references/reading-outside-react.md)  |
 | Writing a mutation — `execute`, request id, envelope, retry, command cache keys    | [references/writing-mutations.md](references/writing-mutations.md)      |
 | The cache did not update after a mutation — `links`, patches, staleness, eviction  | [references/cache-and-invalidation.md](references/cache-and-invalidation.md) |

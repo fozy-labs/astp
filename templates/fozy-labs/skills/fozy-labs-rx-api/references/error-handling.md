@@ -79,7 +79,7 @@ On the command path it passes through `mapError` (so the typed envelope holds), 
 | `useCommand` / `agent.trigger`      | `{ status: "error", error }` envelope **and** `state.isError`      |
 | `command.execute`                   | Promise rejection                                                  |
 
-`error` and `refresh-error` are different: the first has no data, the second keeps the last good response in `data`. Rendering an error screen on `refresh-error` throws away data the user could still use.
+`error` and `refresh-error` are different: the first has no data, the second keeps the last good response in `data`. Rendering an error screen on `refresh-error` throws away data the user could still use. How loud each failure should be — [ui-states.md](ui-states.md#error-loudness).
 
 ---
 
@@ -89,7 +89,7 @@ There is **no automatic retry or backoff.** Retries are explicit:
 
 | Call                              | Semantics                                                                 |
 |-----------------------------------|---------------------------------------------------------------------------|
-| `state.retry()` (resource)        | Re-runs the failed query. No-op outside `error`.                          |
+| `state.retry()` (resource)        | Re-runs the failed query: `error → pending`, `refresh-error → refreshing`. The run carries `isRetrying: true` and keeps the failure in `error` until it settles. No-op elsewhere. |
 | `state.retry()` (command)         | Re-runs the same entry, reusing its request id. No-op outside `error`.    |
 | `state.refresh()`                 | Background SWR refresh; keeps stale data on screen. No-op outside `success` / `refresh-error`. |
 | `ensure` / `fetch` / `prefetch`   | Retry an entry sitting in `error` before awaiting it — in both `prefetch` modes. |

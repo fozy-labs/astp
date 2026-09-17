@@ -157,13 +157,20 @@ agent.start();                      // begin observing and create/start the entr
 | `state$`                | `ReadonlySignal<TResourceAgentState<…>>`      | Same union the hook returns.                                    |
 | `set(args, mark?)`      | `(ArgsOrVoidOrSkip<TArgs>, boolean?) => void` | Switches args. `SKIP` → `idle`. Same key = no-op.               |
 | `start()`               | `() => void`                                  | Takes **no arguments**; starts the currently set args.          |
-| `retry()` / `refresh()` | `() => void`                                  | Delegate to the tracked entry.                                  |
+| `adoptPrevious(source)` | `(IResourceAgent<…>) => void`                 | Takes over `source`'s data as this agent's SWR fallback — for "replace the agent" flows instead of `set`. |
+| `retry()` / `refresh()` | `() => void`                                  | Delegate to the tracked entry; `retry()` marks the run `isRetrying`. |
 | `whenSettled()`         | `() => Promise<void>`                         | Resolves when initial loading ends (either way). Never rejects. |
 | `args`                  | `TArgs \| null` (getter)                      | Currently observed args.                                        |
 
 `start()` and a post-start `set()` go through `getEntry(args, true)`: a warm entry is reused as-is, never
 re-fetched. No explicit teardown is needed — the internal signals deactivate when their last subscriber
-leaves. On an args change the agent keeps the previous entry's data as the stale SWR fallback.
+leaves. On an args change the agent keeps the previous entry's data as the stale SWR fallback — surfaced as
+`refreshing` with `isSwitching: true` and `dataArgs` pointing at the previous args.
+
+`adoptPrevious(source)` is the same fallback for the case where a store creates a **new** agent per args instead of
+calling `set` on a live one (that is how the React hooks work): it copies `source`'s current entry when it holds data
+(`success` / `refreshing` / `refresh-error`), otherwise `source`'s own previous slot. `source` is read once and not
+retained. Call it right after `createAgent()`, before `set` and `start()`.
 
 Ordering matters: `set` before `start`, and `start()` never accepts args.
 

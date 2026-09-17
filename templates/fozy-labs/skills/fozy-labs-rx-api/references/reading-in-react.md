@@ -26,8 +26,8 @@ const page = userApi.getOrders.useResource({ status, page });
 
 Behaviour:
 
-1. Records the args during render, then starts in a layout effect (`agent.start()` → `getEntry(args, true)`) — a cold entry is created and begins loading.
-2. On an args change it switches entries; the previous entry's data stays visible (SWR).
+1. Creates an agent per `(resource, args key)` during render, then starts it in a layout effect (`agent.start()` → `getEntry(args, true)`) — a cold entry is created and begins loading. Render stays pure: no shared agent is mutated, so an args change inside `startTransition` (router navigation) cannot ping-pong between the transition and the committed tree.
+2. On an args change a new agent takes over; the last committed agent hands its data to the successor (`adoptPrevious`), so the previous entry's data stays visible (SWR) with `isSwitching: true` and `dataArgs` pointing at the old args.
 3. On unmount it unsubscribes; the entry survives `retentionTime` (default 60 000 ms), so a remount inside that window renders from cache instantly.
 4. It never refetches an entry that already holds data — a warm entry is reused as-is. For fresh data call `state.refresh()`, or `prefetch(args, { force: true })` from outside the component.
 
@@ -39,26 +39,39 @@ Passing a fresh object literal every render is fine: entries are addressed by th
 
 `TResourceAgentState` is a discriminated union on `status`. Narrowing on `status` or on any boolean flag narrows `data` and `error` too.
 
-| `status`         | `data`            | `error`  | `isLoading` | `isInitialLoading` | `isRefreshing` | `isRefreshError` | `isSuccess` | `isError` |
-|------------------|-------------------|----------|-------------|--------------------|----------------|------------------|-------------|-----------|
-| `idle`           | `null`            | `null`   | —           | —                  | —              | —                | —           | —         |
-| `pending`        | `null`            | `null`   | ✅           | ✅                  | —              | —                | —           | —         |
-| `success`        | `TData`           | `null`   | —           | —                  | —              | —                | ✅           | —         |
-| `error`          | `TData \| null`¹  | `TError` | —           | —                  | —              | —                | —           | ✅         |
-| `refreshing`     | `TData` (stale)   | `null`   | ✅           | —                  | ✅              | —                | —           | —         |
-| `refresh-error`  | `TData` (stale)   | `TError` | —           | —                  | —              | ✅                | —           | ✅         |
+| `status`         | `data`            | `error`            | `dataArgs`        | `isLoading` | `isInitialLoading` | `isRefreshing` | `isSwitching` | `isRetrying` | `isRefreshError` | `isSuccess` | `isError` |
+|------------------|-------------------|--------------------|-------------------|-------------|--------------------|----------------|---------------|--------------|------------------|-------------|-----------|
+| `idle`           | `null`            | `null`             | `null`            | —           | —                  | —              | —             | —            | —                | —           | —         |
+| `pending`        | `null`            | `TError \| null`³  | `null`            | ✅           | ✅                  | —              | —             | `boolean`³   | —                | —           | —         |
+| `success`        | `TData`           | `null`             | `TArgs`           | —           | —                  | —              | —             | —            | —                | ✅           | —         |
+| `error`          | `TData \| null`¹  | `TError`           | `TArgs \| null`¹  | —           | —                  | —              | —             | —            | —                | —           | ✅         |
+| `refreshing`     | `TData` (stale)   | `TError \| null`³  | `TArgs`           | ✅           | —                  | ✅              | `boolean`²    | `boolean`³   | —                | —           | —         |
+| `refresh-error`  | `TData` (stale)   | `TError`           | `TArgs`           | —           | —                  | —              | —             | —            | ✅                | —           | ✅         |
 
-¹ Normally `null`; carries the previous entry's stale data when the args changed under SWR.
+¹ Normally `null`; carries the previous entry's stale data (and its args in `dataArgs`) when the args changed under SWR.
 
-Plus two methods on every variant: `retry()` (re-run a failed query) and `refresh()` (force a background SWR refresh).
+² `true` while the new args load behind the previous entry's data (`dataArgs !== args`); `false` for a `refresh()` of the same entry (`dataArgs === args`).
+
+³ `true` when the load was started by `retry()` (`error → pending`, `refresh-error → refreshing`); `error` then still holds the failure being retried although `isError` is `false`. Otherwise `false` and `error: null`. Independent of `isSwitching` — a `retry()` after an error under SWR sets both.
+
+`args` is the observed args (`null` only in `idle`); `dataArgs` is the args `data` was loaded for. Plus two methods on every variant: `retry()` (re-run a failed query from `error` / `refresh-error`) and `refresh()` (force a background SWR refresh).
+
+What to render for each variant — [ui-states.md](ui-states.md).
 
 ```tsx
 const state = orderApi.getOrders.useResource({ status });
 
-if (state.isError) return <ErrorBox error={state.error} onRetry={state.retry} />; // error: TError, not `| null`
+if (state.isError || state.isRetrying)                                            // error: TError, not `| null`
+  return <ErrorBox error={state.error} onRetry={state.retry} busy={state.isRetrying} />;
 if (state.isInitialLoading) return <Spinner />;
 if (!state.data) return null;                                                     // idle
-return <OrderList items={state.data} isStale={state.isRefreshing} />;
+return (
+  <OrderList
+    items={state.data}
+    isStale={state.isRefreshing}
+    caption={state.isSwitching ? `Showing ${state.dataArgs.status}, loading ${state.args.status}…` : undefined}
+  />
+);
 ```
 
 `error` is `unknown` unless the api declares `mapError` — see [error-handling.md](error-handling.md).
@@ -86,6 +99,7 @@ Same subscription, different failure contract:
 | Initial load                    | `isInitialLoading: true`          | throws a promise → `<Suspense>`      |
 | Initial error, no stale data    | `isError: true`                   | throws the error → Error Boundary    |
 | Background refresh (SWR)        | `isRefreshing: true`              | same — **never** suspends            |
+| Args changed, old data on screen | `isSwitching: true`, `dataArgs` = old args | same — no fallback flash   |
 | Refresh failed                  | `isRefreshError: true`            | same — stale data stays              |
 | Warm cache                      | renders `success`                 | renders synchronously, no fallback   |
 

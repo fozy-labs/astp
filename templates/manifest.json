@@ -275,6 +275,11 @@
                     "category": "skill"
                 },
                 {
+                    "source": "fozy-labs/skills/fozy-labs-rx-api/references/ui-states.md",
+                    "target": "skills/fozy-labs-rx-api/references/ui-states.md",
+                    "category": "skill"
+                },
+                {
                     "source": "fozy-labs/skills/fozy-labs-rx-api/references/writing-mutations.md",
                     "target": "skills/fozy-labs-rx-api/references/writing-mutations.md",
                     "category": "skill"
