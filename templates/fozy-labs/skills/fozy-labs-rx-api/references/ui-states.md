@@ -11,13 +11,10 @@ It is a starting point the implementer adapts to the place; the component set is
 
 Before wiring flags to components, find what the project already has. Three common shapes:
 
-| Shape                                                                                          | What it means for the code                                                                              |
-|------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------|
-| One container that can dim, lock and show an error (`<QueryContainer state={state}>`)          | Pass the state through; do not branch by hand.                                                          |
-| Separate parts — `Skeleton`, `ErrorBoundary`, `Dimmer`, `EmptyState`, toasts                   | Branch on the flags below; one part per state.                                                          |
-| Router / framework owns pending and error UI (loaders, `errorElement`, Suspense boundaries)    | Leave initial load and hard errors to it; the component handles switching, reloading and refresh errors. |
-
-Reuse the project's parts and intents; invent a component only when none exists.
+- One container that can dim, lock and show an error (`<QueryContainer queries={state}>`);
+- Separate parts — `Skeleton`, `ErrorBoundary`, `Dimmer`, `EmptyState`, toasts;
+- Router / framework owns pending and error UI (loaders, `errorElement`, Suspense boundaries);
+- Other forms, their combinations and associations.
 
 ---
 
@@ -26,15 +23,16 @@ Reuse the project's parts and intents; invent a component only when none exists.
 Flags are the [state union](reading-in-react.md#the-state-union); `error` vs `refresh-error` is in
 [error-handling.md](error-handling.md#where-a-failure-shows-up).
 
-| State                                       | Condition                                            | Default                                                                                          | Common deviation                                                                                      |
-|---------------------------------------------|------------------------------------------------------|--------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------|
-| Initial load                                | `isInitialLoading` (or the Suspense fallback)        | Skeleton in the shape of the content; a spinner when the shape is unknown                        | Router pending UI already covers it → render nothing extra                                            |
-| Switching — new args behind old data        | `isSwitching`                                        | Keep the data, lower its emphasis (dim / muted colours): the old result is visibly being replaced | Remount with `key={id}` → back to Skeleton; a search-as-you-type list may keep full emphasis          |
-| Reloading — `refresh()`, `invalidate`, polling | `isRefreshing && !isSwitching`                    | Nothing — the data is still valid                                                                | A "live" widget: a faint spinner in a corner                                                          |
-| Retrying                                    | `isRetrying`                                         | The same surface as the failure being retried, with a loading affordance inside; `error` still holds the failure | A list returns to Skeleton (`isInitialLoading` is also `true` for a retried initial load) |
-| Error, no data                              | `isError && data === null`                           | By consequence — [Error loudness](#error-loudness). Always a retry affordance (`state.retry`)     | —                                                                                                     |
-| Refresh error — data on screen              | `isRefreshError`                                     | Keep the data; a quiet inline notice ("could not refresh") with retry                            | Never a full error state                                                                              |
-| Empty                                       | `isSuccess && data.length === 0` — **not** a library state | `EmptyState` with a *create* intent                                                        | Active filters → different copy plus a "reset filters" action                                         |
+| State                                          | Condition                                     | "Default"                                                                                     |
+|------------------------------------------------|-----------------------------------------------|-----------------------------------------------------------------------------------------------|
+| Initial load                                   | `isInitialLoading` (or the Suspense fallback) | Skeleton in the shape of the content                                                          |
+| Switching — new args behind old data           | `isSwitching`                                 | Keep the data, lower its emphasis (dim / muted colours)                                       |
+| Reloading — `refresh()`, `invalidate`, polling | `isRefreshing && !isSwitching`                | Nothing — the data is still valid                                                             |
+| Retrying                                       | `isRetrying`                                  | Same as the state it lands in: Initial load, Switching or Reloading ([retry cases](reading-in-react.md#the-state-union)) |
+| Error, no data                                 | `isError && data === null`                    | By consequence — [Error loudness](#error-loudness). Always a retry affordance (`state.retry`) |
+| Error, stale data from the previous args       | `isError && !isRefreshError && data !== null` | The error surface for `args`, as above; `data` belongs to `dataArgs`, not to the failed request: dimmed behind the error at most, never shown as the current result |
+| Refresh error — data on screen                 | `isRefreshError`                              | Keep the data; a quiet inline notice ("could not refresh") with retry                         |
+| Empty                                          | `isSuccess && data.length === 0`              | `EmptyState` with a *create* intent                                                           |
 
 Empty and error often share a component; they never share copy, icon or primary action.
 

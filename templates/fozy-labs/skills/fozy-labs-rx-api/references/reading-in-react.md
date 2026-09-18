@@ -48,11 +48,23 @@ Passing a fresh object literal every render is fine: entries are addressed by th
 | `refreshing`     | `TData` (stale)   | `TError \| null`³  | `TArgs`           | ✅           | —                  | ✅              | `boolean`²    | `boolean`³   | —                | —           | —         |
 | `refresh-error`  | `TData` (stale)   | `TError`           | `TArgs`           | —           | —                  | —              | —             | —            | ✅                | —           | ✅         |
 
-¹ Normally `null`; carries the previous entry's stale data (and its args in `dataArgs`) when the args changed under SWR.
+¹ Which failure it is:
+
+| Failure                                            | `status`        | `isRefreshError` | `data`  | `dataArgs`    |
+|----------------------------------------------------|-----------------|------------------|---------|---------------|
+| Initial load failed, nothing cached                | `error`         | —                | `null`  | `null`        |
+| New args failed, stale data from the previous args | `error`         | —                | `TData` | previous args |
+| `refresh()` / invalidation failed                  | `refresh-error` | ✅                | `TData` | `= args`      |
 
 ² `true` while the new args load behind the previous entry's data (`dataArgs !== args`); `false` for a `refresh()` of the same entry (`dataArgs === args`).
 
-³ `true` when the load was started by `retry()` (`error → pending`, `refresh-error → refreshing`); `error` then still holds the failure being retried although `isError` is `false`. Otherwise `false` and `error: null`. Independent of `isSwitching` — a `retry()` after an error under SWR sets both.
+³ `true` when the load was started by `retry()`; `error` then still holds the failure being retried although `isError` is `false`. Otherwise `false` and `error: null`. Where the retry lands depends on what is on screen:
+
+| Retried from                                     | `status`     | `isInitialLoading` | `isSwitching` | `isRefreshing` |
+|--------------------------------------------------|--------------|--------------------|---------------|----------------|
+| `error`, no stale data                           | `pending`    | ✅                  | —             | —              |
+| `error`, stale data from the previous args (SWR) | `refreshing` | —                  | ✅             | ✅              |
+| `refresh-error`                                  | `refreshing` | —                  | —             | ✅              |
 
 `args` is the observed args (`null` only in `idle`); `dataArgs` is the args `data` was loaded for. Plus two methods on every variant: `retry()` (re-run a failed query from `error` / `refresh-error`) and `refresh()` (force a background SWR refresh).
 
