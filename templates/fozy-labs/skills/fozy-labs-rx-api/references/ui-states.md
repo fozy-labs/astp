@@ -23,18 +23,16 @@ Before wiring flags to components, find what the project already has. Three comm
 Flags are the [state union](reading-in-react.md#the-state-union); `error` vs `refresh-error` is in
 [error-handling.md](error-handling.md#where-a-failure-shows-up).
 
-| State                                          | Condition                                     | "Default"                                                                                     |
-|------------------------------------------------|-----------------------------------------------|-----------------------------------------------------------------------------------------------|
-| Initial load                                   | `isInitialLoading` (or the Suspense fallback) | Skeleton in the shape of the content                                                          |
-| Switching — new args behind old data           | `isSwitching`                                 | Keep the data, lower its emphasis (dim / muted colours)                                       |
-| Reloading — `refresh()`, `invalidate`, polling | `isRefreshing && !isSwitching`                | Nothing — the data is still valid                                                             |
-| Retrying                                       | `isRetrying`                                  | Same as the state it lands in: Initial load, Switching or Reloading ([retry cases](reading-in-react.md#the-state-union)) |
-| Error, no data                                 | `isError && data === null`                    | By consequence — [Error loudness](#error-loudness). Always a retry affordance (`state.retry`) |
-| Error, stale data from the previous args       | `isError && !isRefreshError && data !== null` | The error surface for `args`, as above; `data` belongs to `dataArgs`, not to the failed request: dimmed behind the error at most, never shown as the current result |
-| Refresh error — data on screen                 | `isRefreshError`                              | Keep the data; a quiet inline notice ("could not refresh") with retry                         |
-| Empty                                          | `isSuccess && data.length === 0`              | `EmptyState` with a *create* intent                                                           |
-
-Empty and error often share a component; they never share copy, icon or primary action.
+| State                                          | Condition                                     | "Default"                                                                                                                                                           |
+|------------------------------------------------|-----------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Initial load                                   | `isInitialLoading` (or the Suspense fallback) | Skeleton in the shape of the content                                                                                                                                |
+| Switching — new args behind old data           | `isSwitching`                                 | Keep the data, lower its emphasis (dim / muted colours)                                                                                                             |
+| Reloading — `refresh()`, `invalidate`, polling | `isRefreshing && !isSwitching`                | Nothing — the data is still valid                                                                                                                                   |
+| Retrying                                       | `isRetrying`                                  | Same as the state it lands in: Initial load, Switching or Reloading ([retry cases](reading-in-react.md#the-state-union))                                            |
+| Error, no data                                 | `isError && data === null`                    | By consequence — [Error loudness](#error-loudness). Always a retry affordance (`state.retry`)                                                                       |
+| Error, stale data                              | `isError && !isRefreshError && data !== null` | The error surface for `args`, as above; `data` belongs to `dataArgs`, not to the failed request: dimmed behind the error at most, never shown as the current result |
+| Refresh error — data on screen                 | `isRefreshError`                              | Keep the data; a quiet inline notice ("could not refresh") with retry                                                                                               |
+| Empty                                          | `isSuccess && data.length === 0`              | `EmptyState` with a *create* intent                                                                                                                                 |
 
 ---
 
