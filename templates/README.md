@@ -60,7 +60,7 @@ The `manifest.json` file defines all available bundles and their contents. It is
 | Value | Project root | User root |
 |-------|--------------|-----------|
 | `vscode` | `./.github/` | `~/.copilot/` |
-| `claude-code` | `./.claude/` | `~/.claude/` |
+| `claude-code` | `./.claude/` | `$CLAUDE_CONFIG_DIR`, else `~/.claude/` |
 
 A bundle listed with both platforms is selectable in either install flow; the same `target` path lands under the platform's own root, so write bundle items as if they live directly under `skills/<name>/SKILL.md`, `agents/...`, etc.
 

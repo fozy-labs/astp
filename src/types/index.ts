@@ -3,7 +3,7 @@
 /**
  * Coding agent platform a bundle targets.
  * - `vscode` — GitHub Copilot in VS Code (installs under `.github/` or `~/.copilot/`).
- * - `claude-code` — Anthropic Claude Code CLI (installs under `.claude/` or `~/.claude/`).
+ * - `claude-code` — Anthropic Claude Code CLI (installs under `.claude/` or `$CLAUDE_CONFIG_DIR`, else `~/.claude/`).
  */
 export type Platform = "vscode" | "claude-code";
 

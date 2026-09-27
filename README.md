@@ -39,7 +39,7 @@ All commands accept `--platform <vscode|claude-code>` and `--target <project|use
 | Platform | `--target project` | `--target user` |
 |----------|--------------------|-----------------|
 | `vscode` | `<cwd>/.github/` | `~/.copilot/` |
-| `claude-code` | `<cwd>/.claude/` | `~/.claude/` |
+| `claude-code` | `<cwd>/.claude/` | `$CLAUDE_CONFIG_DIR`, else `~/.claude/` |
 
 ### install
 
