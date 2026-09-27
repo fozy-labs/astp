@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { resolveTarget } from "../../types/index.js";
+import { describeTarget, resolveTarget } from "../../types/index.js";
 import { installFile, validateTargetPath } from "../installer.js";
 
 describe("resolveTarget", () => {
@@ -32,10 +32,53 @@ describe("resolveTarget", () => {
 
     // T17b: Claude Code user target
     it("resolves claude-code user target to ~/.claude", () => {
+        vi.stubEnv("CLAUDE_CONFIG_DIR", undefined);
         const target = resolveTarget("claude-code", "user");
         expect(target.platform).toBe("claude-code");
         expect(target.type).toBe("user");
         expect(target.rootDir).toBe(path.join(os.homedir(), ".claude"));
+    });
+
+    it("resolves claude-code user target to CLAUDE_CONFIG_DIR when set", () => {
+        const configDir = path.join(os.tmpdir(), "claude-alt");
+        vi.stubEnv("CLAUDE_CONFIG_DIR", configDir);
+        expect(resolveTarget("claude-code", "user").rootDir).toBe(configDir);
+    });
+
+    it("ignores an empty CLAUDE_CONFIG_DIR", () => {
+        vi.stubEnv("CLAUDE_CONFIG_DIR", "");
+        expect(resolveTarget("claude-code", "user").rootDir).toBe(path.join(os.homedir(), ".claude"));
+    });
+
+    it("leaves the claude-code project target alone when CLAUDE_CONFIG_DIR is set", () => {
+        vi.stubEnv("CLAUDE_CONFIG_DIR", path.join(os.tmpdir(), "claude-alt"));
+        expect(resolveTarget("claude-code", "project").rootDir).toBe(path.join(process.cwd(), ".claude"));
+    });
+
+    afterEach(() => {
+        vi.unstubAllEnvs();
+    });
+});
+
+describe("describeTarget", () => {
+    it("shows the default claude-code user root as ~/.claude/", () => {
+        vi.stubEnv("CLAUDE_CONFIG_DIR", undefined);
+        expect(describeTarget(resolveTarget("claude-code", "user"))).toBe("~/.claude/");
+    });
+
+    it("shows a CLAUDE_CONFIG_DIR under the home directory relative to ~", () => {
+        vi.stubEnv("CLAUDE_CONFIG_DIR", path.join(os.homedir(), ".claude-alt"));
+        expect(describeTarget(resolveTarget("claude-code", "user"))).toBe("~/.claude-alt/");
+    });
+
+    it("shows a CLAUDE_CONFIG_DIR outside the home directory as an absolute path", () => {
+        const configDir = path.join(path.parse(os.homedir()).root, "claude-alt");
+        vi.stubEnv("CLAUDE_CONFIG_DIR", configDir);
+        expect(describeTarget(resolveTarget("claude-code", "user"))).toBe(`${configDir}/`);
+    });
+
+    afterEach(() => {
+        vi.unstubAllEnvs();
     });
 });
 
