@@ -33,6 +33,7 @@ astp install fozy-labs --platform claude-code --target project
 | `astp install [bundle]` | Install a bundle to the selected target |
 | `astp update [--force]` | Update installed files to latest versions |
 | `astp check` | Check for available updates |
+| `astp delete [bundle] [--force]` | Remove an installed bundle |
 
 All commands accept `--platform <vscode|claude-code>` and `--target <project|user>` to skip interactive prompts. Resolved roots:
 
@@ -64,6 +65,14 @@ astp check [--platform <vscode|claude-code>] [--target <project|user>]
 ```
 
 Compare installed file versions against the remote manifest and display a status report.
+
+### delete
+
+```bash
+astp delete [bundle] [--force] [--platform <vscode|claude-code>] [--target <project|user>]
+```
+
+Remove the files of an installed bundle. Without a bundle name, prompts to pick from the bundles found in the target. Modified files are kept by default — use `--force` to delete them too.
 
 ## Bundles
 
