@@ -10,8 +10,8 @@ version, or when an unfamiliar name shows up in existing code.
 ## 0.12.x → 0.13.0 — the Query dictionary and the state shape
 
 Breaking release. Old names live on as `@deprecated` aliases until 0.14.0 — **except** the state shape, the removed
-`Machine*` classes and the already-deprecated `trigger` / `signalize`, which are gone with no alias. The package's own
-guide (`docs/migrations/0.13.0.md` in the repo) walks a codebase through it; this table is for reading old code.
+`Machine*` classes and the already-deprecated `trigger` / `signalize`, which are gone with no alias. This table is for
+reading old code.
 
 | Old (0.12.x) | Current | Notes |
 |--------------|---------|-------|

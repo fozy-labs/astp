@@ -66,8 +66,6 @@ function Signup() {
 When **not** to reach for it: a two-field form with no validation beyond `required` — a plain `Signal.state` plus a
 command is less machinery.
 
-The full module docs live in the package repo (`docs/form/`): definition, instance, validation, submit, React.
-
 ---
 
 ## Pitfalls
