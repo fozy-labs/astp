@@ -31,7 +31,8 @@ One api instance per app.
 
 ```ts
 // shared/api/api.ts
-import { createApi, reactHooksPlugin } from "@fozy-labs/rx-toolkit";
+import { createApi } from "@fozy-labs/rx-toolkit";
+import { reactHooksPlugin } from "@fozy-labs/rx-toolkit/react";
 
 export const api = createApi({
   keyPrefix: "main-api",
@@ -42,7 +43,7 @@ export const api = createApi({
 | Option                                  | Default           | Meaning                                                            |
 |-----------------------------------------|-------------------|--------------------------------------------------------------------|
 | `keyPrefix`                             | `undefined`       | Prefixed onto every `key` as `` `${keyPrefix}/${key}` ``.          |
-| `plugins`                               | `[]`              | `reactHooksPlugin()` is what adds the `use*` methods.              |
+| `plugins`                               | `[]`              | `reactHooksPlugin()` — from `@fozy-labs/rx-toolkit/react` — is what adds the `use*` methods. |
 | `serializeArgs`                         | `stableStringify` | Args → cache key.                                                  |
 | `resourceRetentionTime`                 | `60_000`          | ms an unsubscribed resource entry survives. `false` = never evict; `(args, state) => number \| false` decides per entry. |
 | `commandRetentionTime`                  | `0`               | Same, for commands.                                                |
@@ -160,6 +161,7 @@ args, the link silently does nothing.
 - ❌ Don't `try/catch` a hook or clutch `trigger` — it never rejects; check `result.status` or use `.unwrap()`.
 - ❌ Don't leave a manual `entry.createPatch(...)` handle uncommitted — a pending patch never reconciles.
 - ❌ Don't test "loaded" with `data !== null` or `data &&` — `TData` may itself be `null`; the check is `hasData`.
+- ❌ Importing hooks or `reactHooksPlugin` from the package root — React bindings live in `@fozy-labs/rx-toolkit/react` since 0.13.0.
 - ✅ Render by `hasData`, report errors by `hasError` — `pending` and `error` can sit on top of shown data.
 - ✅ Use `ensure` / `fetch` when you need the data, `prefetch` when you only want the cache warm.
 - ✅ `SKIP` gates a read until args are ready (`useResource` only — `useSuspenseResource` rejects it).
@@ -173,7 +175,7 @@ Load these only when the specific situation applies — do **not** preload.
 | Situation                                                                          | File                                   |
 |------------------------------------------------------------------------------------|----------------------------------------|
 | Rendering server data — hooks, `SKIP`, state union, Suspense                       | [references/reading-in-react.md](references/reading-in-react.md)       |
-| Deciding what the UI shows per state — skeleton, dimming, error loudness, `invalidate` policy | [references/ui-states.md](references/ui-states.md)         |
+| Deciding what the UI shows per state — resource, Suspense, infinite feed, mutations; skeleton, dimming, error loudness, `invalidate` policy | [references/ui-states.md](references/ui-states.md)         |
 | Reading from stores, route loaders, workers — `ensure`/`fetch`/`prefetch`, clutches | [references/reading-outside-react.md](references/reading-outside-react.md)  |
 | Writing a mutation — `execute`, request id, envelope, retry, command cache keys    | [references/writing-mutations.md](references/writing-mutations.md)      |
 | The cache did not update after a mutation — `links`, patches, lazy invalidation, eviction | [references/cache-and-invalidation.md](references/cache-and-invalidation.md) |
@@ -185,7 +187,7 @@ Load these only when the specific situation applies — do **not** preload.
 | Writing a custom plugin, devtools, `DefaultOptions`                                | [references/extending-the-api.md](references/extending-the-api.md)      |
 | SSR — serializing a snapshot on the server, hydrating it on the client             | [references/ssr-hydration.md](references/ssr-hydration.md)          |
 | Sharing cache between browser tabs — `syncDriver`, `defaultSync`, custom transports | [references/cross-tab-sync.md](references/cross-tab-sync.md)         |
-| Existing code uses a name this skill does not describe (`createAgent`, `refresh`, `pack`, `trigger`) | [references/migrations.md](references/migrations.md)             |
+| Existing code uses a name this skill does not describe (`createAgent`, `refresh`, `pack`, `trigger`) or imports hooks from the package root | [references/migrations.md](references/migrations.md)             |
 
 Pick **one** reading file matching the target environment — loading both the React and the non-React variant of the same
 topic is redundant.

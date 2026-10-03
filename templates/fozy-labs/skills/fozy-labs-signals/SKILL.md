@@ -13,7 +13,7 @@ Use for **local synchronous state** — server state goes through `createResourc
 Two layers:
 
 - **core** — framework-agnostic (`Signal`, the `State` / `Computed` / `Effect` / `FromSignal` classes, `Batcher`). Works in Node, workers, tests, any framework.
-- **react** — a single hook, `useSignal`. React ≥ 19 (declared peer), client-only.
+- **react** — a single hook, `useSignal`, from `@fozy-labs/rx-toolkit/react` (nothing React is at the package root since 0.13.0). React ≥ 19 (declared peer), client-only.
 
 Reactivity is by **value, not by event**: every write dedupes with `Object.is`, so writing an equal value notifies nobody.
 
@@ -199,6 +199,6 @@ Load these only when the specific situation applies — do **not** preload.
 | State that must survive a reload — `LocalSignal`, storage layout, GC, drivers           | [references/persisted-state.md](references/persisted-state.md)       |
 | One big object or a keyed collection wakes every reader (experimental APIs)             | [references/fine-grained-state.md](references/fine-grained-state.md) |
 | Modelling a lifecycle, not a value — state machines (`unstable_MachineSignal.state`)    | [references/statechart.md](references/statechart.md)                 |
-| Existing code uses a name this skill does not describe (`signalize`, `zodSchema`, `LocalState`) | [references/migrations.md](references/migrations.md)                 |
+| Existing code uses a name this skill does not describe (`signalize`, `zodSchema`, `LocalState`) or imports `useSignal` from the package root | [references/migrations.md](references/migrations.md)                 |
 
 Pick **one** of `use-in-react.md` / `use-outside-react.md` — the one matching the host. Loading both variants of the same topic is redundant.

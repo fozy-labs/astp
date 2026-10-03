@@ -15,6 +15,7 @@ version, or when an unfamiliar name shows up in existing code.
 | `LocalSignal.state({ zodSchema })` | `LocalSignal.state({ schema })` — any synchronous Standard Schema; `zod` is no longer a peer dependency |
 | `Signal.effect(() => values.push(x()))` | **type error** — the body must return a teardown or nothing; write a block body |
 | Engine internals — `DependencyTracker`, `SyncObservable`, `Batcher.scheduler`, `Effect._getRang()` | removed with no replacement; `SourceSignal.create(subscribe, defaultValue).peek()` covers the `SyncObservable` use |
+| `useSignal` / `useConstant` / `useEventHandler` / `useIsomorphicLayoutEffect` from `@fozy-labs/rx-toolkit` | `@fozy-labs/rx-toolkit/react` — removed from the root, no alias |
 
 Behavior that still compiles but changed:
 

@@ -41,6 +41,18 @@ Flags and statuses with **no alias** (a compile error in typed code, a silent `u
 | `isFetchingNext` (infinite feed) | `isLoadingNext` |
 | `data !== null` as the "loaded" check | `hasData` |
 
+**React bindings moved to `@fozy-labs/rx-toolkit/react`, removed from the root with no alias:**
+`useResource`, `useSuspenseResource`, `useInfiniteResource`, `useCommand`, `useSignal`, `useConstant`,
+`useEventHandler`, `useIsomorphicLayoutEffect`, `reactHooksPlugin` / `ReactHooksPlugin` (+ `IReactHooksPluginHKT` /
+`ReactHooksPluginHKT`), `useForm`, `unstable_formsReactPlugin` / `unstable_FormsReactPlugin` (+ `UseFormOptions`,
+`FormReactInstanceMembers`, `FormReactMembers`, `FormsReactPluginHKT`). The state types
+(`TSuspenseResourceState`, `TResourceClutchState`, `TCommandClutchState`, `TInfiniteResourceState`, …) stay at the root.
+
+Two compile-time breaks hit implementors, not callers: a custom `ICacheEntry` / `IQueryCacheEntry` implementation must
+add `hold()` and `readonly isMelting` (plus `readonly isInvalidated` on `IQueryCacheEntry`), and
+`TResourcePrefetchOptions` is now a union (`TResourcePrefetchCachedOptions | TResourcePrefetchForceOptions`) — an
+interface can no longer extend it: extend one variant, or use an intersection type.
+
 Two behavior traps a mechanical rename walks into:
 
 1. **Invalidation is lazy now.** `refresh(args)` always sent the request; `invalidate(args)` refetches at once only
@@ -107,6 +119,7 @@ The differences bite in two places.
 | `resource.trigger(args, true)`     | `prefetch(args, { force: true })`            |
 | `isLoading` / `isRefreshing` / `isRefreshError` / `isRetrying` | see the flags table above |
 | `getDevtoolsKey`                   | removed, delete it                           |
+| `use*` hooks / `reactHooksPlugin` imported from `@fozy-labs/rx-toolkit` | `@fozy-labs/rx-toolkit/react` — removed with no alias |
 | `await trigger(dto)` + `try/catch` | envelope check on `result.status`            |
 
 ---

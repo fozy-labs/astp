@@ -196,7 +196,7 @@ entities/user/
 ```ts
 // entities/user/react/use-current-user.ts
 import { inject } from "@fozy-labs/simplest-di";
-import { useSignal } from "@fozy-labs/rx-toolkit";
+import { useSignal } from "@fozy-labs/rx-toolkit/react";
 import { SessionStore } from "@/shared/auth";
 
 export function useCurrentUser() {

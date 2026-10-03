@@ -136,10 +136,12 @@ Semantics worth knowing before relying on it:
 
 ## In React
 
-Both controllers satisfy `{ obs, peek }`, so `useSignal(ps)` / `useSignal(users)` works — but that subscribes to the
+Both controllers are `ReadonlySignal`s, so `useSignal(ps)` / `useSignal(users)` works — but that subscribes to the
 **whole** structure and defeats the point. Wrap the narrow read instead:
 
 ```tsx
+import { useConstant, useSignal } from "@fozy-labs/rx-toolkit/react";
+
 function UserRow({ id }: { id: string }) {
   const user$ = useConstant(() => Signal.compute(() => users.get$(id)), [id]);
   const user = useSignal(user$);

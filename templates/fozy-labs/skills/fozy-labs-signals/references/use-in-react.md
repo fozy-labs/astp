@@ -3,7 +3,8 @@
 Reading and owning signals from components. For Node, workers, tests and other frameworks see [use-outside-react.md](use-outside-react.md) —
 pick the one matching your host, not both.
 
-React ≥ 19 is the declared peer dependency. Nothing needs wiring up: `useSignal` is the whole binding.
+React ≥ 19 is the declared peer dependency. Nothing needs wiring up: `useSignal` — imported from
+`@fozy-labs/rx-toolkit/react`, not the package root — is the whole binding.
 
 **Contents:** [`useSignal`](#usesignal) · [Stable signal identity](#stable-signal-identity) · [Component-local signals](#component-local-signals) · [Effects in components](#effects-in-components) · [Other exported hooks](#other-exported-hooks) · [Store pattern](#store-pattern)
 
@@ -12,7 +13,7 @@ React ≥ 19 is the declared peer dependency. Nothing needs wiring up: `useSigna
 ## `useSignal`
 
 ```tsx
-import { useSignal } from "@fozy-labs/rx-toolkit";
+import { useSignal } from "@fozy-labs/rx-toolkit/react";
 
 function CurrentUserWidget() {
   const session = inject(SessionStore);
@@ -23,8 +24,8 @@ function CurrentUserWidget() {
 }
 ```
 
-- Accepts anything shaped `{ obs, peek }` — every signal type, plus the `unstable_ProxySignal` /
-  `unstable_KeyedSignal` controllers ([fine-grained-state.md](fine-grained-state.md)).
+- Accepts any `ReadonlySignal<T>` — a callable signal with `peek()` — every signal type, plus the
+  `unstable_ProxySignal` / `unstable_KeyedSignal` controllers ([fine-grained-state.md](fine-grained-state.md)).
 - Implemented as `useSyncExternalStore(subscribe, () => signal$.peek(), getServerSnapshot)`. Subscribes on mount,
   unsubscribes on unmount.
 - Re-renders only when the snapshot changes — React compares with `Object.is`.
@@ -75,10 +76,11 @@ const total = useSignal(total$);
 
 ## Component-local signals
 
-`useConstant(fn, deps?)` is exported by the package — a `useMemo` that is never discarded by React.
+`useConstant(fn, deps?)` — also from `@fozy-labs/rx-toolkit/react` — a `useMemo` that is never discarded by React.
 
 ```tsx
-import { Signal, useConstant, useSignal } from "@fozy-labs/rx-toolkit";
+import { Signal } from "@fozy-labs/rx-toolkit";
+import { useConstant, useSignal } from "@fozy-labs/rx-toolkit/react";
 
 function SearchBox() {
   const query$ = useConstant(() => Signal.state(""));

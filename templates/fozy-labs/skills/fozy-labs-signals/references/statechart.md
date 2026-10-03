@@ -181,7 +181,8 @@ effect watching `status: "error"`.
 
 - ⚠️ `matches()` / `can()` read the snapshot **without** registering a dependency. Inside a `Signal.compute`, read the
   signal explicitly (`light$()`) or derive from its value — otherwise the compute never recomputes.
-- There is no dedicated React hook; `useSignal(light$)` works because `MachineStateSignal` implements `obs` / `peek`.
+- There is no dedicated React hook; `useSignal(light$)` (from `@fozy-labs/rx-toolkit/react`) works because
+  `MachineStateSignal` is a `ReadonlySignal` — a callable with `peek()`.
 - A component-lifetime instance: `useState(() => MachineSignal.state(def))`. The callable signal is a function, so it
   must go through `useState` / `setState` **only as a thunk** — `setMachine$(MachineSignal.state(def))` would be
   treated as an updater and store a snapshot instead of the signal (symptom: `signal$.peek is not a function`).

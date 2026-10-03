@@ -66,7 +66,7 @@ DefaultOptions.update({
 
 `reduxDevtools(options?)` targets the Redux DevTools browser extension; without the extension it logs `console.error` and no-ops (0.12.x threw and could crash the app). `batchStrategy` is `"sync"` / `"microtask"` (default) / `"task"`, with `taskDelay` for the last. Any `DevtoolsLike` implementation works — `combineDevtools(...)` fans out to several at once.
 
-Query transitions arrive as `UPDATE: success | error | invalidate | revalidate | rebase | invalidate-error | retry | patch | patch-settled | sync` (`revalidate` is the deferred refetch of a marked entry; `UPDATE: refresh` / `refresh-error` are the pre-0.13 names).
+Query transitions arrive as `UPDATE: success | error | invalidate | revalidate | rebase | invalidate-error | retry | patch | patch-settled | sync`, plus `refetch` (an in-place re-query via `fetch()`/`ensure()`) and `stream-next` (each stream emission after the first). `revalidate` is the deferred refetch of a marked entry; `UPDATE: refresh` / `refresh-error` are the pre-0.13 names.
 
 Entries are labelled `` `${resourceKey}:${entryKey}` `` and there is no per-resource override, so a resource or command with no `key` is largely invisible in devtools.
 

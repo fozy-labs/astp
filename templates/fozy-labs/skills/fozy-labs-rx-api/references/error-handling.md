@@ -11,6 +11,8 @@ Typing `error`, where a failure surfaces, what the library retries (almost nothi
 Every state's `error` is `unknown` until the api declares `mapError`. That option normalizes every raw failure once and its return type becomes the api's `TError`, propagated to every resource and command it creates:
 
 ```ts
+import { reactHooksPlugin } from "@fozy-labs/rx-toolkit/react";
+
 class NetUnknownError extends Error {
   constructor(readonly original: unknown) { super("net unknown"); }
 }
@@ -94,7 +96,7 @@ There is **no automatic retry or backoff.** Retries are explicit:
 | Call                              | Semantics                                                                 |
 |-----------------------------------|---------------------------------------------------------------------------|
 | `state.retry()` (resource)        | Re-runs the failed query, **keeping the error on screen**: `pending` with `hasError` until the run settles. No-op with a console warn outside an error. |
-| `state.invalidate()` (resource)   | Re-runs and **clears the error** — valid on a failed entry too (0.12.x no-op'd there). |
+| `state.invalidate()` (resource)   | Re-checks the shown data and **clears the error**. With nothing on screen (`status: "error"`, `dataSource: "none"`) it warns and no-ops — that row wants `retry()`. Entry-level `entry.invalidate()` / `resource.invalidate(args)` retry a failed entry instead. |
 | `state.retry()` (command)         | Re-runs the same entry, reusing its request id. No-op outside `error`.    |
 | `ensure` / `fetch` / `prefetch`   | Retry an entry sitting in `error` before awaiting it — in both `prefetch` modes. |
 | `command.execute(args)` again     | A **new** entry and a **new** request id — a different logical operation. |

@@ -163,7 +163,7 @@ clutch.start();                                          // begin observing and 
 | `switch(args, opts?)`   | `(TArgsOrVoidOrSkip<TArgs>, { markPending?: boolean }?) => void` | Switches args. `SKIP` → `idle`. Same key = no-op. `markPending` makes an unstarted clutch report `pending` instead of `idle`. |
 | `start()`               | `() => void`                                  | Takes **no arguments**; starts the currently set args.          |
 | `adoptPrevious(source)` | `(IResourceClutch<…>) => void`                | Takes over `source`'s data as this clutch's SWR fallback — for "replace the clutch" flows instead of `switch`. |
-| `retry()` / `invalidate(opts?)` | `() => void` / `(opts?: { inFlight?: TInFlightPolicy }) => void` | Delegate to the tracked entry; `retry()` keeps the error on screen, `invalidate()` clears it. |
+| `retry()` / `invalidate(opts?)` | `() => void` / `(opts?: { inFlight?: TInFlightPolicy }) => void` | Delegate to the tracked entry; `retry()` keeps the error on screen, `invalidate()` clears it. On an error with nothing shown `invalidate()` warns and no-ops — `retry()` is the call there. |
 | `whenSettled(opts?)`    | `({ waitForDone?: boolean }?) => Promise<void>` | Resolves when there is something to render (any data, or an error with nothing to show); `waitForDone: true` waits for "no request in flight" instead. Never rejects. |
 | `args`                  | `TArgs \| null` (getter)                      | Currently observed args.                                        |
 

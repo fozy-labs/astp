@@ -9,16 +9,12 @@ Two plugins, chosen instead of (or next to) `reactHooksPlugin()`:
 | Plugin                        | Adds                              |
 |-------------------------------|-----------------------------------|
 | `unstable_formsPlugin()`      | `api.defineForm`                  |
-| `unstable_formsReactPlugin()` | `api.defineForm` + the `useForm` hook |
+| `unstable_formsReactPlugin()` | `api.defineForm` + the `useForm` / `useFormContext` hooks and `<form.Provide>` |
 
 ```tsx
 import { z } from "zod/v4";
-import {
-  createApi,
-  unstable_FormSignal as FormSignal,
-  unstable_formsReactPlugin,
-  useSignal,
-} from "@fozy-labs/rx-toolkit";
+import { createApi, unstable_FormSignal as FormSignal } from "@fozy-labs/rx-toolkit";
+import { unstable_formsReactPlugin, useSignal } from "@fozy-labs/rx-toolkit/react";
 
 const f = FormSignal.field;
 
@@ -61,7 +57,8 @@ function Signup() {
   dirty).
 - `group` nests objects, `list` models repeating rows; `disabled` and validation rules can read other fields' values.
 - Standalone, with no plugin: `FormSignal.state(definition)` creates the instance directly; `useForm` needs
-  `unstable_formsReactPlugin()`.
+  `unstable_formsReactPlugin()`. `<form.Provide>` puts the instance into context — `FormDef.useFormContext()` reads it
+  in descendants and throws outside one.
 
 When **not** to reach for it: a two-field form with no validation beyond `required` — a plain `Signal.state` plus a
 command is less machinery.

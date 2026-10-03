@@ -13,6 +13,7 @@ answers `RES`, and the entry hydrates as `success` without a round-trip.
 
 ```ts
 import { broadcastSyncDriver, createApi } from "@fozy-labs/rx-toolkit";
+import { reactHooksPlugin } from "@fozy-labs/rx-toolkit/react";
 
 export const api = createApi({
   keyPrefix: "main-api",
@@ -35,8 +36,7 @@ Without a `syncDriver` nothing syncs, whatever `defaultSync` says. A resource-le
 both directions.
 
 **Commands are never synced.** `createCommand` has no `sync` option and never touches the syncer, so `defaultSync: "all"`
-behaves identically to `"resources"`. Verified against the 0.11 source: parts of the package docs still list a
-command-level `sync` option — there is none.
+behaves identically to `"resources"` — parts of the package docs still list a command-level `sync` option; there is none.
 
 ---
 
@@ -54,8 +54,8 @@ ran — see [lifecycle-hooks.md](lifecycle-hooks.md)), and normal `retentionTime
 
 A `RES` can never clobber local data: the `REQ` is only ever sent for a **cold** entry, and the answer is applied only
 while that entry is still `pending`. There is no freshness comparison — `RES` carries no timestamp, so a tab holding
-older (but unmarked) data answers just as readily. Verified against the 0.11 source, against what the package docs claim. If no
-answer arrives within 150 ms the entry falls back to its own `queryFn`.
+older (but unmarked) data answers just as readily. If no answer arrives within 150 ms the entry falls back to its own
+`queryFn`.
 
 ---
 
@@ -78,7 +78,7 @@ call is wrapped in try/catch, so an unsupported environment degrades to no sync 
 
 ```ts
 interface ISyncDriver {
-  connect(onMessage: (msg: ISyncMessage) => void): void;
+  connect(onMessage: (msg: ISyncMessage) => void, context: TSyncDriverContext): void;
   disconnect(): void;
   send(message: ISyncMessage): void;
 }
@@ -91,6 +91,7 @@ interface ISyncMessage {
 }
 ```
 
+`context.keyPrefix` is the api's `keyPrefix` (`""` when it has none) — a custom driver namespaces its channel by it.
 A resource with no `key` cannot be addressed by `keys[1]` and so cannot sync.
 
 ---

@@ -11,6 +11,9 @@ Priming the client cache from a server render instead of from `queryFn`.
 const snapshot = api.getSnapshot(); // TApiSnapshot — serialize into the HTML
 
 // Client
+import { createApi } from "@fozy-labs/rx-toolkit";
+import { reactHooksPlugin } from "@fozy-labs/rx-toolkit/react";
+
 export const api = createApi({
   keyPrefix: "main-api",
   plugins: [reactHooksPlugin()],
@@ -20,7 +23,9 @@ export const api = createApi({
 ```
 
 `TApiSnapshot` is `{ version, keyPrefix, timestamp, resources }`, where each resource slice holds entries of
-`{ status, args, data, updatedAt }`. The version is **2** since 0.13.0.
+`{ status, args, data, updatedAt, isStale? }`. The version is **2** since 0.13.0. `initialSnapshot` is deep-cloned by
+`createApi` (structured clone — `bigint`, `NaN`, `Infinity`, `undefined` survive), so mutating the passed object later
+has no effect.
 
 ---
 
@@ -31,6 +36,8 @@ export const api = createApi({
 - resources with `snapshotable` left `true` — `snapshotable: false` excludes a resource from both serialization and
   hydration (for derived resources whose data belongs to another resource; projection resources set it automatically);
 - entries in `success` **and** `invalidate-error` (the latter's data is last-known-good);
+- an entry marked for revalidation — `success` with `isInvalidated`, or a lazily `invalidating` entry with no request
+  in flight — serializes as `success` with `isStale: true` and hydrates stale;
 - the **confirmed base**: when optimistic patches are pending it writes `patchState.originalData`, not the patched `data`.
 
 Call it *after* rendering, so the entries reflect what the page actually read.
@@ -43,7 +50,7 @@ Lazily, at each `createResource()` call:
 
 1. Looks up the slice by the resource's own `key` — the api's `keyPrefix` is stripped on serialize and is not required to match on the client.
 2. Revives each entry from its persisted `data` in `success`.
-3. Marks the entry (`entry.isInvalidated`) when it came from `invalidate-error`, or when `snapshotValidTime` is a number and `updatedAt + snapshotValidTime < Date.now()`.
+3. Marks the entry (`entry.isInvalidated`) when it came from `invalidate-error`, when the persisted entry carried `isStale: true`, or when `snapshotValidTime` is a number and `updatedAt + snapshotValidTime < Date.now()`.
 
 A marked entry fires **no request at creation time** — the refetch starts on its first **hold** (a mounted hook, an
 `ensure`), and that subscriber's first snapshot already shows the in-flight state. 0.12.x refetched every stale entry

@@ -4,9 +4,11 @@
 
 **Contents:** [`useResource`](#useresourceargs) · [The state shape](#the-state-shape) · [`SKIP`](#skip--conditional-queries) · [`useSuspenseResource`](#usesuspenseresourceargs) · [`useCommand`](#usecommandentrykey) · [Standalone forms](#standalone-forms)
 
-The hooks exist (as a method) **only** when the api was built with `reactHooksPlugin()`:
+The hooks exist (as a method) **only** when the api was built with `reactHooksPlugin()`. All React bindings live in `@fozy-labs/rx-toolkit/react` — nothing React comes from the package root:
 
 ```ts
+import { reactHooksPlugin } from "@fozy-labs/rx-toolkit/react";
+
 export const api = createApi({ plugins: [reactHooksPlugin()] });
 ```
 
@@ -52,7 +54,7 @@ Passing a fresh object literal every render is fine: entries are addressed by th
 | `isInvalidating` | In flight over current-args data. |
 | `hasData` / `hasError` | `dataSource !== 'none'` / `error !== null`. |
 | `retry()` | Re-runs the failed query, **keeping the error on screen** (`pending` + `hasError`). |
-| `invalidate()` | Re-checks the shown entry, **clearing** the error. |
+| `invalidate()` | Re-checks the shown entry, **clearing** the error — warns and no-ops on error with nothing shown (`retry()` is the call there). |
 
 `dataSource` values: `placeholder` is the product of the resource's `placeholderData` option — synthesized data for args with nothing cached, never written to the cache; `previous` is previous args' data held over an args change (SWR); `current` is this entry's own data. Display priority: `current` → `placeholder` → `previous` → `none`.
 
@@ -129,7 +131,7 @@ The returned union (`TSuspenseResourceState`) is narrowed to `dataSource: 'place
 Constraints:
 
 - `SKIP` is **not** accepted — the arg type is `TArgsOrVoid<TArgs>`. A component that may suspend must always have args; use `useResource` for conditional reads.
-- The query starts **during render**, not in an effect (a suspended render never runs effects).
+- The query starts right after the suspending render (in a microtask), not in an effect — the render itself creates no entry and runs no `queryFn`.
 - Under SSR a boundary that suspends on the server renders its fallback there — the data arrives on the client. Hydrate the cache when the server HTML must contain it — see [ssr-hydration.md](ssr-hydration.md).
 
 ---
@@ -157,7 +159,7 @@ async function onSubmit(dto: CreateOrderDto) {
 Every hook is also exported as a free function taking the resource/command first. Use these when the api has no `reactHooksPlugin()`, or in generic components:
 
 ```tsx
-import { useResource, useSuspenseResource, useCommand } from "@fozy-labs/rx-toolkit";
+import { useResource, useSuspenseResource, useCommand } from "@fozy-labs/rx-toolkit/react";
 
 const state = useResource(orderApi.getOrders, { status });
 const [trigger] = useCommand(orderApi.createOrder);

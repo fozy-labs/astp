@@ -141,7 +141,7 @@
         },
         "fozy-labs": {
             "name": "fozy-labs",
-            "version": "1.4.0",
+            "version": "1.5.0",
             "description": "Fozy Labs stack skills — DI, FSD, rx-api, signals (VS Code + Claude Code)",
             "default": false,
             "platforms": [
@@ -237,6 +237,11 @@
                 {
                     "source": "fozy-labs/skills/fozy-labs-rx-api/references/extending-the-api.md",
                     "target": "skills/fozy-labs-rx-api/references/extending-the-api.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "fozy-labs/skills/fozy-labs-rx-api/references/forms.md",
+                    "target": "skills/fozy-labs-rx-api/references/forms.md",
                     "category": "skill"
                 },
                 {
