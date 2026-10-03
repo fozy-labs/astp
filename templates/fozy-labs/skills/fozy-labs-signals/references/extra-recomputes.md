@@ -51,15 +51,24 @@ Consequences worth internalising:
 
 - **`NaN` is stable and `+0 → -0` is a change** — this is `Object.is`, not `===`.
 - **A fresh reference always propagates.** `Signal.compute(() => new Set(this.ids$()))` emits on every recompute, and a
-  `useSignal` on it re-renders every time. That is correct behaviour, not a leak of updates.
+  `useSignal` on it re-renders every time. That is correct behaviour, not a leak of updates — unless you give the
+  computed your own equality (below).
 - **In-place mutation is invisible.** `arr$.peek().push(x); arr$.set(arr$.peek())` writes the same reference — dropped.
 
-When a downstream consumer needs structural rather than referential comparison, the package exports `shallowEqual` and
-`deepEqual`; use them in a guard, not as a signal option (there is no `equals` option on `SignalOptions`).
+When a **computed** builds a fresh object every run, give it structural equality instead of a hand guard:
+`Signal.compute(fn, { equals })`. On equal it keeps the previous reference, so `obs` subscribers and dependents never
+wake. The exported `shallowEqual` / `deepEqual` plug straight in (`deepEqual` compares `File`, `Blob` and `URL` by
+reference):
 
 ```ts
 import { shallowEqual } from "@fozy-labs/rx-toolkit";
 
+readonly page$ = Signal.compute(() => toPage(this.raw$()), { equals: shallowEqual });
+```
+
+A **state** signal has no `equals` option — guard before `set`:
+
+```ts
 readonly page$ = Signal.state<PageDto>(EMPTY_PAGE);
 
 setPage(next: PageDto) {
@@ -83,9 +92,9 @@ A `Signal.compute` has two regimes, and they cost different things:
 A computed recomputes only when a dependency changes — cold reads revalidate the memo with `Object.is`, warm ones wake
 on a dependency emission. So "my computed recalculates too often" is one of: a dependency that changes more often than
 the output needs (split it, or `peek()` the noisy part); a dependency whose `peek()` is not `Object.is`-stable — a
-`SourceSignal` handing back a fresh object on each re-subscribe, say — so every read counts as a change; or a computed cycling
-warm → cold, which is the one recompute that is not caused by a dependency at all: warming up always runs `computeFn`
-and drops the memo cache.
+`SourceSignal` handing back a fresh object on each re-subscribe, say — so every read counts as a change; or a computed
+cycling warm → cold: warming up re-runs `computeFn` (with `{ equals }`, an equal result still keeps the old reference
+and notifies nobody).
 
 ---
 
@@ -104,12 +113,13 @@ Batcher.run(() => {
 - `Batcher.run(fn)` returns whatever `fn` returns.
 - **Nested calls join the outer batch.** Every `State.set` already wraps itself in `Batcher.run`, so a single write needs
   no explicit batch — reach for `Batcher.run` only to group two or more writes.
-- The flush is **synchronous and glitch-free**: each effect/computed carries a *rang* (its depth in the dependency
-  graph), and the batcher drains rangs in ascending order. A downstream effect therefore never observes a half-updated
-  graph and never runs twice for one batch.
+- The flush is **synchronous and glitch-free**: a downstream effect never observes a half-updated graph and never runs
+  twice for one batch. Independent effects run **in the order they were queued** (0.12.x drained them by graph depth).
+- A read inside a batch returns the up-to-date value: a stale computed recomputes for that read only — its source
+  subscriptions re-sync after the batch.
 - The flush is iterative, so deep dependency chains do not blow the stack.
-- If something throws during the batch, the queue is reset in a `finally` — pending reactions are **dropped**, not
-  carried into the next unrelated batch. An effect whose body threw is closed permanently.
+- If `fn` or a reaction throws, the remaining reactions **still run**, and the first error rethrows after the flush —
+  nothing is silently dropped, and a throwing effect is not closed (see [SKILL.md](../SKILL.md#3-signaleffect--side-effect-on-dependency-change)).
 
 ### The one case that may double-emits
 

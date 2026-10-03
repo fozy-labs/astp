@@ -12,10 +12,10 @@ ordersFeed = api.createResource({
   queryFn: (args: { deskId: string }) => webSocket<Order[]>(`wss://api.example.com/desks/${args.deskId}/orders`),
 });
 
-const { data, isLoading } = ordersFeed.useResource({ deskId: "main" }); // updates on every emission
+const { data, isPending } = ordersFeed.useResource({ deskId: "main" }); // updates on every emission
 ```
 
-Agents, `useResource` / `useSuspenseResource`, SWR, `ensure` / `fetch` / `prefetch` and devtools all work unchanged.
+Clutches, `useResource` / `useSuspenseResource`, SWR, `ensure` / `fetch` / `prefetch` and devtools all work unchanged.
 
 ---
 
@@ -25,12 +25,14 @@ Agents, `useResource` / `useSuspenseResource`, SWR, `ensure` / `fetch` / `prefet
   consider the query done.
 - **Later emissions**: `success → success` in place (devtools action `stream-next`); active optimistic patches are
   replayed on the new base — the same rebase as a background refresh.
-- **Stream error**: before any emission — ordinary `error`; after data — `refresh-error` with last-known-good data
+- **Stream error**: before any emission — ordinary `error`; after data — `invalidate-error` with last-known-good data
   kept. Goes through `mapError`.
 - **`complete`** after data just ends the live phase — the entry stays in `success` under normal cache rules.
   Completing with **zero emissions** is an `EmptyStreamError` (exported), so the entry cannot hang in `pending`.
-- **`refresh()` / `retry()` / `fetch()`** unsubscribe from the current stream and resubscribe; the new run's first
-  emission arrives through the rebase path.
+- **`invalidate()` / `retry()` / `fetch()`** unsubscribe from the current stream and resubscribe; the new run's first
+  emission arrives through the rebase path. An `invalidate()` with an **open stream** follows the in-flight policy:
+  `cancel` (default) resubscribes at once, `trail` waits for the stream to complete first, `join` treats the open
+  stream as the answer and does nothing.
 - **Eviction** (retention GC, `resetAll`) unsubscribes — the producer teardown (socket close) runs; the `AbortSignal`
   passed to `queryFn` fires at the same moment.
 - One subscription per cache entry regardless of how many components read the same args; different args — different
@@ -65,7 +67,7 @@ reason when the run is torn down first (resubscription, eviction). For a promise
 ## Interaction with other mechanics
 
 - **SSR snapshots** serialize the last emission like any success entry, but a hydrated entry does **not** reconnect
-  the stream — data is static until a `refresh()`. For purely live resources consider `snapshotable: false`
+  the stream — data is static until an `invalidate()`. For purely live resources consider `snapshotable: false`
   (see [ssr-hydration.md](ssr-hydration.md)).
 - **Cross-tab sync** hands the neighbour tab a one-shot copy of the data, not the stream — the cold entry never
   subscribes to the producer. Leave `sync` off (the default) for stream resources.
@@ -77,6 +79,6 @@ reason when the run is torn down first (resubscription, eviction). For a promise
 - ❌ Expecting a hydrated or synced entry to be live — only a real `queryFn` run subscribes.
 - ❌ Committing patches over a stream that does not echo mutations — the next emission reverts them.
 - ❌ Returning an `Observable` from a command `queryFn` — streams are resource-only.
-- ✅ Put the socket in `queryFn` and let refresh/eviction manage the subscription — no manual `onCacheEntryAdded`
+- ✅ Put the socket in `queryFn` and let invalidation/eviction manage the subscription — no manual `onCacheEntryAdded`
   socket plumbing needed for plain live data.
 - ✅ Use `$queryStream.allReceived` only for finite streams — an endless stream never resolves it.

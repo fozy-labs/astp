@@ -126,7 +126,7 @@ Execution order in a macrostep: `exit` of the source states → transition actio
 
 | Option | Default | Meaning |
 |---|---|---|
-| `key` | `"Statechart/<machine id>"` | Redux DevTools key (concurrent unkeyed instances get `#2`, `#3`, …) |
+| `key` | `"Statechart/<machine id>"` | Redux DevTools key (concurrent unkeyed instances share one entry — pass `key` to tell them apart) |
 | `isDisabled` | — | opt this instance out of Redux DevTools |
 | `inspector` | global `MACHINE_DEVTOOLS` | external machine inspector; `null` disables |
 | `autoStart` | `true` | `start()` in the constructor; `false` still computes the initial snapshot, effects wait for `start()` |

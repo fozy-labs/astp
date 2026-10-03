@@ -12,7 +12,7 @@ What holds a subscription, what must be stopped by hand, and what cleans itself 
 | `Signal.compute`                            | Nothing while cold; an internal effect + dependency subs while warm. | Automatic at the last unsubscribe. `dispose()` for good. |
 | `Signal.effect`                             | One subscription per tracked dependency + your teardown.       | **You must** call `unsubscribe()`.                           |
 | `Signal.from`                               | One shared upstream subscription while hot; nothing when cold. | Refcount + `keepAlive`. `dispose()` ends it for good.        |
-| `SourceSignal.create`                       | A fresh subscription per read and per tracking consumer.       | Ends with the consumer; the signal itself owns nothing.      |
+| `SourceSignal.create`                       | One shared producer while observed; a run per read otherwise.  | Ends with the consumer; the signal itself owns nothing.      |
 | `LocalSignal.state`                         | An internal state + computed, plus a page-lifetime storage manager. **No `dispose()`.** | Nothing to call.        |
 | `unstable_KeyedSignal` / `unstable_ProxySignal` | Lazily materialised per-key / per-path nodes.               | `dispose()`; idle nodes are reaped on their own.             |
 | `s$.obs.subscribe(...)`                     | A plain RxJS subscription.                                     | `sub.unsubscribe()` or `takeUntil(destroyed$)`.              |
@@ -36,11 +36,13 @@ stop.unsubscribe();
 ```
 
 - The returned function runs **before each re-run** and once on `unsubscribe()`. It never runs twice for the same run.
-- `Signal.effect` is declared as `(effectFn: () => void) => Effect`. Returning a teardown still type-checks (TypeScript's
-  void-return rule) and is honoured at runtime. The class form `new Effect(fn)` types the teardown explicitly.
-- A body that **throws** unsubscribes the effect from everything it had collected, sets `closed = true` and rethrows.
-  The effect is dead; it will not resume when a dependency changes. Guard risky work inside the body if the effect must
-  survive it.
+  A teardown that throws is not called again.
+- `effectFn` must return a teardown or nothing — since 0.13 an arrow body returning a value is a type error, so write a
+  block body. The class form `new Effect(fn)` types the teardown explicitly.
+- A body that throws **on its first run** unsubscribes the effect and rethrows — the effect is dead. A throw on a
+  **later** run leaves it subscribed to what it read before the throw: the error rethrows from the write that scheduled
+  the run (usually `set()`), and the effect fires again when one of those dependencies changes. Explicitly
+  `unsubscribe()` an effect that must not survive a failure.
 
 ---
 

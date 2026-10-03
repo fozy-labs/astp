@@ -2,7 +2,7 @@
 
 Cache keys, `links`, optimistic patches, staleness, eviction — and why a mutation sometimes leaves the UI unchanged.
 
-**Contents:** [Cache keys](#the-cache-key-is-the-serialized-args) · [`links`](#links--wiring-a-command-to-resources) · [`forwardArgs`](#forwardargs-addresses-exactly-one-entry) · [Why nothing happened](#why-nothing-happened--checklist) · [Manual patches](#manual-patches) · [Staleness and eviction](#staleness-and-eviction)
+**Contents:** [Cache keys](#the-cache-key-is-the-serialized-args) · [`links`](#links--wiring-a-command-to-resources) · [`forwardArgs`](#forwardargs-addresses-exactly-one-entry) · [Why nothing happened](#why-nothing-happened--checklist) · [Manual patches](#manual-patches) · [Staleness, holds and eviction](#staleness-holds-and-eviction) · [Lazy invalidation and the in-flight policy](#lazy-invalidation-and-the-in-flight-policy)
 
 ---
 
@@ -43,10 +43,10 @@ setStatus = api.createCommand<UserStatus, User>({
 | Field              | Required | Runs                                                              |
 |--------------------|----------|-------------------------------------------------------------------|
 | `resource`         | ✅        | Target resource.                                                   |
-| `forwardArgs`      | ✅        | `(commandArgs) => TResArgs \| undefined` — which entry is touched.  |
+| `forwardArgs`      | ✅        | `(commandArgs) => TResArgs` — which entry is touched.              |
 | `optimisticUpdate` | —        | Before `queryFn`; Immer recipe on the cached data.                 |
 | `update`           | —        | After success; also gets the server result.                        |
-| `invalidate`       | —        | After success; background SWR refresh of the entry.                |
+| `invalidate`       | —        | After success; invalidates the entry. `true` ≡ `{}`; `{ inFlight }` overrides the resource's policy. |
 
 Timing:
 
@@ -57,7 +57,7 @@ execute(args)
   ├─ queryFn(args, requestId)
   ├─ success ─┬─ update       (patch, committed at once)
   │           ├─ commit of the optimistic patches
-  │           └─ invalidate   (resource.refresh(forwardedArgs))
+  │           └─ invalidate   (resource.invalidate(forwardedArgs))
   └─ failure ── abort of the optimistic patches (automatic rollback)
 ```
 
@@ -67,12 +67,12 @@ After a *successful* mutation each phase is isolated: a throwing `update` / `for
 
 ## `forwardArgs` addresses exactly one entry
 
-It maps command args to the resource's args, which are then serialized into a single cache key. `() => undefined` is not a wildcard — it addresses the entry whose args are `undefined`, i.e. the entry of a no-args resource. There is no "invalidate all entries of this resource" in `links`.
+It maps command args to the resource's args, which are then serialized into a single cache key. There is no "invalidate all entries of this resource" in `links` — and since 0.13.0 the return type is `TResArgs`, so `undefined` passes only for a resource whose args are `void`.
 
 Consequences:
 
 - A resource paged by `{ page }` needs a `forwardArgs` per page you intend to touch, or a hand-rolled loop over `getEntries()`.
-- If `forwardArgs` returns args with **no existing entry**, the link silently does nothing: `optimisticUpdate` and `update` call `getEntry(args)` without creating, and `invalidate` calls `refresh(args)`, which no-ops on a missing entry. This is the single most common "my cache did not update".
+- If `forwardArgs` returns args with **no existing entry**, the link silently does nothing: `optimisticUpdate` and `update` call `getEntry(args)` without creating, and `invalidate` never creates one either. This is the single most common "my cache did not update".
 
 ---
 
@@ -81,9 +81,9 @@ Consequences:
 1. **Is there an entry for those args?** `resource.getState(forwardedArgs).status` — `idle` means the link had no target.
 2. **Do the serialized keys match?** Compare `resource.serialize(forwardedArgs)` with the key the component reads. An extra optional field or a `Date` in the args produces a different key.
 3. **Did the command actually succeed?** `update` and `invalidate` only run on success; only `optimisticUpdate` runs before the response.
-4. **Was the entry evicted?** With no subscriber it is gone after `retentionTime` (60 000 ms for resources, `0` for commands).
+4. **Was the entry evicted?** With no holds it is gone after `retentionTime` (60 000 ms for resources, `0` for commands) — but an entry that was never held is never collected.
 5. **Does the recipe mutate the draft?** `optimisticUpdate` / `update` are Immer recipes — mutate `draft`, do not return a new value.
-6. **Was the entry in a state `refresh` accepts?** `invalidate` calls `resource.refresh(args)`, which is valid **only** from `success` / `refresh-error`. From `pending`, `refreshing` or `error` it logs `refresh() called in invalid state: …` and does nothing. Subscribers are irrelevant — when the state is valid, `queryFn` re-runs immediately whether or not anything is listening.
+6. **Is the entry held at all?** `invalidate` is [lazy](#lazy-invalidation-and-the-in-flight-policy): an entry nothing holds (no mounted `useResource`, no pending `ensure` / `fetch`, no `entry.hold()`) is only **marked** — the refetch fires on the next hold. For a refresh that must happen now use `fetch` / `prefetch(args, { force: true })`.
 
 ---
 
@@ -99,30 +99,50 @@ handle?.abort();   // roll back via the inverse patch
 
 An uncommitted handle keeps `patchState` alive forever, so `data` never reconciles with the server and snapshots fall back to `originalData`. Always settle it — this is what `links` does for you.
 
-While any patch is pending the machine state carries `patchState`: `originalData` (untouched server data), the patch stack, and `isConsistencyViolation`. Patches are replayed on top of fresh data whenever a refresh lands. If a replay cannot be resolved, `isConsistencyViolation` is set, the stack is cleared and the entry auto-invalidates.
+While any patch is pending the entry state carries `patchState`: `originalData` (untouched server data), the patch stack, and `isConsistencyViolation`. Patches are replayed on top of fresh data whenever a revalidation lands. If a replay cannot be resolved, `isConsistencyViolation` is set, the stack is cleared and the entry invalidates itself.
 
 ---
 
-## Staleness and eviction
+## Staleness, holds and eviction
+
+An entry lives by **holds**: a mounted `useResource`, a pending `ensure` / `fetch`, an `entry.obs` subscription, or an explicit `entry.hold()` (returns an idempotent release). An entry with no holds is "melting" (`entry.isMelting`) and is collected after `retentionTime` — but the timer only starts when the last hold is released, so an entry that was never held is never collected.
 
 | Cause                                  | Effect                                                                                  |
 |----------------------------------------|-----------------------------------------------------------------------------------------|
-| `link({ invalidate: true })`           | `resource.refresh(args)` after success — background SWR on an existing entry            |
-| `resource.refresh(args)`               | Same, called by hand. No-op with no entry, and from `pending` / `refreshing` / `error`. |
-| `state.refresh()` (hook/agent)         | Refresh of the entry currently observed.                                                |
-| `prefetch(args, { force: true })`      | Refreshes a warm entry, retries a failed one, creates and runs a cold one.              |
+| `link({ invalidate: true })`           | `resource.invalidate(args)` after success — refetch a held entry, mark a melting one    |
+| `resource.invalidate(args)`            | Same, called by hand. Never creates an entry; on an `error` entry it retries with the error cleared. |
+| `state.invalidate()` (hook/clutch)     | Invalidation of the entry currently observed.                                           |
+| `prefetch(args, { force: true })`      | Refetches a warm entry, retries a failed one, creates and runs a cold one.              |
 | `retentionTime` elapsed                | Entry dropped; `$cacheEntryRemoved` resolves and `queryFn` is aborted.                  |
-| `api.resetAll()`                       | Clears every resource and command entry and resets sync state.                          |
+| `api.resetAll()`                       | Clears every resource and command entry, the stored SSR snapshot, and sync state.       |
+
+`retentionTime` accepts a number, `false` (never evict), or `(args, state) => number | false` — evaluated synchronously at each release of the last hold; `Infinity` means no timer, a throw counts as `0`.
+
+---
+
+## Lazy invalidation and the in-flight policy
+
+`invalidate()` — on the resource, the entry, the clutch, or through a link — refetches immediately only an entry someone **holds**. An unheld entry just gets `entry.isInvalidated = true` and refetches when it is next held; the new subscriber's first snapshot already shows the in-flight state. A stale SSR snapshot hydrates the same way: marked, refetched on first hold, not at `createApi` time.
+
+On an entry with a request **in flight** (an open stream counts too), `invalidate()` follows the in-flight policy:
+
+| Mode      | What happens                                                                 |
+|-----------|-------------------------------------------------------------------------------|
+| `cancel` (default) | Aborts the current request (`AbortSignal`) and sends a new one at once — a pre-mutation response cannot settle as fresh. |
+| `trail`   | Lets the current request finish; the refetch goes right after it settles.     |
+| `join`    | No-op — the in-flight result is accepted as the answer to the invalidation.   |
+
+Set it via the resource option `invalidateInFlight`, per call as `invalidate(args, { inFlight })`, or per link as `invalidate: { inFlight }`. Use `join` only when the in-flight request is known to be fresh enough.
 
 ---
 
 ## Pitfalls
 
-- ❌ Expecting `forwardArgs: () => undefined` to hit every entry — it hits the `undefined`-args entry only.
+- ❌ Expecting `forwardArgs: () => undefined` to hit every entry — it hits the `undefined`-args entry only (and no longer type-checks for a resource with non-`void` args).
 - ❌ Returning a value from an `optimisticUpdate` / `update` recipe instead of mutating `draft`.
 - ❌ Calling `entry.createPatch(...)` and never `commit()` / `abort()`.
 - ❌ Args carrying a `Map` / `Set` / `RegExp` under the default `serializeArgs` — each serializes to `{}`, so every value shares one entry.
-- ❌ Assuming `invalidate` always refetches — it is a silent no-op when the entry is missing or sits in `pending` / `refreshing` / `error`. When the state is valid it refetches at once, subscribers or not.
+- ❌ Assuming `invalidate` always refetches — it refetches at once only a **held** entry; an unheld one is marked and refetched on its next hold.
 - ✅ Combine `optimisticUpdate` with `invalidate: true` when you want instant feedback plus server reconciliation.
 - ✅ One `link({ … })` call per affected resource; several calls inside one `links` callback is the normal shape.
 - ✅ Check `serialize(args)` on both sides when a link appears inert.

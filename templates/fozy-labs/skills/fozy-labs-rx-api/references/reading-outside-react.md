@@ -2,7 +2,7 @@
 
 Imperative and reactive reads from stores, route loaders, workers, Node and tests.
 
-**Contents:** [Which method starts a query](#which-method-starts-a-query) · [Keepalive and the retention window](#keepalive-and-the-retention-window) · [Router loaders and warm-ups](#router-loaders-and-warm-ups) · [Synchronous state](#synchronous-state-no-subscription) · [Reactive reads](#reactive-reads-in-a-store) · [`createAgent()`](#createagent--a-reactive-observer-with-swr) · [Which one to use](#which-one-to-use)
+**Contents:** [Which method starts a query](#which-method-starts-a-query) · [Keepalive and the retention window](#keepalive-and-the-retention-window) · [Router loaders and warm-ups](#router-loaders-and-warm-ups) · [Synchronous state](#synchronous-state-no-subscription) · [Reactive reads](#reactive-reads-in-a-store) · [`createClutch()`](#createclutch--a-reactive-observer-with-swr) · [Which one to use](#which-one-to-use)
 
 ---
 
@@ -11,23 +11,25 @@ Imperative and reactive reads from stores, route loaders, workers, Node and test
 Every entry point below addresses the same cache entry (one per serialized args). They differ in what they do
 to an entry that already exists, what comes back, and whether a failure is visible.
 
-| Call                             | No entry yet    | Entry holds data                    | Entry in `error`      | Returns            | Abort-aware | On failure          |
-|----------------------------------|-----------------|-------------------------------------|-----------------------|--------------------|-------------|---------------------|
-| `ensure(args, opts?)`            | creates + waits | resolves at once (stale data too)   | **retries**, waits    | `Promise<TData>`   | yes         | rejects             |
-| `fetch(args, opts?)`             | creates + waits | refreshes, waits for the new result | **retries**, waits    | `Promise<TData>`   | yes         | rejects             |
-| `prefetch(args)`                 | creates + waits | resolves at once                    | **retries**           | `Promise<void>`    | no          | swallowed           |
-| `prefetch(args, { force: true })`| creates + waits | refreshes                           | **retries**           | `Promise<void>`    | no          | swallowed           |
-| `getEntry(args, true)`           | creates + runs  | returns it untouched                | left alone            | `IQueryCacheEntry` | no          | lands in entry state |
-| `refresh(args)`                  | **never**       | marks stale + re-runs               | no-op + console warn  | `void`             | no          | → `refresh-error`   |
+| Call                             | No entry yet    | Entry holds data                          | Entry in `error`                | Returns            | Abort-aware | On failure          |
+|----------------------------------|-----------------|-------------------------------------------|---------------------------------|--------------------|-------------|---------------------|
+| `ensure(args, opts?)`            | creates + waits | resolves at once (stale data too)         | **retries**, waits              | `Promise<TData>`   | yes         | rejects             |
+| `fetch(args, opts?)`             | creates + waits | refetches, waits for the new result       | **retries**, waits              | `Promise<TData>`   | yes         | rejects             |
+| `prefetch(args)`                 | creates + waits | resolves at once                          | **retries**                     | `Promise<void>`    | no          | swallowed           |
+| `prefetch(args, { force: true })`| creates + waits | refetches                                 | **retries**                     | `Promise<void>`    | no          | swallowed           |
+| `getEntry(args, true)`           | creates + runs  | returns it untouched                      | left alone                      | `IQueryCacheEntry` | no          | lands in entry state |
+| `invalidate(args)`               | **never**       | held → refetch now; unheld → **mark**, refetch on next hold | **retries**, error cleared | `void`    | no          | → `invalidate-error` |
 
 - `prefetch` **is** `ensure` (or `fetch`, with `force`) with the outcome swallowed — same entry creation, same
   retry-on-`error`, a `Promise<void>` that never rejects.
-- `fetch` and `prefetch({ force: true })` on a `pending` / `refreshing` entry join the run already in flight
-  instead of starting a second one.
-- `ensure` / `prefetch` wait for a `pending` entry (it has no data yet) but take the stale data from a
-  `refreshing` one at once.
-- `refresh` is the only one that never creates an entry. It also no-ops (with a `console.warn`) from `pending`,
-  `refreshing` and `error` — it is valid only from `success` / `refresh-error`.
+- `fetch` and `prefetch({ force: true })` on an entry with a request in flight **cancel it by default** and wait
+  for the new one. `{ inFlight: 'trail' }` lets it finish and waits for the next run; `{ inFlight: 'join' }` waits
+  for the current one (the pre-0.13 behaviour).
+- `ensure` / `prefetch` wait for an entry whose request is in flight only while it has no data; with data they
+  resolve at once.
+- `invalidate` is the only one that never creates an entry — and it never fails: it either starts the refetch or
+  sets `entry.isInvalidated`. Use `fetch` / `prefetch(args, { force: true })` when the refresh must happen **now**
+  (a timer over invisible data, a warm-up after a mutation).
 - `getEntry(args, true)` is typed non-null: the `doInitiate: true` overload returns `IQueryCacheEntry`, not
   `IQueryCacheEntry | null`.
 
@@ -47,12 +49,13 @@ to an entry that already exists, what comes back, and whether a failure is visib
 ## Keepalive and the retention window
 
 An entry created outside React has no subscriber until a component mounts, so `retentionTime` (default
-60 000 ms) decides how long the warm-up survives.
+60 000 ms) decides how long the warm-up survives. The option also accepts `(args, state) => number | false`,
+evaluated each time the last hold is released — e.g. evict failed entries at once, keep list pages longer.
 
 `ensure` / `fetch` / `prefetch` hold a keepalive subscription on the entry for the duration of the call —
-**cache hits included** — and release it when the promise settles. With nothing else subscribed that drops the
-refcount to zero, which **restarts the full `retentionTime` countdown**. `getEntry(args, true)` and
-`refresh(args)` never subscribe and never touch the timer.
+**cache hits included** — and release it when the promise settles. With nothing else holding the entry that
+**restarts the full `retentionTime` countdown** (or re-evaluates the function). `getEntry(args, true)` and
+`invalidate(args)` never subscribe and never touch the timer.
 
 Consequence for a periodic warm-up loop:
 
@@ -97,16 +100,18 @@ that.
 
 ```ts
 const state = orderApi.getOrders.getState({ status: "NEW" });
-if (state.isSuccess) console.log(state.data);
+if (state.hasData) console.log(state.data);
 ```
 
-`getState` is a read-only snapshot with the same fields and flags as the hook state (`IResourceLiteState`),
-built from `getEntry(args, false)` — it never creates an entry. Its `idle` means "no cache entry", where the
-agent's `idle` means "`SKIP`".
+`getState` is a read-only snapshot with the same fields and flags as the hook state (`TResourceEntryState`),
+with `dataSource` narrowed to `'none' | 'current'` and no methods — built from `getEntry(args, false)`, so it
+never creates an entry and never holds one. Its `idle` means "no cache entry", where the clutch's `idle` means
+"`SKIP`". An `isPending` / `isInvalidating` here can also mean "a refetch is owed" rather than in flight: an
+entry whose request was cancelled with no holds keeps its status until the next hold.
 
 Other pure accessors: `serialize(args)` → the cache key string, `toKeyed(args)` → a `{ value, key }` pair you
 can pass back to any method to skip re-serialization, `getEntries()` → an iterator over live entries,
-`pack(args)` → an inert `{ kind: "resource", resource, args }` descriptor that executes nothing.
+`bind(args)` → an inert `{ kind: "resource", resource, args }` descriptor that executes nothing.
 
 ---
 
@@ -124,16 +129,16 @@ export class OrderListStore {
   private _entry$ = Signal.compute(() => this._api.getOrders.getEntry$({ status: this.status$() })());
 
   count$ = Signal.compute(() => {
-    const machine = this._entry$()?.machine$();
+    const state = this._entry$()?.state$();
     // `data` exists only on the data-bearing variants — narrow on `status` first.
-    return machine?.status === "success" ? machine.data.items.length : 0;
+    return state?.status === "success" ? state.data.items.length : 0;
   });
 }
 ```
 
-`Machine` is a union discriminated by `status`; `state` carries the full `{ status, args, data, error, updatedAt }`
-shape, and `data` / `updatedAt` / `patchState` are direct getters on the `success` / `refreshing` /
-`refresh-error` variants only.
+`entry.state$()` is a flat `TQueryEntryState`: `status` (`pending | success | error | invalidating |
+invalidate-error`), `args`, `data`, `error`, `updatedAt`, `patchState`. A retry in flight shows up as
+`pending` / `invalidating` with `error !== null`.
 
 With `doInitiate: false` (the default) the signal is a pure observer: it yields `null` until an entry exists.
 With `doInitiate: true` **reading the signal creates and starts the entry**, fires `onCacheEntryAdded` /
@@ -141,38 +146,38 @@ With `doInitiate: true` **reading the signal creates and starts the entry**, fir
 
 ---
 
-## `createAgent()` — a reactive observer with SWR
+## `createClutch()` — a reactive observer with SWR
 
-The agent is what `useResource` is built on. Reach for it when a store needs live `status` / `data` / `error`
+The clutch is what `useResource` is built on. Reach for it when a store needs live `status` / `data` / `error`
 rather than a one-shot value.
 
 ```ts
-const agent = orderApi.getOrders.createAgent();
-agent.set({ status: "NEW" }, true); // choose the args (does not start the query)
-agent.start();                      // begin observing and create/start the entry
+const clutch = orderApi.getOrders.createClutch();
+clutch.switch({ status: "NEW" }, { markPending: true }); // choose the args (does not start the query)
+clutch.start();                                          // begin observing and create/start the entry
 ```
 
 | Member                  | Signature                                     | Notes                                                           |
 |-------------------------|-----------------------------------------------|-----------------------------------------------------------------|
-| `state$`                | `ReadonlySignal<TResourceAgentState<…>>`      | Same union the hook returns.                                    |
-| `set(args, mark?)`      | `(ArgsOrVoidOrSkip<TArgs>, boolean?) => void` | Switches args. `SKIP` → `idle`. Same key = no-op.               |
+| `state$`                | `ReadonlySignal<TResourceClutchState<…>>`     | Same union the hook returns.                                    |
+| `switch(args, opts?)`   | `(TArgsOrVoidOrSkip<TArgs>, { markPending?: boolean }?) => void` | Switches args. `SKIP` → `idle`. Same key = no-op. `markPending` makes an unstarted clutch report `pending` instead of `idle`. |
 | `start()`               | `() => void`                                  | Takes **no arguments**; starts the currently set args.          |
-| `adoptPrevious(source)` | `(IResourceAgent<…>) => void`                 | Takes over `source`'s data as this agent's SWR fallback — for "replace the agent" flows instead of `set`. |
-| `retry()` / `refresh()` | `() => void`                                  | Delegate to the tracked entry; `retry()` marks the run `isRetrying`. |
-| `whenSettled()`         | `() => Promise<void>`                         | Resolves when initial loading ends (either way). Never rejects. |
+| `adoptPrevious(source)` | `(IResourceClutch<…>) => void`                | Takes over `source`'s data as this clutch's SWR fallback — for "replace the clutch" flows instead of `switch`. |
+| `retry()` / `invalidate(opts?)` | `() => void` / `(opts?: { inFlight?: TInFlightPolicy }) => void` | Delegate to the tracked entry; `retry()` keeps the error on screen, `invalidate()` clears it. |
+| `whenSettled(opts?)`    | `({ waitForDone?: boolean }?) => Promise<void>` | Resolves when there is something to render (any data, or an error with nothing to show); `waitForDone: true` waits for "no request in flight" instead. Never rejects. |
 | `args`                  | `TArgs \| null` (getter)                      | Currently observed args.                                        |
 
-`start()` and a post-start `set()` go through `getEntry(args, true)`: a warm entry is reused as-is, never
+`start()` and a post-start `switch()` go through `getEntry(args, true)`: a warm entry is reused as-is, never
 re-fetched. No explicit teardown is needed — the internal signals deactivate when their last subscriber
-leaves. On an args change the agent keeps the previous entry's data as the stale SWR fallback — surfaced as
-`refreshing` with `isSwitching: true` and `dataArgs` pointing at the previous args.
+leaves. On an args change the clutch keeps the previous entry's data as the stale SWR fallback — surfaced as
+`pending` with `isSwitching: true` and `dataArgs` pointing at the previous args.
 
-`adoptPrevious(source)` is the same fallback for the case where a store creates a **new** agent per args instead of
-calling `set` on a live one (that is how the React hooks work): it copies `source`'s current entry when it holds data
-(`success` / `refreshing` / `refresh-error`), otherwise `source`'s own previous slot. `source` is read once and not
-retained. Call it right after `createAgent()`, before `set` and `start()`.
+`adoptPrevious(source)` is the same fallback for the case where a store creates a **new** clutch per args instead of
+calling `switch` on a live one (that is how the React hooks work): it copies `source`'s current entry when it holds data
+(`success` / `invalidating` / `invalidate-error`), otherwise `source`'s own previous slot. `source` is read once and not
+retained; a `placeholderData` memo is not carried over. Call it right after `createClutch()`, before `switch` and `start()`.
 
-Ordering matters: `set` before `start`, and `start()` never accepts args.
+Ordering matters: `switch` before `start`, and `start()` never accepts args.
 
 ---
 
@@ -184,18 +189,19 @@ Ordering matters: `set` before `start`, and `start()` never accepts args.
 | Hover / idle warm-up, result unused             | `void prefetch(args)`               |
 | "Give me genuinely fresh data now"              | `fetch(args)`                       |
 | Periodic background refresh, result unused      | `void prefetch(args, { force: true })` |
-| Invalidate an entry someone is already watching | `refresh(args)`                     |
+| Invalidate an entry someone is already watching | `invalidate(args)`                  |
+| Refresh an entry on a timer, watched or not     | `void prefetch(args, { force: true })` |
 | One-off check of what is cached                 | `getState(args)`                    |
-| Store needs to react to loading/error over time | `createAgent()` or `getEntry$`      |
+| Store needs to react to loading/error over time | `createClutch()` or `getEntry$`     |
 
 ---
 
 ## Pitfalls
 
-- ❌ `agent.start(args)` — `start` takes no arguments; call `set(args, true)` first.
+- ❌ `clutch.start(args)` — `start` takes no arguments; call `switch(args, { markPending: true })` first.
 - ❌ `getEntry$(args, true)` inside a React render or any other pure read — it starts a query as a side effect.
-- ❌ Relying on `refresh(args)` to load data that was never fetched — it no-ops on a missing entry, and also
-  from `pending` / `refreshing` / `error`.
+- ❌ Relying on `invalidate(args)` to refresh an unwatched entry — with no holds it only marks the entry, and the
+  request fires on the next hold. Use `fetch` / `prefetch(args, { force: true })` for a refresh that must happen now.
 - ❌ A `prefetch(args)` loop as a poller — it re-arms retention on every hit and never refetches; pass
   `{ force: true }`.
 - ❌ `try/catch` around `prefetch` — it never rejects; read `getState(args)` to find out what happened.

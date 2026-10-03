@@ -5,7 +5,7 @@ exists, and instrumenting every individual query run.
 
 Both are accepted at two levels — on `createApi(...)` (api-wide) and on `createResource` / `createCommand` (local).
 
-**Contents:** [`onCacheEntryAdded`](#oncacheentryadded--once-per-cache-entry) · [`onQueryStarted`](#onquerystarted--once-per-query-run) · [`composeHooks`](#composehooks--several-hooks-on-one-option) · [Both levels run](#both-levels-run) · [Polling and retry](#not-a-substitute-for-polling-or-retry)
+**Contents:** [`onCacheEntryAdded`](#oncacheentryadded--once-per-cache-entry) · [`onQueryStarted`](#onquerystarted--once-per-query-run) · [Hook arrays](#hook-arrays--several-hooks-on-one-option) · [Both levels run](#both-levels-run) · [Polling and retry](#not-a-substitute-for-polling-or-retry)
 
 ---
 
@@ -71,25 +71,24 @@ await is therefore harmless, but a resource you opened in the hook leaks unless 
 
 ---
 
-## `composeHooks` — several hooks on one option
+## Hook arrays — several hooks on one option
 
-`composeHooks(...hooks)` merges hooks of one kind into one, for stacking independent behaviours (logging, optimistic
+Both options accept a single hook or an **array of hooks**, for stacking independent behaviours (logging, optimistic
 updates, metrics) on a single option:
 
 ```ts
-import { composeHooks } from "@fozy-labs/rx-toolkit";
-
 getUser = api.createResource({
   queryFn: (id: number): Promise<User> => fetchUser(id),
-  onQueryStarted: composeHooks(logQueryStarted, warmRelatedCaches),
+  onQueryStarted: [logQueryStarted, isDev && collectMetrics],
 });
 ```
 
-- `undefined` arguments are skipped; a single remaining hook is returned as-is, none — `undefined`.
+- Falsy elements (`undefined`, `false`) are skipped, so a conditional hook is written inline in the array.
 - All hooks **start simultaneously** (completion order not guaranteed) and each one's error is suppressed
-  independently. The api merges api-level and local hooks with this same utility.
+  independently. The api merges api-level and local hooks under these same rules.
 - Type-inference limit: with inline un-annotated hooks TS needs `TData` known up front — annotate the `queryFn`
   return type, the hook's `ctx`, or pass the generics explicitly.
+- `composeHooks(...)` from older code does the same thing; it is `@deprecated` and removed in 0.14.0 — pass an array.
 
 ---
 
@@ -113,13 +112,15 @@ export const api = createApi({
 
 ## Not a substitute for polling or retry
 
-The package ships neither. `onCacheEntryAdded` is where you build them: start an interval that calls `refresh(args)`
-and clear it after `$cacheEntryRemoved`. Retry policy belongs inside `queryFn` — see [error-handling.md](error-handling.md).
+The package ships neither. `onCacheEntryAdded` is where you build them: start an interval that calls
+`invalidate(args)` and clear it after `$cacheEntryRemoved`. Retry policy belongs inside `queryFn` — see
+[error-handling.md](error-handling.md).
 
-Use `refresh(args)` here, not `prefetch(args, { force: true })`: `prefetch` re-arms the entry's `retentionTime` on
+Use `invalidate(args)` here, not `prefetch(args, { force: true })`: `prefetch` re-arms the entry's `retentionTime` on
 every call, so a poll faster than the retention window keeps the entry alive forever and `$cacheEntryRemoved` never
-resolves. The trade-off is that `refresh` no-ops (with a console warning) while the entry sits in `pending`,
-`refreshing` or `error` — a tick that lands there is simply skipped.
+resolves. The trade-off is that `invalidate` only refetches a **held** entry — for polling that is exactly what you
+want: while nothing holds the entry, nothing needs fresh data. A tick that must force the request regardless goes
+through `prefetch(args, { force: true })`.
 
 ---
 

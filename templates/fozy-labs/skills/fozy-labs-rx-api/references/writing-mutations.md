@@ -2,7 +2,7 @@
 
 Declaring a command, running it, and reading its outcome.
 
-**Contents:** [Declaring](#declaring) · [Request id](#the-second-queryfn-argument-is-a-request-id-not-an-abortsignal) · [Running it](#running-it-two-different-contracts) · [Cache keys](#cache-keys-and-shared-state) · [Command state](#command-state) · [`createAgent`](#createagentkey--commands-outside-react) · [`pack`](#packargs-key)
+**Contents:** [Declaring](#declaring) · [Request id](#the-second-queryfn-argument-is-a-request-id-not-an-abortsignal) · [Running it](#running-it-two-different-contracts) · [Cache keys](#cache-keys-and-shared-state) · [Command state](#command-state) · [`createClutch`](#createclutchentrykey--commands-outside-react) · [`bind`](#bindargs-entrykey)
 
 ---
 
@@ -24,7 +24,7 @@ export class OrderApi {
 | `queryFn`                              | **required**          | `(args: TArgs, requestId: string) => Promise<TData>`                     |
 | `key`                                  | —                     | Prefix for cache keys and devtools. Combined with the api's `keyPrefix`. |
 | `links`                                | —                     | Cache wiring — [cache-and-invalidation.md](cache-and-invalidation.md).                              |
-| `retentionTime`                        | `0`                   | ms an entry survives with no subscribers. `false` = never evict.         |
+| `retentionTime`                        | `0`                   | ms an entry survives with no holds. `false` = never evict; `(args, state) => number \| false` decides per entry. |
 | `generateRequestId`                    | `crypto.randomUUID()` | `(args) => string \| Promise<string>`, called once per cache entry.      |
 | `onCacheEntryAdded` / `onQueryStarted` | —                     | Lifecycle hooks — [lifecycle-hooks.md](lifecycle-hooks.md).                                  |
 
@@ -57,7 +57,7 @@ Request id ≠ cache key: the cache key addresses state inside the library, the 
 ## Running it: two different contracts
 
 ```ts
-// 1. Hook / agent `trigger` — envelope. NEVER rejects.
+// 1. Hook / clutch `trigger` — envelope. NEVER rejects.
 const [trigger] = orderApi.createOrder.useCommand();
 const result = await trigger(dto);
 if (result.status === "error") show(result.error);
@@ -78,13 +78,15 @@ Fire-and-forget from a hook needs no defensive `.catch()` — `void trigger(dto)
 
 ## Cache keys and shared state
 
-Every run without an explicit key mints a fresh key (`execute`: timestamp plus a counter; agent/hook `trigger`: `crypto.randomUUID()`), so each call gets its own entry and its own state. Pass the same key to make several consumers observe one mutation:
+Every run without an explicit key mints a fresh random key (built without `crypto.randomUUID` where that is
+unavailable), so each call gets its own entry and its own state. Pass the same key to make several consumers
+observe one mutation:
 
 ```ts
 await orderApi.createOrder.execute(dto, "checkout");                  // imperative
 const [trigger, state] = orderApi.createOrder.useCommand("checkout"); // hook binds at hook level
-const agent = orderApi.createOrder.createAgent("checkout");           // agent binds at construction
-agent.setKey("checkout-retry");                                       // or later
+const clutch = orderApi.createOrder.createClutch("checkout");         // clutch binds at construction
+clutch.setEntryKey("checkout-retry");                                 // or later
 ```
 
 Re-running an existing key **completes the previous entry first**. If that mutation was still in flight, its promise rejects with `CacheEntryRemovedError` (passed through `mapError`) — see [error-handling.md](error-handling.md).
@@ -93,51 +95,51 @@ Re-running an existing key **completes the previous entry first**. If that mutat
 
 ## Command state
 
-`useCommand` / `agent.state$` yield `TCommandAgentState`, a discriminated union on `status`:
+`useCommand` / `clutch.state$` yield `TCommandClutchState`, a discriminated union on `status` and `hasError`:
 
-| `status`  | `data`             | `error`            | `isLoading` | `isSuccess` | `isError` |
-|-----------|--------------------|--------------------|-------------|-------------|-----------|
-| `idle`    | `null`             | `null`             | —           | —           | —         |
-| `pending` | `TData \| null`¹   | `TError \| null`¹  | ✅           | —           | —         |
-| `success` | `TData`            | `null`             | —           | ✅           | —         |
-| `error`   | `null`             | `TError`           | —           | —           | ✅         |
+| `status`  | `data`             | `error`            | `isPending` | `hasData` | `hasError` |
+|-----------|--------------------|--------------------|-------------|-----------|------------|
+| `idle`    | `null`             | `null`             | —           | —         | —          |
+| `pending` | `null`             | `null`¹            | ✅           | —         | —¹         |
+| `success` | `TData`            | `null`             | —           | ✅         | —          |
+| `error`   | `null`             | `TError`           | —           | —         | ✅          |
 
-¹ Normally `null`; they only carry stale values when a manually refreshed command entry is defensively remapped to `pending`.
+¹ `pending` never carries data (`data` is strictly `null`): a re-run creates a new entry, so nothing stale is kept. A retry in flight is `isPending && hasError` — the failure being retried stays in `error` until the run settles.
 
 Every variant also carries `retry()`.
 
 ```tsx
-const [pay, { isLoading, isError, error, retry }] = orderApi.payOrder.useCommand();
+const [pay, { isPending, hasError, error, retry }] = orderApi.payOrder.useCommand();
 
-if (isError) return <Failed error={error} onRetry={retry} />;
-return <Button disabled={isLoading} onPress={() => pay({ orderId })}>Pay</Button>;
+if (hasError) return <Failed error={error} onRetry={retry} busy={isPending} />;
+return <Button disabled={isPending} onPress={() => pay({ orderId })}>Pay</Button>;
 ```
 
 `retry()` re-runs the tracked entry — no new entry, same request id. It is a no-op outside `error`. A second run (`execute` / hook `trigger`) instead creates a new entry with a new id.
 
 ---
 
-## `createAgent(key?)` — commands outside React
+## `createClutch(entryKey?)` — commands outside React
 
 ```ts
-const agent = orderApi.createOrder.createAgent("checkout");
-const result = await agent.trigger(dto);        // envelope, same as the hook
-agent.state$();                                  // TCommandAgentState
-agent.retry();
+const clutch = orderApi.createOrder.createClutch("checkout");
+const result = await clutch.trigger(dto);       // envelope, same as the hook
+clutch.state$();                                // TCommandClutchState
+clutch.retry();
 ```
 
-The argument is a **string key**, not an options object. There is no SWR and no `SKIP` on command agents — mutations only run when you ask.
+The argument is a **string entry key**, not an options object. There is no SWR and no `SKIP` on command clutches — mutations only run when you ask. Without a key each `trigger` mints a fresh one and the clutch follows the **latest** run; a fixed binding is `createClutch(entryKey)` or `setEntryKey(entryKey)`.
 
 ---
 
-## `pack(args, key?)`
+## `bind(args, entryKey?)`
 
-An inert `{ kind: "command", command, args, key }` descriptor that runs nothing. Together with `TPackedResource` it forms `TPacked`, discriminated on `kind`, so one dispatcher can accept reads and writes:
+An inert `{ kind: "command", command, args, entryKey }` descriptor that runs nothing. Together with `TBoundResource` it forms `TBound`, discriminated on `kind`, so one dispatcher can accept reads and writes:
 
 ```ts
-function run(packed: TPacked<unknown, unknown>) {
-  if (packed.kind === "resource") void packed.resource.prefetch(packed.args);
-  else void packed.command.execute(packed.args, packed.key).catch(() => {}); // execute rejects
+function run(bound: TBound<unknown, unknown>) {
+  if (bound.kind === "resource") void bound.resource.prefetch(bound.args);
+  else void bound.command.execute(bound.args, bound.entryKey).catch(() => {}); // execute rejects
 }
 ```
 
@@ -146,10 +148,10 @@ function run(packed: TPacked<unknown, unknown>) {
 ## Pitfalls
 
 - ❌ Treating the second `queryFn` argument as an `AbortSignal` — commands never receive one.
-- ❌ `try/catch` around hook or agent `trigger` — dead code; the envelope never rejects.
+- ❌ `try/catch` around hook or clutch `trigger` — dead code; the envelope never rejects.
 - ❌ Leaving `command.execute(...)` unhandled at a fire-and-forget call site — unlike the hook trigger, it rejects.
 - ❌ Forgetting `.unwrap()` and then reading `result.id` — `result` is the envelope, not the data.
-- ❌ `createAgent({ key })` — the parameter is a bare string.
+- ❌ `createClutch({ key })` — the parameter is a bare string.
 - ❌ `sync: true` on a command expecting cross-tab propagation — commands are not synced.
 - ✅ Forward `requestId` to the backend for anything non-idempotent; otherwise `retry()` can double-charge.
 - ✅ Use an explicit key when two places must see one mutation; leave it out for independent calls.

@@ -3,33 +3,68 @@
 The last two releases that require code changes. Read this only when working in a codebase written against an older
 version, or when an unfamiliar name shows up in existing code.
 
-**Contents:** [0.10.x → 0.11.x](#010x--011x--execute--prefetch) · [0.9.x → 0.10.0](#09x--0100--the-trigger-envelope) · [Name lookup](#name-lookup)
+**Contents:** [0.12.x → 0.13.0](#012x--0130--the-query-dictionary-and-the-state-shape) · [0.10.x → 0.11.x](#010x--011x--execute--prefetch) · [Name lookup](#name-lookup)
+
+---
+
+## 0.12.x → 0.13.0 — the Query dictionary and the state shape
+
+Breaking release. Old names live on as `@deprecated` aliases until 0.14.0 — **except** the state shape, the removed
+`Machine*` classes and the already-deprecated `trigger` / `signalize`, which are gone with no alias. The package's own
+guide (`docs/migrations/0.13.0.md` in the repo) walks a codebase through it; this table is for reading old code.
+
+| Old (0.12.x) | Current | Notes |
+|--------------|---------|-------|
+| `createAgent()` | `createClutch()` | `IResourceAgent` / `ICommandAgent` → `IResourceClutch` / `ICommandClutch` |
+| `agent.set(args)` / `set(args, true)` | `clutch.switch(args)` / `switch(args, { markPending: true })` | |
+| `agent.setKey(key)` | `clutch.setEntryKey(entryKey)` | |
+| `refresh()` everywhere — resource, entry, clutch, state, infinite feed | `invalidate()` | different semantics — see the traps below |
+| `pack(args)` / `pack(args, key?)` | `bind(args)` / `bind(args, entryKey?)` | descriptor field `.key` → `.entryKey`, **no alias** — a missed read silently mints a fresh key per run |
+| `composeHooks(a, b)` | `onQueryStarted: [a, b]` | falsy elements are skipped |
+| `entry.machine$()` | `entry.state$()` — a **flat** `TQueryEntryState` | `.state$().state.status` → `.state$().status`, no alias |
+| `instanceof MachineSuccess`, `initialMachine: Machine.fromSnapshot(...)` | `state.status === 'success'`, `initialState: { status, args, data, error, updatedAt, patchState }` | `Machine*` classes removed |
+| `TPacked*` | `TBound*` | |
+| `TResourceAgentState` / `TCommandAgentState` / `IResourceLiteState` | `TResourceClutchState` / `TCommandClutchState` / `TResourceEntryState` | |
+| `command.trigger(args, key?)` | `command.execute(args, entryKey?)` | deprecated in 0.11, **removed** here |
+| `resource.trigger(args)` | `prefetch(args)` / `prefetch(args, { force: true })` | removed |
+
+Flags and statuses with **no alias** (a compile error in typed code, a silent `undefined` behind `any`):
+
+| Old | Read it as |
+|-----|------------|
+| `isLoading` | `isPending` |
+| `isRefreshing` | `isInvalidating \|\| isSwitching` |
+| `isRefreshError`, `status === 'refresh-error'` | `status === 'error' && dataSource === 'current'` |
+| `status === 'refreshing'` | `isPending && hasData` |
+| `isSuccess` / `isError` | `status === 'success'` / `status === 'error'` — for rendering use `hasData` / `hasError` |
+| `isRetrying` | `isPending && hasError` |
+| `isFetchingNext` (infinite feed) | `isLoadingNext` |
+| `data !== null` as the "loaded" check | `hasData` |
+
+Two behavior traps a mechanical rename walks into:
+
+1. **Invalidation is lazy now.** `refresh(args)` always sent the request; `invalidate(args)` refetches at once only
+   a **held** entry and merely marks an unheld one (refetch on next hold). Cache warm-up after a mutation and timers
+   over invisible data move to `fetch` / `prefetch(args, { force: true })`.
+2. **`invalidate()` on a failed entry retries it** with the error cleared, where `refresh()` logged a warning and did
+   nothing. A blind interval/focus invalidation now re-requests failed entries.
+
+Also in this release: `placeholderData` (synthesized data for uncached args), `entry.hold()` + `isMelting` /
+`isInvalidated`, `retentionTime` as a function, hook arrays, `augmentApi` for plugins, the `unstable_FormSignal`
+forms module, snapshots v2. All covered by the skill's main files.
 
 ---
 
 ## 0.10.x → 0.11.x — `execute` / `prefetch`
 
 The release unifies the vocabulary for "start this query": `trigger` used to mean three different contracts, so it is
-gone from both primitives.
+gone from both primitives. (Both names were then removed for good in 0.13.0 — see above.)
 
 | Level                          | Old (0.10.x)                           | Current                                 |
 |--------------------------------|----------------------------------------|-----------------------------------------|
-| `Command` (core)               | `trigger(args, key?)` → raw promise    | `execute(args, key?)` — same contract   |
-| `CommandAgent` / `useCommand`  | `trigger(args)` → envelope             | unchanged                               |
+| `Command` (core)               | `trigger(args, key?)` → raw promise    | `execute(args, entryKey?)` — same contract |
+| `CommandAgent` / `useCommand`  | `trigger(args)` → envelope             | unchanged (the clutch keeps the name `trigger`) |
 | `Resource`                     | `trigger(args, doForce?)` → `void`     | `prefetch(args)` / `prefetch(args, { force: true })` |
-
-Both old names still exist, marked `@deprecated`.
-
-### `Command.trigger` → `Command.execute`
-
-A pure rename — raw `Promise<TData>`, rejects, goes through `mapError`.
-
-```ts
-await createOrder.trigger(dto, "checkout");   // old
-await createOrder.execute(dto, "checkout");   // current
-```
-
-The agent/hook `trigger` is a **different method** and is not deprecated; it still returns the non-rejecting envelope.
 
 ### `Resource.trigger` → `prefetch`
 
@@ -39,13 +74,13 @@ The differences bite in two places.
 | Entry state       | `trigger(args)` | `trigger(args, true)`                    | `prefetch(args)`      | `prefetch(args, { force: true })` |
 |-------------------|-----------------|------------------------------------------|-----------------------|-----------------------------------|
 | absent            | creates + runs  | creates + runs                           | creates + runs, waits | creates + runs, waits             |
-| holds data        | no-op           | `refresh()`                              | resolves at once      | `refresh()`, waits for fresh      |
+| holds data        | no-op           | `refresh()`                              | resolves at once      | `invalidate()`, waits for fresh   |
 | **`error`**       | **no-op**       | **no-op** + console warning              | **retries**           | **retries**                       |
 | **`retentionTime`** | untouched     | untouched                                | **re-armed**          | **re-armed**                      |
 
 1. **A failed entry is now retried.** Code that deliberately went quiet after an error — a periodic warm-up, say — will
    start repeating the request after a mechanical rename. Guard it:
-   `if (!resource.getState(args).isError) void resource.prefetch(args);`
+   `if (!resource.getState(args).hasError) void resource.prefetch(args);`
 2. **`prefetch` holds a keepalive subscription for the duration of the call, cache hits included**, and releasing it
    restarts the `retentionTime` countdown. A polling loop calling `prefetch(args)` more often than `retentionTime`
    therefore pins the entry forever and — without `force` — never refetches, where `trigger` let it expire and
@@ -53,48 +88,8 @@ The differences bite in two places.
 
 ### Also in this release
 
-- `ensure` / `fetch` / `prefetch` lost their `@experimental` marker — the imperative read API is stable.
-- `getEntry(args, true)` gained an overload typed `IQueryCacheEntry` without `| null`, mirroring `getEntry$`. Runtime
-  behaviour is unchanged, including that it still does **not** retry an `error` entry.
 - `getDevtoolsKey` was **removed** from the resource options. It was dead — nothing ever read it. Delete the option;
   entries are labelled `` `${resourceKey}:${entryKey}` `` with no override.
-
----
-
-## 0.9.x → 0.10.0 — the `trigger` envelope
-
-Agent- and hook-level `trigger` stopped rejecting. It resolves a `TTriggerResult`, discriminated on `status`:
-
-```ts
-type TTriggerResult<TData, TError> =
-  | { status: "success"; data: TData; error?: undefined }
-  | { status: "error"; data?: undefined; error: TError };
-```
-
-Three call sites change.
-
-```ts
-// try/catch became dead code
-try { const data = await trigger(dto); } catch (e) { /* never runs */ }   // old
-const result = await trigger(dto);                                        // current
-if (result.status === "error") show(result.error); else use(result.data);
-
-// throwing semantics, if you want them back
-const data = await trigger(dto).unwrap();
-
-// fire-and-forget no longer needs a defensive catch
-void trigger(dto);
-```
-
-Type annotations mentioning the trigger change from `(args: TArgs) => Promise<TData>` to
-`(args: TArgs) => TTriggerPromise<TData, TError>`.
-
-The core `Command` method was untouched by this release — it kept raw-promise semantics under the name `trigger`, and
-0.11 renamed it to `execute`. `wrapTrigger(promise)` was added here to put a raw promise into the envelope:
-
-```ts
-const result = await wrapTrigger(orderApi.createOrder.execute(dto));
-```
 
 ---
 
@@ -102,18 +97,26 @@ const result = await wrapTrigger(orderApi.createOrder.execute(dto));
 
 | Name in old code                   | Read it as                                  |
 |------------------------------------|---------------------------------------------|
-| `command.trigger(args, key?)`      | `command.execute(args, key?)`               |
-| `resource.trigger(args)`           | `prefetch(args)` — but see the `error` row  |
-| `resource.trigger(args, true)`     | `prefetch(args, { force: true })`           |
-| `getDevtoolsKey`                   | removed, delete it                          |
-| `await trigger(dto)` + `try/catch` | envelope check on `result.status`           |
+| `createAgent` / `agent.set` / `agent.setKey` | `createClutch` / `clutch.switch` / `clutch.setEntryKey` |
+| `refresh(...)` anywhere            | `invalidate(...)` — but see the lazy-invalidation trap |
+| `pack(...)` / `.key` on a descriptor | `bind(...)` / `.entryKey`                    |
+| `composeHooks(...)`                | an array in the option                       |
+| `entry.machine$` / `Machine*`      | `entry.state$()` flat + `state.status`       |
+| `command.trigger(args, key?)`      | `command.execute(args, entryKey?)`           |
+| `resource.trigger(args)`           | `prefetch(args)` — but see the `error` row   |
+| `resource.trigger(args, true)`     | `prefetch(args, { force: true })`            |
+| `isLoading` / `isRefreshing` / `isRefreshError` / `isRetrying` | see the flags table above |
+| `getDevtoolsKey`                   | removed, delete it                           |
+| `await trigger(dto)` + `try/catch` | envelope check on `result.status`            |
 
 ---
 
 ## Pitfalls
 
-- ❌ Renaming `resource.trigger` → `prefetch` mechanically in a polling loop — it stops refetching and pins the entry.
+- ❌ Renaming `refresh` → `invalidate` in a polling loop over invisible data — the entries are unheld, so nothing refetches; use `prefetch(args, { force: true })`.
+- ❌ Grep-renaming `pack` → `bind` and forgetting the descriptor field — `.key` has no alias and silently gives `undefined`.
+- ❌ Renaming `resource.trigger` → `prefetch` in a polling loop — it stops refetching and pins the entry.
 - ❌ Renaming `resource.trigger` → `prefetch` on a path that must stay quiet after a failure — it now retries.
 - ❌ Assuming `command.trigger` and the hook's `trigger` are the same method; only the former was renamed.
-- ✅ Write `execute` and `prefetch` in new code; the old names are kept only for compatibility.
+- ✅ Write the new names in new code; aliases exist only for compatibility and are removed in 0.14.0.
 - ✅ After migrating off `trigger`, check `retentionTime` anywhere a warm-up runs on a timer.

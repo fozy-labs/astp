@@ -10,17 +10,17 @@ description: >
 Declarative cache-aware server state: one cache entry per serialized args, stale-while-revalidate, optimistic updates,
 SSR snapshots.
 Framework-agnostic core; React binds through a plugin.
-Tracks package version **0.12.3**.
+Tracks package version **0.13.0**.
 
 Two primitives:
 
-| Primitive        | Purpose                                                        | Reactive surface                          |
-|------------------|----------------------------------------------------------------|-------------------------------------------|
-| `createResource` | **Read** — cached by args, SWR, invalidated by commands.       | `useResource`, `createAgent`, `getEntry$` |
-| `createCommand`  | **Write** — mutations, optimistic patches, links to resources. | `useCommand`, `createAgent`               |
+| Primitive        | Purpose                                                        | Reactive surface                           |
+|------------------|----------------------------------------------------------------|--------------------------------------------|
+| `createResource` | **Read** — cached by args, SWR, invalidated by commands.       | `useResource`, `createClutch`, `getEntry$` |
+| `createCommand`  | **Write** — mutations, optimistic patches, links to resources. | `useCommand`, `createClutch`               |
 
 The resource/command objects are plain objects, not signals.
-Everything reactive they expose (`state$`, `machine$`, `getEntry$`) is an rx-toolkit signal,
+Everything reactive they expose (`state$`, `getEntry$`) is an rx-toolkit signal,
 so it composes with `Signal.compute` and `useSignal` — see the `fozy-labs-signals` skill.
 
 ---
@@ -44,14 +44,15 @@ export const api = createApi({
 | `keyPrefix`                             | `undefined`       | Prefixed onto every `key` as `` `${keyPrefix}/${key}` ``.          |
 | `plugins`                               | `[]`              | `reactHooksPlugin()` is what adds the `use*` methods.              |
 | `serializeArgs`                         | `stableStringify` | Args → cache key.                                                  |
-| `resourceRetentionTime`                 | `60_000`          | ms an unsubscribed resource entry survives. `false` = never evict. |
+| `resourceRetentionTime`                 | `60_000`          | ms an unsubscribed resource entry survives. `false` = never evict; `(args, state) => number \| false` decides per entry. |
 | `commandRetentionTime`                  | `0`               | Same, for commands.                                                |
 | `mapError`                              | identity          | Normalizes errors and types `TError`.                              |
 | `initialSnapshot` / `snapshotValidTime` | `null` / `false`  | SSR hydration.                                                     |
 | `defaultSync` / `syncDriver`            | `"none"` / —      | Cross-tab sync.                                                    |
-| `onCacheEntryAdded` / `onQueryStarted`  | —                 | Api-wide lifecycle hooks, merged with per-resource ones.           |
+| `onCacheEntryAdded` / `onQueryStarted`  | —                 | Api-wide lifecycle hooks, merged with per-resource ones; accept arrays. |
 
-The instance exposes exactly four members: `createResource`, `createCommand`, `getSnapshot()` and `resetAll()`.
+The instance exposes `createResource`, `createCommand`, `unstable_createProjectionResource`, `getSnapshot()` and
+`resetAll()`; plugins may add members of their own (`augmentApi` — see [references/extending-the-api.md](references/extending-the-api.md)).
 
 ---
 
@@ -74,21 +75,23 @@ export class OrderApi {
 ```
 
 `queryFn` is the only required option; its second argument is an `AbortSignal` — forward it to `fetch`, 
-    the library aborts on args change and on eviction. 
+    the library aborts a superseded request (args change, eviction, the default `cancel` in-flight policy). 
 `key` is optional, but devtools, snapshots and cross-tab sync all address by it.
 A resource `queryFn` may also return an `Observable<TData>` — the entry goes live and updates on every emission
     (WebSocket, SSE); see [references/stream-queries.md](references/stream-queries.md).
 
 ```tsx
 const orderApi = inject(OrderApi);
-const { data, isLoading } = orderApi.getCurrentUser.useResource();
+const { data, isPending } = orderApi.getCurrentUser.useResource();
 const orders = orderApi.getOrders.useResource(status ? { status } : SKIP);
 ```
 
-State is a discriminated union on `status` (`idle | pending | success | error | refreshing | refresh-error`);
-    narrowing on `isSuccess` gives `data: TData` without `| null`. `dataArgs` names the args `data` belongs to;
-    `isSwitching` tells an args change under SWR apart from a `refresh()` of the same entry; `isRetrying` marks a
-    load started by `retry()`.
+State is a discriminated union over three axes: `status` (`idle | pending | success | error`), `dataSource`
+    (`none | placeholder | previous | current`) and `hasError`. Narrow on `hasData` for `data: TData` without
+    `| null`, on `hasError` for `error: TError`. `pending` and `error` both happen **on top of** data already on
+    screen, so `switch (status)` without checking `hasData` first shows a spinner on every invalidation.
+    `dataArgs` names the args `data` belongs to; `isSwitching` tells an args change under SWR apart from an
+    `invalidate()` of the same entry; a retry in flight is `isPending && hasError`.
 
 ---
 
@@ -105,14 +108,14 @@ The second `queryFn` argument is a **request id**,
     not an abort signal — a per-cache-entry idempotency token reused across `retry()`.
 
 ```tsx
-const [createOrder, { isLoading }] = orderApi.createOrder.useCommand();
+const [createOrder, { isPending }] = orderApi.createOrder.useCommand();
 const result = await createOrder(dto); // never rejects
 if (result.status === "error") show(result.error);
 else navigate(result.data.id);
 ```
 
-Hook and agent `trigger` resolve an envelope and never reject (`.unwrap()` restores throwing semantics). 
-The imperative `command.execute(args, key?)` returns a raw `Promise<TData>` that does reject.
+Hook and clutch `trigger` resolve an envelope and never reject (`.unwrap()` restores throwing semantics). 
+The imperative `command.execute(args, entryKey?)` returns a raw `Promise<TData>` that does reject.
 
 ---
 
@@ -130,11 +133,11 @@ setStatus = api.createCommand<UserStatus, User>({
 });
 ```
 
-| Field              | Runs                                                         |
-|--------------------|--------------------------------------------------------------|
-| `optimisticUpdate` | Before `queryFn`; Immer recipe, auto-rolled back on failure. |
-| `update`           | After success; also receives the server result.              |
-| `invalidate: true` | After success; background SWR refresh of the entry.          |
+| Field              | Runs                                                                              |
+|--------------------|-----------------------------------------------------------------------------------|
+| `optimisticUpdate` | Before `queryFn`; Immer recipe, auto-rolled back on failure.                      |
+| `update`           | After success; also receives the server result.                                   |
+| `invalidate: true` | After success; invalidates the entry — a background refetch while it is held.     |
 
 `forwardArgs` is required and selects **exactly one** cache entry. It is not a wildcard: if no entry exists for those
 args, the link silently does nothing.
@@ -146,7 +149,7 @@ args, the link silently does nothing.
 | Expectation                        | Reality                                                                         |
 |------------------------------------|---------------------------------------------------------------------------------|
 | Automatic retry / backoff          | None. `retry()` is manual; put a retry policy inside `queryFn`.                 |
-| Polling / `refetchInterval`        | None. `refresh(args)` from an `onCacheEntryAdded` hook, or `prefetch(args, { force: true })` from your own timer. |
+| Polling / `refetchInterval`        | None. `invalidate(args)` from an `onCacheEntryAdded` hook, or `prefetch(args, { force: true })` from your own timer. |
 | Infinite query / pagination helper | Cursor pagination: none — one entry per page args, SWR keeps the previous page on screen. Id-based collections: `unstable_createProjectionResource` + `useInfiniteResource` (see [references/projection-resource.md](references/projection-resource.md)). |
 | A built-in fetcher                 | None by design — `queryFn` is any function returning `Promise<TData>` (or `Observable<TData>` for streams). |
 
@@ -154,8 +157,10 @@ args, the link silently does nothing.
 
 ## Rules
 
-- ❌ Don't `try/catch` a hook or agent `trigger` — it never rejects; check `result.status` or use `.unwrap()`.
+- ❌ Don't `try/catch` a hook or clutch `trigger` — it never rejects; check `result.status` or use `.unwrap()`.
 - ❌ Don't leave a manual `entry.createPatch(...)` handle uncommitted — a pending patch never reconciles.
+- ❌ Don't test "loaded" with `data !== null` or `data &&` — `TData` may itself be `null`; the check is `hasData`.
+- ✅ Render by `hasData`, report errors by `hasError` — `pending` and `error` can sit on top of shown data.
 - ✅ Use `ensure` / `fetch` when you need the data, `prefetch` when you only want the cache warm.
 - ✅ `SKIP` gates a read until args are ready (`useResource` only — `useSuspenseResource` rejects it).
 
@@ -169,17 +174,18 @@ Load these only when the specific situation applies — do **not** preload.
 |------------------------------------------------------------------------------------|----------------------------------------|
 | Rendering server data — hooks, `SKIP`, state union, Suspense                       | [references/reading-in-react.md](references/reading-in-react.md)       |
 | Deciding what the UI shows per state — skeleton, dimming, error loudness, `invalidate` policy | [references/ui-states.md](references/ui-states.md)         |
-| Reading from stores, route loaders, workers — `ensure`/`fetch`/`prefetch`, agents  | [references/reading-outside-react.md](references/reading-outside-react.md)  |
+| Reading from stores, route loaders, workers — `ensure`/`fetch`/`prefetch`, clutches | [references/reading-outside-react.md](references/reading-outside-react.md)  |
 | Writing a mutation — `execute`, request id, envelope, retry, command cache keys    | [references/writing-mutations.md](references/writing-mutations.md)      |
-| The cache did not update after a mutation — `links`, patches, staleness, eviction  | [references/cache-and-invalidation.md](references/cache-and-invalidation.md) |
+| The cache did not update after a mutation — `links`, patches, lazy invalidation, eviction | [references/cache-and-invalidation.md](references/cache-and-invalidation.md) |
 | Typing `error`, `mapError`, retries, cancellation, `CacheEntryRemovedError`        | [references/error-handling.md](references/error-handling.md)         |
 | Live data — an `Observable` in `queryFn` (WebSocket, SSE), patches over a stream   | [references/stream-queries.md](references/stream-queries.md)        |
 | Loading collections by id lists, per-item cache, infinite feed (`useInfiniteResource`) | [references/projection-resource.md](references/projection-resource.md) |
-| Polling, per-entry teardown, per-run instrumentation, `composeHooks`               | [references/lifecycle-hooks.md](references/lifecycle-hooks.md)        |
+| Polling, per-entry teardown, per-run instrumentation, hook arrays                  | [references/lifecycle-hooks.md](references/lifecycle-hooks.md)        |
+| Building a form — field schemas, validation, submit through a command (`unstable_formsPlugin`) | [references/forms.md](references/forms.md)                 |
 | Writing a custom plugin, devtools, `DefaultOptions`                                | [references/extending-the-api.md](references/extending-the-api.md)      |
 | SSR — serializing a snapshot on the server, hydrating it on the client             | [references/ssr-hydration.md](references/ssr-hydration.md)          |
 | Sharing cache between browser tabs — `syncDriver`, `defaultSync`, custom transports | [references/cross-tab-sync.md](references/cross-tab-sync.md)         |
-| Existing code uses a name this skill does not describe (`trigger`, `getDevtoolsKey`) | [references/migrations.md](references/migrations.md)             |
+| Existing code uses a name this skill does not describe (`createAgent`, `refresh`, `pack`, `trigger`) | [references/migrations.md](references/migrations.md)             |
 
 Pick **one** reading file matching the target environment — loading both the React and the non-React variant of the same
 topic is redundant.

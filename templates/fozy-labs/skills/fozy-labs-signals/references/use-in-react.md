@@ -25,9 +25,13 @@ function CurrentUserWidget() {
 
 - Accepts anything shaped `{ obs, peek }` — every signal type, plus the `unstable_ProxySignal` /
   `unstable_KeyedSignal` controllers ([fine-grained-state.md](fine-grained-state.md)).
-- Implemented as `useSyncExternalStore(subscribe, () => signal$.peek())`. Subscribes on mount, unsubscribes on unmount.
+- Implemented as `useSyncExternalStore(subscribe, () => signal$.peek(), getServerSnapshot)`. Subscribes on mount,
+  unsubscribes on unmount.
 - Re-renders only when the snapshot changes — React compares with `Object.is`.
-- A burst of synchronous writes is coalesced into one `queueMicrotask` notification, so a batch produces one re-render.
+- The subscription is an engine effect that notifies **synchronously, inside the write** — a controlled input keeps
+  its caret (0.12.x coalesced in a microtask and lost it). React still batches the re-renders of one event.
+- A signal whose value is an error (a failed `compute`) rethrows from the hook into the nearest `ErrorBoundary` —
+  the component no longer freezes on an unhandled RxJS error.
 - One hook per field. `useSignal(store.user$)` and `useSignal(store.isAuth$)` re-render independently; a single hook over
   a composite object re-renders on every part of it.
 
@@ -46,9 +50,10 @@ an infinite render loop (`The result of getSnapshot should be cached`).
 
 ### Server rendering
 
-`useSignal` passes no `getServerSnapshot`, so it is **client-only**: React throws `Missing getServerSnapshot, which is
-required for server-rendered content` when rendering on the server or hydrating server-rendered HTML. For data that must
-exist during SSR use `useResource` (`fozy-labs-rx-api`) or pass values down as props.
+`useSignal` passes a `getServerSnapshot` (`signal$.peek()`), so it renders under SSR and hydrates without the
+`Missing getServerSnapshot` crash of 0.12.x. What the server emits is the value the signal holds at render time —
+nothing waits for an async source. For data that must be in the server HTML, prime the source before render (for
+server state, hydrate the query cache from a snapshot — `fozy-labs-rx-api`, `references/ssr-hydration.md`).
 
 ---
 

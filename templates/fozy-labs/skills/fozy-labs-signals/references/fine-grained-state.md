@@ -46,10 +46,13 @@ as on a normal state signal over the whole tree — and adds `mutate(recipe, act
 - Inside a `compute` / `effect`, calling a node subscribes to exactly that path. Outside one it is a plain read.
 - A node under a nullable ancestor (and any array index) is callable with a fallback:
   `ps.root.user.name("")` → `string` instead of `string | undefined`.
-- `root` supports exactly two operations: **navigation** (property access) and **reading** (call). Everything else —
-  `in`, `Object.keys`, spread, `for..of`, `JSON.stringify`, template interpolation, assignment, `delete` — does not
-  reach the state. Assignments in particular are silently ineffective. Use `peek()` for a real snapshot and
-  `mutate` / `set` / `update` to write.
+- Since 0.13, `in` and `Object.keys` also work — they track the node's **key set** (they fire on add/remove of a key,
+  not on a value change).
+- Everything else — spread, `for..of`, `JSON.stringify`, template interpolation — still does not reach the state. Use
+  `peek()` for a real snapshot. A data key named `then` is not a path (a node can be `await`ed or returned from an
+  async function); read it through `peek()`.
+- Direct mutation of the proxy — assignment, `delete`, `defineProperty`, `Object.freeze` — **throws** (0.12.x silently
+  swallowed assignments). Write through `mutate` / `set` / `update`.
 
 ### Writing
 
@@ -77,7 +80,8 @@ const next = produce(base, (draft) => { draft.items[0].done = true; });
 
 `produce` drafts plain objects, arrays and `Map` (its values are draftable); `Set` elements and class instances are
 atomic. The base is never mutated, untouched subtrees keep identity, and a no-op recipe returns the base itself.
-Cyclic structures are not supported.
+Assigning `undefined` (`d.x = undefined`, `arr[i] = undefined`, `map.set(k, undefined)`) works, and returning a key to
+its original value cancels the change — both were broken before 0.13. Cyclic structures are not supported.
 
 ### Lifetime
 

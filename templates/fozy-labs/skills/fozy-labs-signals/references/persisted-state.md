@@ -17,7 +17,7 @@ import { LocalSignal } from "@fozy-labs/rx-toolkit";
 readonly isOpen$ = LocalSignal.state<boolean>({
   key: "filters_panel_open",
   defaultValue: true,
-  zodSchema: z.boolean(),
+  schema: z.boolean(),
   userId: this._session.user$.peek()?.id,
   devtoolsOptions: "FiltersPanelStore/isOpen$",
 });
@@ -31,7 +31,7 @@ isOpen$.clear();    // drop the stored value, fall back to defaultValue
 |-------------------|----------|---------------------------------------------------------------------------------------------------|
 | `key`             | yes      | Slot key. Becomes `` `__LSValue__:${key}` `` — [Storage layout](#storage-layout).                 |
 | `defaultValue`    | yes      | Used when nothing is stored, the stored blob is invalid, or `checkEffect` rejects the value.      |
-| `zodSchema`       | no       | Zod v4 schema validating **this slot's** value at construction.                                   |
+| `schema`          | no       | Any synchronous **Standard Schema** (Zod, Valibot, ArkType) validating **this slot's** value at construction. `zod` is no longer a peer dependency — pass Zod schemas as-is. |
 | `userId`          | no       | Puts the value in its own per-user slot. Omit only for genuinely anonymous state.                 |
 | `checkEffect`     | no       | `(value) => boolean` — a **read-time** filter; [Hydration and bad data](#hydration-and-bad-data). |
 | `driver`          | no       | `StorageLike`. Defaults to `localStorage` when reachable.                                         |
@@ -76,12 +76,17 @@ strictly alone — that session does not wipe, sweep, self-heal or re-touch anyt
 
 Hydration is **synchronous and one-shot** — the slot is read in the constructor and never re-read.
 
-A slot that fails to parse, is not a valid envelope, or fails `zodSchema` falls back to `defaultValue`, logs a
+A slot that fails to parse, is not a valid envelope, or fails `schema` falls back to `defaultValue`, logs a
 `console.warn`, and is **removed** (self-heal), so it cannot resurface. Self-heal is skipped when a newer format owns
 the namespace, and is best-effort: a storage that rejects writes never breaks a read or a constructor.
 
-- ✅ Always pass `zodSchema`, and version it via `key` when the shape changes.
+- ✅ Always pass `schema`, and version it via `key` when the shape changes.
 - ✅ `set` / `update` / `clear` work over a corrupt entry and simply overwrite it.
+- An **async** schema (e.g. a Zod `.refine(async …)`) logs `console.error`; the stored value is ignored and the slot
+  stays.
+- Values written through `set()` are stored as the schema's **output** and trusted on load without re-validation —
+  a transforming schema (`transform`, `z.date()`, coercion) no longer rejects the signal's own writes, and `Date`
+  survives storage. Only data written by other code is validated.
 
 ### `checkEffect`
 
@@ -97,7 +102,7 @@ readonly sort$ = LocalSignal.state<SortKey>({
 
 If it returns `false` the signal yields `defaultValue` — the stored value is **not** removed and will be re-evaluated on
 the next read. Use it for values whose validity depends on runtime state (a feature flag, a permission) rather than on
-shape; shape belongs in `zodSchema`.
+shape; shape belongs in `schema`.
 
 ---
 
@@ -109,8 +114,8 @@ long-logged-out users' data disappears.
 | Knob                                  | Default   | Meaning                                                     |
 |---------------------------------------|-----------|-------------------------------------------------------------|
 | `gc: false` / `{ enabled: false }`    | —         | Slot is exempt; never auto-removed.                         |
-| `gc: { maxUnreadTime: ms }`           | 60 days   | Per-slot lifetime.                                          |
-| `LocalSignal.GC_OPTIONS.checkInterval`| 1 week    | How often a sweep is due.                                   |
+| `gc: { maxUnreadTime: ms }`           | 60 days   | Per-slot lifetime — a positive number. `Infinity` ≡ `false` (exempt); `0`, negative or `NaN` logs a warning and keeps the default. |
+| `LocalSignal.GC_OPTIONS.checkInterval`| 1 week    | How often a sweep is due. `Infinity` disables the sweep.    |
 | `LocalSignal.GC_OPTIONS.randomOffset` | 1 hour    | Random start spread — used instead of cross-tab locking.    |
 | `LocalSignal.GC_OPTIONS.syncLimit`    | 20        | Keys per synchronous slice; the sweep yields between slices.|
 
@@ -118,6 +123,9 @@ long-logged-out users' data disappears.
   engine never loses the reference. Defaults, `maxUnreadTime` included, are exported as `LOCAL_STATE_GC_DEFAULTS`.
 - A slot with a live instance in this session is **re-touched, never expired** — including against sweeps from other
   tabs. Reads also refresh `at`, throttled to `min(checkInterval, ttl / 2)`.
+- A changed `gc` policy reaches an already-stored slot at load time, and every tab's GC applies it at once.
+- If the namespace meta disappears mid-session (`localStorage.clear()` on logout), the next slot write restores it,
+  and values written after the clear survive the reload.
 - Tabs coordinate lock-free through `nextGcAt` in the meta key: first to fire claims the next deadline, then sweeps.
 - GC requires key enumeration on the driver (`keys(): string[]`, or `length` + `key(i)`). Without it everything else
   still works — there is simply no sweep and no wipe.
@@ -156,11 +164,11 @@ LocalSignal.DEFAULT_DRIVER = memoryDriver();
 
 ## Pitfalls
 
-- ✅ Pass `zodSchema`, and a `driver` with `keys()` in Node / tests.
+- ✅ Pass `schema`, and a `driver` with `keys()` in Node / tests.
 - ✅ `gc: false` for anything that must outlive 60 idle days (a licence key, an onboarding flag).
 - ✅ Reuse one driver instance app-wide; do not build one per component.
 - ❌ Don't expect cross-tab **reactivity**: nothing listens to the `storage` event, so another tab's write is invisible
   until the next construction. That is separate from writes not destroying each other, which they do not.
 - ❌ Don't rely on persisted data surviving a package upgrade that bumps the storage format — it is wiped, not migrated.
 - ❌ Don't look for `dispose()`; `LocalStateSignal` has none.
-- ❌ Don't store secrets: `zod` validates shape, not trust, and the blob is plain `localStorage`.
+- ❌ Don't store secrets: the schema validates shape, not trust, and the blob is plain `localStorage`.

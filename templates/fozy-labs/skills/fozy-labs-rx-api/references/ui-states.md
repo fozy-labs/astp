@@ -1,6 +1,6 @@
 # UI states — what to render per state
 
-A recommended baseline for UX over `useResource` / agent state.
+A recommended baseline for UX over `useResource` / clutch state.
 It is a starting point the implementer adapts to the place; the component set is the project's, not this document's.
 
 **Contents:** [Inventory first](#inventory-first) · [Baseline per state](#baseline-per-state) · [Links: optimistic vs invalidate](#links-optimistic-vs-invalidate) · [Error loudness](#error-loudness) · [Profiles](#profiles) · [Pitfalls](#pitfalls)
@@ -20,19 +20,20 @@ Before wiring flags to components, find what the project already has. Three comm
 
 ## Baseline per state
 
-Flags are the [state union](reading-in-react.md#the-state-union); `error` vs `refresh-error` is in
+Flags are the [state shape](reading-in-react.md#the-state-shape); which failure sits in `error` is in
 [error-handling.md](error-handling.md#where-a-failure-shows-up).
 
 | State                                          | Condition                                     | "Default"                                                                                                                                                           |
 |------------------------------------------------|-----------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Initial load                                   | `isInitialLoading` (or the Suspense fallback) | Skeleton in the shape of the content                                                                                                                                |
+| Placeholder                                    | `dataSource === 'placeholder'`                | Render as data; it is synthesized, never cached — do not treat it as a server response                                                                              |
 | Switching — new args behind old data           | `isSwitching`                                 | Keep the data, lower its emphasis (dim / muted colours)                                                                                                             |
-| Reloading — `refresh()`, `invalidate`, polling | `isRefreshing && !isSwitching`                | Nothing — the data is still valid                                                                                                                                   |
-| Retrying                                       | `isRetrying`                                  | Same as the state it lands in: Initial load, Switching or Reloading ([retry cases](reading-in-react.md#the-state-union))                                            |
-| Error, no data                                 | `isError && data === null`                    | By consequence — [Error loudness](#error-loudness). Always a retry affordance (`state.retry`)                                                                       |
-| Error, stale data                              | `isError && !isRefreshError && data !== null` | The error surface for `args`, as above; `data` belongs to `dataArgs`, not to the failed request: dimmed behind the error at most, never shown as the current result |
-| Refresh error — data on screen                 | `isRefreshError`                              | Keep the data; a quiet inline notice ("could not refresh") with retry                                                                                               |
-| Empty                                          | `isSuccess && data.length === 0`              | `EmptyState` with a *create* intent                                                                                                                                 |
+| Reloading — `invalidate`, polling              | `isInvalidating`                              | Nothing — the data is still valid                                                                                                                                   |
+| Retrying                                       | `isPending && hasError`                       | Same as the state it is retrying in: Initial load, Switching or Reloading — the error stays in `error` until the run settles                                        |
+| Error, no data                                 | `hasError && !hasData`                        | By consequence — [Error loudness](#error-loudness). Always a retry affordance (`state.retry`)                                                                       |
+| Error, previous args' data                     | `hasError && dataSource === 'previous'`       | The error surface for `args`, as above; `data` belongs to `dataArgs`, not to the failed request: dimmed behind the error at most, never shown as the current result |
+| Invalidation error — data on screen            | `status === 'error' && dataSource === 'current'` | Keep the data; a quiet inline notice ("could not refresh") with retry                                                                                            |
+| Empty                                          | `hasData && data.length === 0`                | `EmptyState` with a *create* intent                                                                                                                                 |
 
 ---
 
@@ -44,7 +45,7 @@ Mechanics: [cache-and-invalidation.md](cache-and-invalidation.md#links--wiring-a
 |--------------------|-----------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `optimisticUpdate` | On — the UI changes the moment the user acts        | The patch cannot be derived on the client (the server computes the result)                                                                                                                                        |
 | `invalidate`       | Depends on transport and load, not on habit         | REST-only B2B: **on** — the server is the only source of truth. High-load with a WS / event bus: **off** — the bus patches entries (`onCacheEntryAdded` subscription or a [stream query](stream-queries.md)); a refetch per mutation multiplies load |
-| `retentionTime`    | Default 60 000 ms                                   | Short-lived, high-cardinality keys (search-as-you-type): 30 s or less — memory over cache hits                                                                                                                    |
+| `retentionTime`    | Default 60 000 ms                                   | Short-lived, high-cardinality keys (search-as-you-type): 30 s or less — memory over cache hits. A `(args, state) => number \| false` policy decides per entry (e.g. evict failed entries at once)                    |
 
 ---
 
@@ -74,7 +75,7 @@ Two real placements — the same flags, different decisions.
 |----------------|---------------------------------------------------------------------------------------------------------|
 | Initial load   | `Skeleton` instead of the list                                                                          |
 | Error          | `EmptyState` (error intent): icon, one line, retry; Skeleton again while retrying                        |
-| Refresh error  | Banner above the list: "could not refresh"                                                              |
+| Invalidation error | Banner above the list: "could not refresh"                                                          |
 | Empty          | `EmptyState` (create intent); with filters active — other copy plus "reset filters"                     |
 | Reloading      | Not shown                                                                                               |
 | Switching      | The container's own `dimmed` flag on the list                                                           |
@@ -88,9 +89,9 @@ Two real placements — the same flags, different decisions.
 |-----------------|------------------------------------------------------------------------------------------------------|
 | Initial load    | `Skeleton`                                                                                           |
 | Error           | `ErrorBoundary` with retry + toast                                                                   |
-| Refresh error   | Icon in the widget corner with a toast                                                               |
+| Invalidation error | Icon in the widget corner with a toast                                                            |
 | Reloading       | Faint spinner in the corner                                                                          |
-| Settings change | `invalidate` on the settings command — refetch at once                                               |
+| Settings change | `invalidate` on the settings command — the widget's entry is held, so the refetch fires at once      |
 | Polling         | `onCacheEntryAdded` loop while the entry lives — [lifecycle-hooks.md](lifecycle-hooks.md#oncacheentryadded--once-per-cache-entry) |
 | Switching       | Unreachable — the widget is remounted per id, so a new id is an initial load                         |
 
@@ -104,8 +105,8 @@ const state = widgetApi.getWidget.useResource({ widgetId });
 
 ## Pitfalls
 
-- ❌ Branching on `isLoading` alone — it merges initial load, switching, reloading and retrying, which get four different treatments.
-- ❌ A full error screen on `refresh-error` — the data on screen is still usable.
-- ❌ Skeleton on every `isRefreshing` — invalidation and polling would flash the page.
+- ❌ Branching on `status` alone — `pending` merges initial load, switching, reloading and retrying, which get four different treatments.
+- ❌ A full error screen when `hasError && hasData` — the data on screen is still usable.
+- ❌ Skeleton on every `isPending` — invalidation and polling would flash the page.
 - ❌ One `EmptyState` for "no results" and "request failed" — different intent, copy and primary action.
 - ✅ Decide `invalidate` per product transport; a bus-fed cache does not need it.

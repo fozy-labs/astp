@@ -42,18 +42,19 @@ command-level `sync` option — there is none.
 
 ## What a responding tab answers with
 
-| Machine state of the holder                          | `RES` payload  |
-|------------------------------------------------------|----------------|
-| `success`                                            | `data`         |
-| `success` with pending patches                       | `originalData` |
-| `pending` / `error` / `refreshing` / `refresh-error` | nothing        |
+| Entry state of the holder                                  | `RES` payload  |
+|------------------------------------------------------------|----------------|
+| `success`                                                  | `data`         |
+| `success` with pending patches                             | `originalData` |
+| `pending` / `error` / `invalidating` / `invalidate-error`  | nothing        |
+| `success` **marked for revalidation** (`isInvalidated`)    | nothing — stale data is not handed out as fresh |
 
 On the receiving side the entry appears in `success`, `onCacheEntryAdded` fires, `onQueryStarted` does **not** (no query
 ran — see [lifecycle-hooks.md](lifecycle-hooks.md)), and normal `retentionTime` rules apply.
 
 A `RES` can never clobber local data: the `REQ` is only ever sent for a **cold** entry, and the answer is applied only
 while that entry is still `pending`. There is no freshness comparison — `RES` carries no timestamp, so a tab holding
-older data answers just as readily. Verified against the 0.11 source, against what the package docs claim. If no
+older (but unmarked) data answers just as readily. Verified against the 0.11 source, against what the package docs claim. If no
 answer arrives within 150 ms the entry falls back to its own `queryFn`.
 
 ---
@@ -61,14 +62,13 @@ answer arrives within 150 ms the entry falls back to its own `queryFn`.
 ## `broadcastSyncDriver`
 
 ```ts
-broadcastSyncDriver();                          // channel "rx-toolkit"
+broadcastSyncDriver();                          // channel `rx-toolkit:{keyPrefix}`
 broadcastSyncDriver({ channel: "shared" });     // explicit channel
 ```
 
-The default channel name is the literal `"rx-toolkit"` — the driver never sees `keyPrefix` (the prefix travels inside
-the message instead). Tabs of different apps sharing an origin therefore share the default channel; give each app an
-explicit `channel`. Every `BroadcastChannel` call is wrapped in try/catch, so an unsupported environment degrades to no
-sync rather than throwing.
+Without a `channel` the driver connects to `` `rx-toolkit:${keyPrefix}` `` — 0.12.x used the shared literal
+`"rx-toolkit"`, so tabs of different apps on one origin collided on the default channel. Every `BroadcastChannel`
+call is wrapped in try/catch, so an unsupported environment degrades to no sync rather than throwing.
 
 ---
 
@@ -98,8 +98,8 @@ A resource with no `key` cannot be addressed by `keys[1]` and so cannot sync.
 ## Pitfalls
 
 - ❌ Enabling `defaultSync` for user-private resources — another tab (same origin, possibly another account after a re-login) can answer. Set `sync: false` on anything account-scoped.
-- ❌ Leaving the default `"rx-toolkit"` channel when several apps share an origin.
+- ❌ Sharing one `keyPrefix` across apps on an origin and leaving the default channel — that is the collision case now; give each app an explicit `channel`.
 - ❌ Expecting a command to propagate — commands are never synced.
 - ❌ Setting `defaultSync` without a `syncDriver` — nothing happens.
 - ✅ Give every resource you intend to sync an explicit `key`.
-- ✅ Treat sync as a cache warm-up, not as a source of truth: a tab only answers from `success`.
+- ✅ Treat sync as a cache warm-up, not as a source of truth: a tab only answers from an unmarked `success`.

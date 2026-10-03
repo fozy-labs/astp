@@ -111,8 +111,9 @@ it("runs a batched effect once", () => {
 - Assert with `peek()`, never `get()`, so the assertion does not register a dependency.
 - Unsubscribe every effect the test created; a leaked effect keeps running across cases in the same file.
 
-The only asynchrony in the library is deliberate and elsewhere: `useSignal` coalesces notifications in a microtask, and
-the experimental collections reap idle nodes in a microtask ([fine-grained-state.md](fine-grained-state.md)).
+The only asynchrony in the library is deliberate and elsewhere: the experimental collections reap idle nodes in a
+microtask ([fine-grained-state.md](fine-grained-state.md)). `useSignal` notifies **synchronously, inside the write**
+since 0.13 (React schedules the re-render itself).
 
 ---
 
@@ -121,8 +122,9 @@ the experimental collections reap idle nodes in a microtask ([fine-grained-state
 - `LocalSignal.state` has no storage: the default driver resolves to `null` and **construction** throws
   `[LocalSignal]: localStorage does not exist and no driver was passed.` Pass a `driver` (give it `keys()` if you want
   its GC to run) — see [persisted-state.md](persisted-state.md).
-- `reduxDevtools()` without an explicit `driver` throws `Redux Devtools extension is not installed` when there is no
-  `window`. Guard the `DefaultOptions.update({ DEVTOOLS })` call with an environment check.
+- `reduxDevtools()` without the extension installed logs `console.error` and no-ops (0.12.x threw
+  `Redux Devtools extension is not installed` and could crash the app). Guarding
+  `DefaultOptions.update({ DEVTOOLS })` with an environment check is still good hygiene, not a requirement.
 - Nothing else in the signals layer touches browser globals.
 
 ---
