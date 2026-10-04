@@ -16,15 +16,28 @@ link, do not re-derive them here:
 | Form members | [forms.md](forms.md) |
 
 Component names (`Skeleton`, `InlineNotice`, `EmptyState`, `BusyButton`) are placeholders for the project's own — this
-document fixes behaviour, not looks. Before wiring, find what the project already has (a `QueryContainer`, separate
-parts, router-owned pending/error UI); a missing part (inline notice, busy button) goes into the project's kit once.
+document fixes behaviour, not looks.
 
-**Contents:** [Rendering obligations](#rendering-obligations) · [Resource](#resource) · [Timing](#timing) ·
-[Making states not happen](#making-states-not-happen) · [Several resources](#several-resources) ·
-[Search, filters, tabs](#search-filters-tabs) · [Suspense](#suspense) · [Infinite feed](#infinite-feed) ·
-[Live data](#live-data) · [Error kinds](#error-kinds) · [Error loudness](#error-loudness) ·
+**Contents:** [Inventory first](#inventory-first) · [Rendering obligations](#rendering-obligations) ·
+[Resource](#resource) · [Timing](#timing) · [Making states not happen](#making-states-not-happen) ·
+[Several resources](#several-resources) · [Search, filters, tabs](#search-filters-tabs) · [Suspense](#suspense) ·
+[Infinite feed](#infinite-feed) · [Error kinds](#error-kinds) · [Error loudness](#error-loudness) ·
 [Automatic recovery](#automatic-recovery) · [Mutations](#mutations) · [Forms](#forms) ·
 [Optimistic vs invalidate](#optimistic-vs-invalidate) · [Profiles](#profiles) · [Pitfalls](#pitfalls)
+
+---
+
+## Inventory first
+
+Before wiring flags to components, find what the project already has. Common shapes:
+
+- One container that can dim, lock and show an error (`<QueryContainer queries={state}>`);
+- Separate parts — `Skeleton`, `ErrorBoundary`, `Dimmer`, `EmptyState`, toasts;
+- Router / framework owns pending and error UI (loaders, `errorElement`, Suspense boundaries);
+- Other forms, their combinations and associations.
+
+Missing a part the tables below need (an inline notice, a busy state on a button)? Add it to the project's kit once,
+not inline per screen.
 
 ---
 
@@ -218,24 +231,6 @@ An auto-loading sentinel (`IntersectionObserver` at the tail) must stop while th
 
 ---
 
-## Live data
-
-A stream `queryFn` ([stream-queries.md](stream-queries.md)) maps onto the resource rows:
-
-| Stream moment | Resource row | Render |
-|---------------|--------------|--------|
-| Waiting for the first emission | Initial load | Skeleton |
-| Emitting | Data | Content; new items do not move what the user is reading (anchor the scroll) |
-| Failed before any emission | Error, no data | As that row |
-| Failed after data | Invalidation error | Data stays, plus "live updates paused"; `retry()` resubscribes |
-| Completed | Data | Content, no longer live; indicate only if the product promises liveness |
-| Hydrated from SSR / another tab | Data, not live | As Completed until a run subscribes (`invalidate()`) |
-
-Reconnect with backoff inside `queryFn` (RxJS `retry({ delay })`) so a transient drop never reaches the state; the
-paused indicator is for drops that outlast it. `invalidateOn.interval` never polls an open stream.
-
----
-
 ## Error kinds
 
 The kind decides the copy and whether retry is offered; [loudness](#error-loudness) decides where it shows. Kinds come
@@ -367,18 +362,45 @@ Mechanics — [cache-and-invalidation.md](cache-and-invalidation.md#links--wirin
 
 ## Profiles
 
-The same flags, different decisions.
+Two real placements — the same flags, different decisions.
 
-| Decision | Searchable list, high-load messenger | KPI widget with group settings |
-|----------|--------------------------------------|--------------------------------|
-| Initial load | Skeleton instead of the list | Skeleton |
-| Error | `EmptyState` (error intent), retry busy while retrying | Error Boundary, copy by kind |
-| Invalidation error | Banner above the list: "Couldn't refresh" | Corner icon, data age (`updatedAt`) in its tooltip |
-| Reloading | Not shown | Faint corner spinner |
-| Switching | The list dims; the input never locks | Unreachable — `<Widget key={id} />` remounts per id |
-| Mutations | Patch entries, never `invalidate`; a failed send stays as "Not sent · Retry" | `invalidate` on the settings command — the held entry refetches at once |
-| Freshness | Bus subscription in `onCacheEntryAdded`; `invalidateOn: false` | `invalidateOn: { interval: 30_000, reconnect: true }` |
-| Cache lifetime | `retentionTime: 30_000` | Default |
+### Searchable list in a high-load messenger
+
+| Decision | Implementation |
+|----------|----------------|
+| Initial load | `Skeleton` instead of the list, after the skeleton delay |
+| Error | `EmptyState` (error intent): icon, one line by kind, retry; the retry button is busy while retrying |
+| Invalidation error | Banner above the list: "Couldn't refresh" |
+| Empty | `EmptyState` (create intent); with filters active — other copy plus "reset filters"; nothing while debouncing |
+| Reloading | Not shown |
+| Switching | The list dims after the dim delay; the search input never locks |
+| Input | `useDebouncedArgs(q ? { q } : SKIP, { delay: 250 })`; Enter calls `flush()` |
+| Mutations | Patch entries, never `invalidate` — the bus is the source of updates; a failed send keeps the message as "Not sent · Retry" |
+| Live updates | `onCacheEntryAdded`: subscribe to the topic on the WS client, patch the entry until `$cacheEntryRemoved` |
+| Revalidation | `invalidateOn: false` — the bus keeps entries fresh; a refetch on focus only adds load |
+| Cache lifetime | `retentionTime: 30_000` — active search creates many keys |
+
+### KPI widget with group settings
+
+| Decision | Implementation |
+|----------|----------------|
+| Initial load | `<Suspense>` fallback: `Skeleton` |
+| Error | Error Boundary with retry, copy by kind |
+| Invalidation error | Returned in state, not thrown: icon in the widget corner, data age (`updatedAt`) in its tooltip |
+| Reloading | Faint spinner in the corner |
+| Settings change | `invalidate` on the settings command — the widget's entry is held, so the refetch fires at once |
+| Polling | `invalidateOn: { interval: 30_000, reconnect: true }` — pauses while unmounted, hidden or offline ([cache-and-invalidation.md](cache-and-invalidation.md#automatic-revalidation--invalidateon)) |
+| Switching | Unreachable — the widget is remounted per id, so a new id is an initial load |
+
+```tsx
+<ErrorBoundary fallback={WidgetError}>
+  <Suspense fallback={<Skeleton />}>
+    <Widget key={id} widgetId={id} />
+  </Suspense>
+</ErrorBoundary>
+// inside Widget:
+const state = widgetApi.getWidget.useSuspenseResource({ widgetId });
+```
 
 ---
 

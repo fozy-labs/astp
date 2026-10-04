@@ -176,7 +176,7 @@ Load these only when the specific situation applies — do **not** preload.
 | Situation                                                                          | File                                   |
 |------------------------------------------------------------------------------------|----------------------------------------|
 | Rendering server data — hooks, `SKIP`, state union, Suspense, `useResources`, timing hooks (`useDelayedFlag`, `useDebouncedArgs`) | [references/reading-in-react.md](references/reading-in-react.md)       |
-| Deciding what the UI shows and offers per state — resource, several resources, Suspense, feed, stream, mutations, forms; skeleton timing, prefetch / placeholder, error kinds and loudness, `invalidateOn` policy | [references/ui-states.md](references/ui-states.md)         |
+| Deciding what the UI shows and offers per state — resource, several resources, Suspense, feed, mutations, forms; skeleton timing, prefetch / placeholder, error kinds and loudness, `invalidateOn` policy | [references/ui-states.md](references/ui-states.md)         |
 | Reading from stores, route loaders, workers — `ensure`/`fetch`/`prefetch`, clutches | [references/reading-outside-react.md](references/reading-outside-react.md)  |
 | Writing a mutation — `execute`, request id, envelope, retry, command cache keys    | [references/writing-mutations.md](references/writing-mutations.md)      |
 | The cache did not update after a mutation — `links`, patches, lazy invalidation, eviction; refetch on focus / reconnect / interval (`invalidateOn`) | [references/cache-and-invalidation.md](references/cache-and-invalidation.md) |
