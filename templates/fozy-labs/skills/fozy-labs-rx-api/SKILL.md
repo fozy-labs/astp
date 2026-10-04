@@ -10,7 +10,7 @@ description: >
 Declarative cache-aware server state: one cache entry per serialized args, stale-while-revalidate, optimistic updates,
 SSR snapshots.
 Framework-agnostic core; React binds through a plugin.
-Tracks package version **0.13.0**.
+Tracks package version **0.13.1**.
 
 Two primitives:
 
@@ -51,6 +51,7 @@ export const api = createApi({
 | `initialSnapshot` / `snapshotValidTime` | `null` / `false`  | SSR hydration.                                                     |
 | `defaultSync` / `syncDriver`            | `"none"` / —      | Cross-tab sync.                                                    |
 | `onCacheEntryAdded` / `onQueryStarted`  | —                 | Api-wide lifecycle hooks, merged with per-resource ones; accept arrays. |
+| `invalidateOn` / `environmentDriver`    | — / `browserEnvironmentDriver()` | Automatic refetch on focus / reconnect / interval; per-resource keys override — see [references/cache-and-invalidation.md](references/cache-and-invalidation.md#automatic-revalidation--invalidateon). |
 
 The instance exposes `createResource`, `createCommand`, `unstable_createProjectionResource`, `getSnapshot()` and
 `resetAll()`; plugins may add members of their own (`augmentApi` — see [references/extending-the-api.md](references/extending-the-api.md)).
@@ -174,11 +175,11 @@ Load these only when the specific situation applies — do **not** preload.
 
 | Situation                                                                          | File                                   |
 |------------------------------------------------------------------------------------|----------------------------------------|
-| Rendering server data — hooks, `SKIP`, state union, Suspense                       | [references/reading-in-react.md](references/reading-in-react.md)       |
-| Deciding what the UI shows and offers per state — resource, Suspense, feed, stream, mutations, forms; skeleton timing, prefetch / placeholder, error kinds and loudness, recovery, `invalidate` policy | [references/ui-states.md](references/ui-states.md)         |
+| Rendering server data — hooks, `SKIP`, state union, Suspense, `useResources`, timing hooks (`useDelayedFlag`, `useDebouncedArgs`) | [references/reading-in-react.md](references/reading-in-react.md)       |
+| Deciding what the UI shows and offers per state — resource, several resources, Suspense, feed, stream, mutations, forms; skeleton timing, prefetch / placeholder, error kinds and loudness, `invalidateOn` policy | [references/ui-states.md](references/ui-states.md)         |
 | Reading from stores, route loaders, workers — `ensure`/`fetch`/`prefetch`, clutches | [references/reading-outside-react.md](references/reading-outside-react.md)  |
 | Writing a mutation — `execute`, request id, envelope, retry, command cache keys    | [references/writing-mutations.md](references/writing-mutations.md)      |
-| The cache did not update after a mutation — `links`, patches, lazy invalidation, eviction | [references/cache-and-invalidation.md](references/cache-and-invalidation.md) |
+| The cache did not update after a mutation — `links`, patches, lazy invalidation, eviction; refetch on focus / reconnect / interval (`invalidateOn`) | [references/cache-and-invalidation.md](references/cache-and-invalidation.md) |
 | Typing `error`, `mapError`, retries, cancellation, `CacheEntryRemovedError`        | [references/error-handling.md](references/error-handling.md)         |
 | Live data — an `Observable` in `queryFn` (WebSocket, SSE), patches over a stream   | [references/stream-queries.md](references/stream-queries.md)        |
 | Loading collections by id lists, per-item cache, infinite feed (`useInfiniteResource`) | [references/projection-resource.md](references/projection-resource.md) |

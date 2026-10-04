@@ -91,12 +91,12 @@ On the command path it passes through `mapError` (so the typed envelope holds), 
 
 ## Retrying
 
-There is **no automatic retry or backoff.** Retries are explicit:
+There is **no retry or backoff on failure.** The only automatic re-run is [`invalidateOn`](cache-and-invalidation.md#automatic-revalidation--invalidateon) — focus, reconnect, interval — which retries a held failed entry when its trigger fires. Everything else is explicit:
 
 | Call                              | Semantics                                                                 |
 |-----------------------------------|---------------------------------------------------------------------------|
 | `state.retry()` (resource)        | Re-runs the failed query, **keeping the error on screen**: `pending` with `hasError` until the run settles. No-op with a console warn outside an error. |
-| `state.invalidate()` (resource)   | Re-checks the shown data and **clears the error**. With nothing on screen (`status: "error"`, `dataSource: "none"`) it warns and no-ops — that row wants `retry()`. Entry-level `entry.invalidate()` / `resource.invalidate(args)` retry a failed entry instead. |
+| `state.invalidate()` (resource)   | Re-checks the shown data and **clears the error**. With nothing on screen (`status: "error"`, `dataSource: "none"`) it warns and no-ops — that row wants `retry()`. Entry-level `entry.invalidate()` / `resource.invalidate(args)` and the `useResources` aggregate `invalidate()` retry a failed entry instead. |
 | `state.retry()` (command)         | Re-runs the same entry, reusing its request id. No-op outside `error`.    |
 | `ensure` / `fetch` / `prefetch`   | Retry an entry sitting in `error` before awaiting it — in both `prefetch` modes. |
 | `command.execute(args)` again     | A **new** entry and a **new** request id — a different logical operation. |
@@ -119,7 +119,7 @@ Automatic retry policy belongs inside `queryFn`, where you also control backoff 
 - ❌ Typing `error` as your own error class without `mapError` — it is `unknown`.
 - ❌ A `mapError` with no fallback branch — `CacheEntryRemovedError` and anything unexpected will violate the declared `TError`.
 - ❌ Expecting a `catch` around `ensure` to always receive `TError` — that channel also yields raw removal and abort reasons.
-- ❌ Waiting for a built-in retry/backoff to kick in.
+- ❌ Waiting for a built-in retry/backoff to kick in — `invalidateOn` re-runs on focus / reconnect / interval, not on failure.
 - ✅ Handle an invalidation failure by showing stale data plus an inline retry, not a full error state.
 - ✅ Put transport-level retry, auth refresh and status-code mapping in `queryFn` or in a shared fetcher wrapper.
 - ✅ Keep `mapError` total and side-effect free; use `onQueryError` for reporting.
