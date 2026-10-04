@@ -10,7 +10,7 @@ description: >
 Declarative cache-aware server state: one cache entry per serialized args, stale-while-revalidate, optimistic updates,
 SSR snapshots.
 Framework-agnostic core; React binds through a plugin.
-Tracks package version **0.13.0**.
+Tracks package version **0.13.1**.
 
 Two primitives:
 
@@ -51,6 +51,7 @@ export const api = createApi({
 | `initialSnapshot` / `snapshotValidTime` | `null` / `false`  | SSR hydration.                                                     |
 | `defaultSync` / `syncDriver`            | `"none"` / —      | Cross-tab sync.                                                    |
 | `onCacheEntryAdded` / `onQueryStarted`  | —                 | Api-wide lifecycle hooks, merged with per-resource ones; accept arrays. |
+| `invalidateOn` / `environmentDriver`    | — / `browserEnvironmentDriver()` | Automatic refetch on focus / reconnect / interval; per-resource keys override — see [references/cache-and-invalidation.md](references/cache-and-invalidation.md#automatic-revalidation--invalidateon). |
 
 The instance exposes `createResource`, `createCommand`, `unstable_createProjectionResource`, `getSnapshot()` and
 `resetAll()`; plugins may add members of their own (`augmentApi` — see [references/extending-the-api.md](references/extending-the-api.md)).
@@ -150,7 +151,7 @@ args, the link silently does nothing.
 | Expectation                        | Reality                                                                         |
 |------------------------------------|---------------------------------------------------------------------------------|
 | Automatic retry / backoff          | None. `retry()` is manual; put a retry policy inside `queryFn`.                 |
-| Polling / `refetchInterval`        | None. `invalidate(args)` from an `onCacheEntryAdded` hook, or `prefetch(args, { force: true })` from your own timer. |
+| Polling / `refetchInterval`        | Built in since 0.13.1: `invalidateOn: { interval }`, plus `focus` / `reconnect` — see [references/cache-and-invalidation.md](references/cache-and-invalidation.md#automatic-revalidation--invalidateon). |
 | Infinite query / pagination helper | Cursor pagination: none — one entry per page args, SWR keeps the previous page on screen. Id-based collections: `unstable_createProjectionResource` + `useInfiniteResource` (see [references/projection-resource.md](references/projection-resource.md)). |
 | A built-in fetcher                 | None by design — `queryFn` is any function returning `Promise<TData>` (or `Observable<TData>` for streams). |
 
@@ -174,15 +175,15 @@ Load these only when the specific situation applies — do **not** preload.
 
 | Situation                                                                          | File                                   |
 |------------------------------------------------------------------------------------|----------------------------------------|
-| Rendering server data — hooks, `SKIP`, state union, Suspense                       | [references/reading-in-react.md](references/reading-in-react.md)       |
-| Deciding what the UI shows and offers per state — resource, Suspense, feed, stream, mutations, forms; skeleton timing, prefetch / placeholder, error kinds and loudness, recovery, `invalidate` policy | [references/ui-states.md](references/ui-states.md)         |
+| Rendering server data — hooks, `SKIP`, state union, Suspense, `useResources`, timing hooks (`useDelayedFlag`, `useDebouncedArgs`) | [references/reading-in-react.md](references/reading-in-react.md)       |
+| Deciding what the UI shows and offers per state — resource, several resources, Suspense, feed, mutations, forms; skeleton timing, prefetch / placeholder, error kinds and loudness, `invalidateOn` policy | [references/ui-states.md](references/ui-states.md)         |
 | Reading from stores, route loaders, workers — `ensure`/`fetch`/`prefetch`, clutches | [references/reading-outside-react.md](references/reading-outside-react.md)  |
 | Writing a mutation — `execute`, request id, envelope, retry, command cache keys    | [references/writing-mutations.md](references/writing-mutations.md)      |
-| The cache did not update after a mutation — `links`, patches, lazy invalidation, eviction | [references/cache-and-invalidation.md](references/cache-and-invalidation.md) |
+| The cache did not update after a mutation — `links`, patches, lazy invalidation, eviction; refetch on focus / reconnect / interval (`invalidateOn`) | [references/cache-and-invalidation.md](references/cache-and-invalidation.md) |
 | Typing `error`, `mapError`, retries, cancellation, `CacheEntryRemovedError`        | [references/error-handling.md](references/error-handling.md)         |
 | Live data — an `Observable` in `queryFn` (WebSocket, SSE), patches over a stream   | [references/stream-queries.md](references/stream-queries.md)        |
 | Loading collections by id lists, per-item cache, infinite feed (`useInfiniteResource`) | [references/projection-resource.md](references/projection-resource.md) |
-| Polling, per-entry teardown, per-run instrumentation, hook arrays                  | [references/lifecycle-hooks.md](references/lifecycle-hooks.md)        |
+| Custom polling schedules, per-entry teardown, per-run instrumentation, hook arrays | [references/lifecycle-hooks.md](references/lifecycle-hooks.md)        |
 | Building a form — field schemas, validation, submit through a command (`unstable_formsPlugin`) | [references/forms.md](references/forms.md)                 |
 | Writing a custom plugin, devtools, `DefaultOptions`                                | [references/extending-the-api.md](references/extending-the-api.md)      |
 | SSR — serializing a snapshot on the server, hydrating it on the client             | [references/ssr-hydration.md](references/ssr-hydration.md)          |

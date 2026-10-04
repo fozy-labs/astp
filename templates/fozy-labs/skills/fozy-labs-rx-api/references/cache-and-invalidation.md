@@ -2,7 +2,7 @@
 
 Cache keys, `links`, optimistic patches, staleness, eviction — and why a mutation sometimes leaves the UI unchanged.
 
-**Contents:** [Cache keys](#the-cache-key-is-the-serialized-args) · [`links`](#links--wiring-a-command-to-resources) · [`forwardArgs`](#forwardargs-addresses-exactly-one-entry) · [Why nothing happened](#why-nothing-happened--checklist) · [Manual patches](#manual-patches) · [Staleness, holds and eviction](#staleness-holds-and-eviction) · [Lazy invalidation and the in-flight policy](#lazy-invalidation-and-the-in-flight-policy)
+**Contents:** [Cache keys](#the-cache-key-is-the-serialized-args) · [`links`](#links--wiring-a-command-to-resources) · [`forwardArgs`](#forwardargs-addresses-exactly-one-entry) · [Why nothing happened](#why-nothing-happened--checklist) · [Manual patches](#manual-patches) · [Staleness, holds and eviction](#staleness-holds-and-eviction) · [Lazy invalidation and the in-flight policy](#lazy-invalidation-and-the-in-flight-policy) · [Automatic revalidation](#automatic-revalidation--invalidateon)
 
 ---
 
@@ -136,6 +136,42 @@ Set it via the resource option `invalidateInFlight`, per call as `invalidate(arg
 
 ---
 
+## Automatic revalidation — `invalidateOn`
+
+Refetch on tab return, on reconnect, or on a timer — resource-scoped, so it never replays a command. SWR applies: the
+data stays on screen while the refetch runs.
+
+```ts
+const api = createApi({ invalidateOn: { focus: true, reconnect: true } }); // api default
+const users = api.createResource({ queryFn: loadUsers, invalidateOn: { interval: 10_000 } });
+```
+
+| Key | Fires on | Value |
+|-----|----------|-------|
+| `focus` | `focused: false → true` | `true` = threshold `0`; a number = the minimum ms the app must have been unfocused; `(args, state) => boolean \| number` per entry |
+| `reconnect` | `online: false → true` | Same as `focus`, measured offline |
+| `interval` | A per-entry timer, counted from the end of the last request | Positive ms (≤ 2 147 483 647) or `(args, state) => number \| false`, re-evaluated each time the timer starts |
+
+- The api option is the default; a resource overrides **per key** (explicit `undefined` inherits). `invalidateOn: false` on a resource turns everything off; `{ focus: false }` only focus.
+- `false`, `undefined`, `NaN` or an invalid value disables a rule; a negative number counts as `0`; `Infinity` never passes. A throwing function logs `console.error("[Resource] invalidateOn.<key> threw", …)` and skips that entry.
+- Focus and reconnect restored in one driver report revalidate the entry once.
+- The interval runs only while the entry is held, the page is visible and the device is online; it pauses otherwise without holding the entry. Any other run (manual invalidation, focus, retry) restarts the count, so a slow request is never overlapped. An open `Observable` counts as in flight — streams are not polled.
+- A held entry in `error` / `invalidate-error` is **retried** (the error stays on screen until the result); any other held entry gets `invalidate({ inFlight: "join" })`, whatever `invalidateInFlight` says. An unheld entry is only marked.
+- Every error kind is retried — filter in a function: `reconnect: (_, s) => !s.hasError || RETRYABLE.has((s.error as AppError).kind)`. The callback's `state.error` is `unknown` even with `mapError` (as in `retentionTime`), hence the cast.
+- `state.updatedAt` (when the shown data loaded) drives age-based rules: `focus: (_, s) => s.updatedAt === null || Date.now() - s.updatedAt > 30_000`.
+- Projection resources do not accept `invalidateOn`, and the api default does not apply to them.
+
+**Environment driver.** The default is `browserEnvironmentDriver()` (visibility, `focus`/`blur`, `online`/`offline`),
+connected lazily when the first resource with an enabled rule appears. Under SSR it attaches nothing and reports
+`visible: false`, so intervals wait. `environmentDriver: null` drops environment events but keeps intervals running
+(Node, tests). A custom driver implements `IEnvironmentDriver`: `connect(onChange)` returns the initial
+`{ visible, focused, online }` and reports full states later (React Native `AppState`, NetInfo). The core connects once
+and never calls `disconnect()`.
+
+Which policy fits which screen — [ui-states.md](ui-states.md#automatic-recovery).
+
+---
+
 ## Pitfalls
 
 - ❌ Expecting `forwardArgs: () => undefined` to hit every entry — it hits the `undefined`-args entry only (and no longer type-checks for a resource with non-`void` args).
@@ -143,6 +179,7 @@ Set it via the resource option `invalidateInFlight`, per call as `invalidate(arg
 - ❌ Calling `entry.createPatch(...)` and never `commit()` / `abort()`.
 - ❌ Args carrying a `Map` / `Set` / `RegExp` under the default `serializeArgs` — each serializes to `{}`, so every value shares one entry.
 - ❌ Assuming `invalidate` always refetches — it refetches at once only a **held** entry; an unheld one is marked and refetched on its next hold.
+- ❌ Focus / reconnect revalidation in an api-wide `onCacheEntryAdded` — that hook also fires for command entries; use `invalidateOn`.
 - ✅ Combine `optimisticUpdate` with `invalidate: true` when you want instant feedback plus server reconciliation.
 - ✅ One `link({ … })` call per affected resource; several calls inside one `links` callback is the normal shape.
 - ✅ Check `serialize(args)` on both sides when a link appears inert.

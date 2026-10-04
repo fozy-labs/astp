@@ -3,7 +3,14 @@
 The last two releases that require code changes. Read this only when working in a codebase written against an older
 version, or when an unfamiliar name shows up in existing code.
 
-**Contents:** [0.12.x → 0.13.0](#012x--0130--the-query-dictionary-and-the-state-shape) · [0.10.x → 0.11.x](#010x--011x--execute--prefetch) · [Name lookup](#name-lookup)
+**Contents:** [0.13.0 → 0.13.1](#0130--0131--updatedat) · [0.12.x → 0.13.0](#012x--0130--the-query-dictionary-and-the-state-shape) · [0.10.x → 0.11.x](#010x--011x--execute--prefetch) · [Name lookup](#name-lookup)
+
+---
+
+## 0.13.0 → 0.13.1 — `updatedAt`
+
+Additive release (`useResources`, `useSuspenseResources`, timing hooks, `invalidateOn`). One type change: every
+resource state now carries `updatedAt` (`number | null`), so hand-built state objects and test mocks must set it.
 
 ---
 
