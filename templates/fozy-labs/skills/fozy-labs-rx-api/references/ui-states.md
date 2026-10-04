@@ -373,7 +373,7 @@ Two real placements — the same flags, different decisions.
 | Invalidation error | Banner above the list: "Couldn't refresh" |
 | Empty | `EmptyState` (create intent); with filters active — other copy plus "reset filters"; nothing while debouncing |
 | Reloading | Not shown |
-| Switching | The list dims after the dim delay; the search input never locks |
+| Switching \| `isDebouncing` | The list dims after the dim delay; the search input never locks |
 | Input | `useDebouncedArgs(q ? { q } : SKIP, { delay: 250 })`; Enter calls `flush()` |
 | Mutations | Patch entries, never `invalidate` — the bus is the source of updates; a failed send keeps the message as "Not sent · Retry" |
 | Live updates | `onCacheEntryAdded`: subscribe to the topic on the WS client, patch the entry until `$cacheEntryRemoved` |
