@@ -151,7 +151,7 @@ args, the link silently does nothing.
 | Expectation                        | Reality                                                                         |
 |------------------------------------|---------------------------------------------------------------------------------|
 | Automatic retry / backoff          | None. `retry()` is manual; put a retry policy inside `queryFn`.                 |
-| Polling / `refetchInterval`        | None. `invalidate(args)` from an `onCacheEntryAdded` hook, or `prefetch(args, { force: true })` from your own timer. |
+| Polling / `refetchInterval`        | Built in since 0.13.1: `invalidateOn: { interval }`, plus `focus` / `reconnect` — see [references/cache-and-invalidation.md](references/cache-and-invalidation.md#automatic-revalidation--invalidateon). |
 | Infinite query / pagination helper | Cursor pagination: none — one entry per page args, SWR keeps the previous page on screen. Id-based collections: `unstable_createProjectionResource` + `useInfiniteResource` (see [references/projection-resource.md](references/projection-resource.md)). |
 | A built-in fetcher                 | None by design — `queryFn` is any function returning `Promise<TData>` (or `Observable<TData>` for streams). |
 
@@ -183,7 +183,7 @@ Load these only when the specific situation applies — do **not** preload.
 | Typing `error`, `mapError`, retries, cancellation, `CacheEntryRemovedError`        | [references/error-handling.md](references/error-handling.md)         |
 | Live data — an `Observable` in `queryFn` (WebSocket, SSE), patches over a stream   | [references/stream-queries.md](references/stream-queries.md)        |
 | Loading collections by id lists, per-item cache, infinite feed (`useInfiniteResource`) | [references/projection-resource.md](references/projection-resource.md) |
-| Polling, per-entry teardown, per-run instrumentation, hook arrays                  | [references/lifecycle-hooks.md](references/lifecycle-hooks.md)        |
+| Custom polling schedules, per-entry teardown, per-run instrumentation, hook arrays | [references/lifecycle-hooks.md](references/lifecycle-hooks.md)        |
 | Building a form — field schemas, validation, submit through a command (`unstable_formsPlugin`) | [references/forms.md](references/forms.md)                 |
 | Writing a custom plugin, devtools, `DefaultOptions`                                | [references/extending-the-api.md](references/extending-the-api.md)      |
 | SSR — serializing a snapshot on the server, hydrating it on the client             | [references/ssr-hydration.md](references/ssr-hydration.md)          |
