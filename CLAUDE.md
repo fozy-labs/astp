@@ -56,7 +56,7 @@ flowchart LR
 - No lock file: `astp-source`, `astp-bundle`, `astp-version` and `astp-hash` in each installed file's frontmatter are the whole install state. `update` skips files whose hash no longer matches unless `--force`.
 - Template sources never contain `astp-*` fields; the installer adds them.
 - A manifest item's `target` is its `source` minus the bundle prefix, and giget lays files out by `target`.
-- Changing a bundle file means bumping that bundle's version in `manifest.json`: patch for content fixes, minor for new files, major for renames or removals.
+- Watch that changes landing in `main` come with a version bump for their bundle in `manifest.json`.
 - A new platform needs an entry in `ALL_PLATFORMS` and in `PLATFORM_ROOTS` (`resolve-target.ts`).
 
 Commits follow Conventional Commits with scopes such as `templates`, `fozy-labs`, `markdown-craft`, `claude-code`; releases are `chore(release): vX.Y.Z` plus a `v*` tag.

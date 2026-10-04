@@ -99,7 +99,7 @@ to tune per product, not norms.
 A warm cache renders `success` synchronously on the first render, so these timers only run on real network waits.
 
 ```tsx
-import { useDelayedFlag } from `@shared/react`;
+import { useDelayedFlag } from "@shared/react";
 
 
 const state = orderApi.getOrders.useResource({ status });
@@ -179,9 +179,10 @@ different source:
 | Many short-lived keys                  | `retentionTime`              | 30 s or less for search-as-you-type                                                   |
 
 ```tsx
-const [searchString, setSearchString] = useState<string | null>(null);
-const debounced = useDebouncedValue(query.trim(), 250);
+const [searchString, setSearchString] = useState("");
+const debounced = useDebouncedValue(searchString.trim(), 250);
 const results = searchApi.search.useResource(debounced ? { q: debounced } : SKIP);
+const dimmed = useDelayedFlag(results.isSwitching, 150);
 
 <SearchInput value={searchString} onChange={setSearchString} busy={results.isSwitching || results.isInitialLoading} />
 {results.hasData && results.dataArgs && (
@@ -298,7 +299,7 @@ Pick by the consequence for the user's task, not by the exception type:
 | The page cannot continue                                           | Modal / `ErrorBoundary` with retry or "reload the page"     |
 
 One failure, one surface: an inline notice and a toast for the same refresh is noise. Transport-level states — offline,
-signing in again — can use are one app-wide banner, not a notice in every block.
+signing in again — can use one app-wide banner, not a notice in every block.
 
 ---
 
