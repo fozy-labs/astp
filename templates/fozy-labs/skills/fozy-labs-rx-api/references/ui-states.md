@@ -99,20 +99,8 @@ to tune per product, not norms.
 A warm cache renders `success` synchronously on the first render, so these timers only run on real network waits.
 
 ```tsx
-function useDelayedFlag(flag: boolean, delayMs: number, minVisibleMs = 0) {
-  const [visible, setVisible] = useState(false);
-  const shownAt = useRef(0);
-  useEffect(() => {
-    if (flag) {
-      const t = setTimeout(() => { shownAt.current = Date.now(); setVisible(true); }, delayMs);
-      return () => clearTimeout(t);
-    }
-    if (!visible) return;
-    const t = setTimeout(() => setVisible(false), Math.max(0, minVisibleMs - (Date.now() - shownAt.current)));
-    return () => clearTimeout(t);
-  }, [flag, delayMs, minVisibleMs, visible]);
-  return visible;
-}
+import { useDelayedFlag } from `@shared/react`;
+
 
 const state = orderApi.getOrders.useResource({ status });
 const showSkeleton = useDelayedFlag(state.isInitialLoading && !state.hasError, 150, 400);
@@ -191,11 +179,11 @@ different source:
 | Many short-lived keys                  | `retentionTime`              | 30 s or less for search-as-you-type                                                   |
 
 ```tsx
-const [query, setQuery] = useState("");
+const [searchString, setSearchString] = useState<string | null>(null);
 const debounced = useDebouncedValue(query.trim(), 250);
 const results = searchApi.search.useResource(debounced ? { q: debounced } : SKIP);
 
-<SearchInput value={query} onChange={setQuery} busy={results.isSwitching || results.isInitialLoading} />
+<SearchInput value={searchString} onChange={setSearchString} busy={results.isSwitching || results.isInitialLoading} />
 {results.hasData && results.dataArgs && (
   <ResultList items={results.data.items} caption={`Results for “${results.dataArgs.q}”`} dimmed={dimmed} />
 )}
@@ -263,7 +251,7 @@ reaches the state; the paused indicator is for drops that outlast it.
 
 The kind decides the copy and whether retry is offered at all; [loudness](#error-loudness) decides where it shows.
 Kinds come from `mapError` ([error-handling.md](error-handling.md)) — give each a literal `kind` so the UI switches on
-it.
+it. Examples for one specific REST api (not your project):
 
 | Kind                         | Typical source                         | Retry                             | Copy and action                                                                                   |
 |------------------------------|----------------------------------------|-----------------------------------|---------------------------------------------------------------------------------------------------|
@@ -281,30 +269,19 @@ it.
 Aborted runs never reach the state — nothing to render.
 
 ```ts
-type AppError =
-  | { kind: "offline" | "network" | "timeout" | "server" | "contract" | "superseded"; cause: unknown }
-  | { kind: "rate-limited"; retryAfterMs: number; cause: unknown }
-  | { kind: "unauthenticated" | "forbidden" | "not-found" | "conflict"; cause: unknown }
-  | { kind: "validation"; fields: { path: (string | number)[]; message: string }[]; cause: unknown };
-
 export const api = createApi({
   plugins: [reactHooksPlugin()],
-  mapError: (error): AppError => {
-    if (error instanceof CacheEntryRemovedError) return { kind: "superseded", cause: error };
-    if (error instanceof HttpError) return fromHttpStatus(error); // the project's transport error
-    if (error instanceof SchemaError) return { kind: "contract", cause: error };
-    if (error instanceof TypeError) return { kind: navigator.onLine ? "network" : "offline", cause: error };
-    return { kind: "server", cause: error };
+  mapError: (error) => {
+   // ...
   },
 });
 
-const RETRYABLE = new Set<AppError["kind"]>(["offline", "network", "timeout", "server", "rate-limited"]);
+const RETRYABLE = // ...
 ```
 
-**Escalation.** A retry that keeps failing must change the offer, not repeat it: after two failed manual retries in a
+**Escalation.** A retry that keeps failing can change the offer, example: after two failed manual retries in a
 row (starting point) keep "Retry" and add a second path — reload the page, contact support with an error reference
-(a trace id from the response, carried on `AppError`). Report through `DefaultOptions.onQueryError`, not from the
-component.
+(a trace id from the response, carried on `AppError`). Report through ls-hooks not from the component.
 
 ---
 
@@ -321,16 +298,14 @@ Pick by the consequence for the user's task, not by the exception type:
 | The page cannot continue                                           | Modal / `ErrorBoundary` with retry or "reload the page"     |
 
 One failure, one surface: an inline notice and a toast for the same refresh is noise. Transport-level states — offline,
-signing in again — are one app-wide banner, not a notice in every block.
+signing in again — can use are one app-wide banner, not a notice in every block.
 
 ---
 
-## Recovery without the user
+## Example ls-hook: Recovery without the user
 
-Retry that needs no click: on reconnect, and a quiet revalidation when the user comes back to the tab. Build it per
-entry in `onCacheEntryAdded` ([lifecycle-hooks.md](lifecycle-hooks.md#oncacheentryadded--once-per-cache-entry)) and
-attach it to resources. Not api-wide: the api-level hook also runs for command entries, and replaying a mutation on
-reconnect is a product decision, not a default.
+Strategy and implementation may vary greatly from project to project,
+    this is just one example.
 
 ```ts
 const STALE_ON_RETURN_MS = 60_000; // starting point
@@ -354,8 +329,6 @@ export const reviveOnReturn = async <A, D>(_args: A, { entry, $cacheEntryRemoved
 
 getOrders = api.createResource({ key: "orders", queryFn: fetchOrders, onCacheEntryAdded: [reviveOnReturn] });
 ```
-
-The resulting refetches land as Retrying and Reloading rows — the UI already handles them.
 
 ---
 
