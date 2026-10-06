@@ -1,6 +1,6 @@
 # astp
 
-CLI tool for managing MDA files (skills, agents, instructions, stage definitions) used by AI coding agents. Supports **VS Code Copilot** (`.github/`, `~/.copilot/`) and **Claude Code** (`.claude/`, `~/.claude/`).
+CLI tool for managing MDA files (skills, agents, instructions, stage definitions) used by AI coding agents. Installs them for **Claude Code** (`.claude/`, `~/.claude/`).
 
 ## Installation
 
@@ -21,8 +21,7 @@ astp
 **Scripted mode** — install a specific bundle directly:
 
 ```bash
-astp install rdpi --platform vscode --target project
-astp install fozy-labs --platform claude-code --target project
+astp install fozy-labs --target project
 ```
 
 ## Commands
@@ -35,25 +34,24 @@ astp install fozy-labs --platform claude-code --target project
 | `astp check` | Check for available updates |
 | `astp delete [bundle] [--force]` | Remove an installed bundle |
 
-All commands accept `--platform <vscode|claude-code>` and `--target <project|user>` to skip interactive prompts. Resolved roots:
+All commands accept `--platform <claude-code>` and `--target <project|user>` to skip interactive prompts. Resolved roots:
 
 | Platform | `--target project` | `--target user` |
 |----------|--------------------|-----------------|
-| `vscode` | `<cwd>/.github/` | `~/.copilot/` |
 | `claude-code` | `<cwd>/.claude/` | `$CLAUDE_CONFIG_DIR`, else `~/.claude/` |
 
 ### install
 
 ```bash
-astp install [bundle] [--platform <vscode|claude-code>] [--target <project|user>]
+astp install [bundle] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Install template bundles. Without arguments, prompts for platform, target directory, and bundle selection. With `--platform` and `--target`, runs non-interactively. Bundles that don't support the requested platform are rejected with a clear error.
+Install template bundles. Without arguments, prompts for target directory and bundle selection (the platform prompt is skipped while only one platform is supported). With `--platform` and `--target`, runs non-interactively. Bundles that don't support the requested platform are rejected with a clear error.
 
 ### update
 
 ```bash
-astp update [--force] [--platform <vscode|claude-code>] [--target <project|user>]
+astp update [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
 Update installed files to the latest version from the manifest. Modified files are skipped by default — use `--force` to overwrite them.
@@ -61,7 +59,7 @@ Update installed files to the latest version from the manifest. Modified files a
 ### check
 
 ```bash
-astp check [--platform <vscode|claude-code>] [--target <project|user>]
+astp check [--platform <claude-code>] [--target <project|user>]
 ```
 
 Compare installed file versions against the remote manifest and display a status report.
@@ -69,24 +67,20 @@ Compare installed file versions against the remote manifest and display a status
 ### delete
 
 ```bash
-astp delete [bundle] [--force] [--platform <vscode|claude-code>] [--target <project|user>]
+astp delete [bundle] [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
 Remove the files of an installed bundle. Without a bundle name, prompts to pick from the bundles found in the target. Modified files are kept by default — use `--force` to delete them too.
 
 ## Bundles
 
-| Bundle | Files | Description | Platforms | Default |
-|--------|-------|-------------|-----------|---------|
-| `base` | 1 | Base skill for VSCode Copilot agent orchestration | `vscode` | Yes |
-| `rdpi` | 22 | Full RDPI pipeline — agents, instructions, and stage definitions | `vscode` | No |
-| `fozy-labs` | 34 | Fozy Labs stack skills (DI, FSD, rx-api, signals) | `vscode`, `claude-code` | No |
-| `docs` | 6 | Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas | `vscode`, `claude-code` | No |
-| `design` | 13 | Design decision derivation — gated procedure for interface, layout, and visual design choices | `vscode`, `claude-code` | No |
+| Bundle | Files | Description | Default |
+|--------|-------|-------------|---------|
+| `fozy-labs` | 34 | Fozy Labs stack skills (DI, FSD, rx-api, signals) | No |
+| `docs` | 6 | Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas | No |
+| `design` | 13 | Design decision derivation — gated procedure for interface, layout, and visual design choices | No |
 
-- **base** includes the orchestration skill (`skills/orchestrate/SKILL.md`) that enables multi-agent coordination.
-- **rdpi** includes 17 specialized agents, 1 instruction file, and 4 stage definitions for the Research → Design → Plan → Implement workflow.
-- **fozy-labs** ships four skills covering the `@fozy-labs` stack — `simplest-di`, Feature-Sliced Design v2.1, `rx-toolkit` server state, and `rx-toolkit` signals. All four use progressive disclosure: a short `SKILL.md` plus `references/*.md` loaded only when the situation calls for them. It installs identically under `.github/skills/` for VS Code Copilot or under `.claude/skills/` for Claude Code.
+- **fozy-labs** ships four skills covering the `@fozy-labs` stack — `simplest-di`, Feature-Sliced Design v2.1, `rx-toolkit` server state, and `rx-toolkit` signals. All four use progressive disclosure: a short `SKILL.md` plus `references/*.md` loaded only when the situation calls for them. It installs under `.claude/skills/`.
 - **design** ships `design-derivation` — a gated procedure for deriving visual and interface decisions (frame, value, scenario → charge and sign → surface and accuracy) instead of picking a remembered look. It carries no styles, palettes, or component recipes; references are loaded on demand per gate.
 - **docs** ships two skills. `markdown-craft` carries stack-agnostic rules for the Markdown an agent writes: one home per fact, one reader per document, diagram-first flows, and link hygiene, with references loaded on demand for Mermaid diagrams and for writing or reviewing a specification. `statechart-craft` covers the other kind of Mermaid an agent writes — a `.mmd` statechart schema: the `stateDiagram-v2` subset, the `%% @…` directives, the `statechart-convert` CLI and the typed file it emits, with references for the live visualizer and for the `toMermaid()` round trip.
 
@@ -100,7 +94,7 @@ npx skills add fozy-labs/astp --list                   # preview what is availab
 npx skills add fozy-labs/astp --skill markdown-craft   # install one skill
 ```
 
-Discovery is driven by `.claude-plugin/marketplace.json`, generated from `templates/manifest.json`. Only bundles that support `claude-code` **and** ship skills are published — `base` and `rdpi` are not, because the `skills` CLI installs skills only and would leave their agents and instructions behind.
+Discovery is driven by `.claude-plugin/marketplace.json`, generated from `templates/manifest.json`. Only bundles that support `claude-code` **and** ship skills are published — all three current bundles qualify.
 
 > **Pick one installer per project.** `npx skills` symlinks skills from its own cache and tracks them in `skills-lock.json`; `astp` writes real files and tracks them through `astp-*` frontmatter. Neither sees the other's installs: `astp check`, `astp update` and `astp delete` ignore skills added by `npx skills`, and installing the same skill both ways leaves a file and a symlink fighting over one path.
 
@@ -110,14 +104,11 @@ Discovery is driven by `.claude-plugin/marketplace.json`, generated from `templa
 For CI environments or scripted usage, pass `--platform` and `--target` to avoid interactive prompts:
 
 ```bash
-# Install in CI (VS Code Copilot)
-astp install rdpi --platform vscode --target project
-
-# Install Fozy Labs skills for Claude Code
+# Install Fozy Labs skills
 astp install fozy-labs --platform claude-code --target project
 
 # Check for updates
-astp check --platform vscode --target project
+astp check --platform claude-code --target project
 
 # Force-update all files
 astp update --force --platform claude-code --target project
@@ -127,7 +118,7 @@ If you encounter GitHub API rate limits, set the `GIGET_AUTH` environment variab
 
 ```bash
 export GIGET_AUTH=ghp_your_token_here
-astp install rdpi --platform vscode --target project
+astp install fozy-labs --platform claude-code --target project
 ```
 
 ## How it works
@@ -139,7 +130,7 @@ When files are installed, `astp` injects `astp-*` frontmatter fields into each f
 ```yaml
 ---
 astp-source: fozy-labs/astp
-astp-bundle: rdpi
+astp-bundle: fozy-labs
 astp-version: 1.0.0
 astp-hash: <sha256>
 ---

@@ -6,32 +6,16 @@ import { describeTarget, resolveTarget } from "../../types/index.js";
 import { installFile, validateTargetPath } from "../installer.js";
 
 describe("resolveTarget", () => {
-    // T16: Project target — VS Code
-    it("T16: resolves vscode project target to .github under cwd", () => {
-        const target = resolveTarget("vscode", "project");
-        expect(target.platform).toBe("vscode");
-        expect(target.type).toBe("project");
-        expect(target.rootDir).toBe(path.join(process.cwd(), ".github"));
-    });
-
-    // T17: User target — VS Code
-    it("T17: resolves vscode user target to ~/.copilot", () => {
-        const target = resolveTarget("vscode", "user");
-        expect(target.platform).toBe("vscode");
-        expect(target.type).toBe("user");
-        expect(target.rootDir).toBe(path.join(os.homedir(), ".copilot"));
-    });
-
-    // T17a: Claude Code project target
-    it("resolves claude-code project target to .claude under cwd", () => {
+    // T16: Project target
+    it("T16: resolves claude-code project target to .claude under cwd", () => {
         const target = resolveTarget("claude-code", "project");
         expect(target.platform).toBe("claude-code");
         expect(target.type).toBe("project");
         expect(target.rootDir).toBe(path.join(process.cwd(), ".claude"));
     });
 
-    // T17b: Claude Code user target
-    it("resolves claude-code user target to ~/.claude", () => {
+    // T17: User target
+    it("T17: resolves claude-code user target to ~/.claude", () => {
         vi.stubEnv("CLAUDE_CONFIG_DIR", undefined);
         const target = resolveTarget("claude-code", "user");
         expect(target.platform).toBe("claude-code");
@@ -141,7 +125,7 @@ Agent body`;
                 target: "agents/test.agent.md",
                 category: "agent",
             },
-            { platform: "vscode", type: "project", rootDir: targetRoot },
+            { platform: "claude-code", type: "project", rootDir: targetRoot },
             { source: "fozy-labs/astp", bundle: "test-bundle", version: "1.0.0" },
         );
 
@@ -157,24 +141,27 @@ Agent body`;
     // T24: Creates nested directories
     it("T24: creates nested directories during install", async () => {
         const sourceContent = "# Stage content";
-        await fs.mkdir(path.join(tempDir, "skills", "rdpi-01-research"), { recursive: true });
-        await fs.writeFile(path.join(tempDir, "skills", "rdpi-01-research", "SKILL.md"), sourceContent);
+        await fs.mkdir(path.join(tempDir, "skills", "pipeline-01-research"), { recursive: true });
+        await fs.writeFile(path.join(tempDir, "skills", "pipeline-01-research", "SKILL.md"), sourceContent);
 
         await installFile(
             tempDir,
             {
-                source: "test-bundle/skills/rdpi-01-research/SKILL.md",
-                target: "skills/rdpi-01-research/SKILL.md",
+                source: "test-bundle/skills/pipeline-01-research/SKILL.md",
+                target: "skills/pipeline-01-research/SKILL.md",
                 category: "skill",
             },
-            { platform: "vscode", type: "project", rootDir: targetRoot },
+            { platform: "claude-code", type: "project", rootDir: targetRoot },
             { source: "fozy-labs/astp", bundle: "test-bundle", version: "1.0.0" },
         );
 
-        const stat = await fs.stat(path.join(targetRoot, "skills", "rdpi-01-research"));
+        const stat = await fs.stat(path.join(targetRoot, "skills", "pipeline-01-research"));
         expect(stat.isDirectory()).toBe(true);
 
-        const installed = await fs.readFile(path.join(targetRoot, "skills", "rdpi-01-research", "SKILL.md"), "utf8");
+        const installed = await fs.readFile(
+            path.join(targetRoot, "skills", "pipeline-01-research", "SKILL.md"),
+            "utf8",
+        );
         expect(installed).toContain("# Stage content");
         expect(installed).toContain("astp-source:");
     });

@@ -78,17 +78,17 @@ describe("E2E: update", () => {
         }
     });
 
-    async function installRdpi(): Promise<void> {
+    async function installPipeline(): Promise<void> {
         mockFetchManifest.mockResolvedValue(manifestV1);
-        const tplDir = await setupTemplateDir(manifestV1, "rdpi");
+        const tplDir = await setupTemplateDir(manifestV1, "pipeline");
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);
-        await executeInstall({ bundle: "rdpi", platform: "vscode", target: "project" });
+        await executeInstall({ bundle: "pipeline", platform: "claude-code", target: "project" });
     }
 
     async function setupV2Mocks(): Promise<Manifest> {
         const manifestV2 = createFixtureManifest("1.1.0");
-        const tplDir2 = await setupTemplateDir(manifestV2, "rdpi");
+        const tplDir2 = await setupTemplateDir(manifestV2, "pipeline");
         templateDirs.push(tplDir2);
 
         vi.clearAllMocks();
@@ -101,14 +101,14 @@ describe("E2E: update", () => {
 
     // T35: Update to new version
     it("T35: updates files to v1.1.0", async () => {
-        await installRdpi();
+        await installPipeline();
         const manifestV2 = await setupV2Mocks();
 
-        await executeUpdate({ platform: "vscode", target: "project" });
+        await executeUpdate({ platform: "claude-code", target: "project" });
 
-        const githubDir = path.join(projectDir, ".github");
-        for (const item of manifestV2.bundles.rdpi.items) {
-            const filePath = path.join(githubDir, item.target);
+        const claudeDir = path.join(projectDir, ".claude");
+        for (const item of manifestV2.bundles.pipeline.items) {
+            const filePath = path.join(claudeDir, item.target);
             const content = await fs.readFile(filePath, "utf8");
             const metadata = extractAstpMetadata(content);
 
@@ -119,21 +119,21 @@ describe("E2E: update", () => {
 
     // T36: Update skips modified files
     it("T36: skips modified files with warning", async () => {
-        await installRdpi();
+        await installPipeline();
 
         // Modify one file
-        const githubDir = path.join(projectDir, ".github");
-        const modifiedFile = path.join(githubDir, "agents", "rdpi-approve.agent.md");
+        const claudeDir = path.join(projectDir, ".claude");
+        const modifiedFile = path.join(claudeDir, "agents", "pipeline-approve.agent.md");
         const original = await fs.readFile(modifiedFile, "utf8");
         await fs.writeFile(modifiedFile, original + "\n<!-- user edit -->", "utf8");
 
         await setupV2Mocks();
-        await executeUpdate({ platform: "vscode", target: "project" });
+        await executeUpdate({ platform: "claude-code", target: "project" });
 
         // Verify modified file was skipped
         expect(mockWarnModified).toHaveBeenCalled();
         const warnedFiles = mockWarnModified.mock.calls[0][0];
-        expect(warnedFiles.some((f: { targetPath: string }) => f.targetPath.includes("rdpi-approve"))).toBe(true);
+        expect(warnedFiles.some((f: { targetPath: string }) => f.targetPath.includes("pipeline-approve"))).toBe(true);
 
         // Modified file retains v1.0.0
         const content = await fs.readFile(modifiedFile, "utf8");
@@ -141,7 +141,7 @@ describe("E2E: update", () => {
         expect(metadata!.version).toBe("1.0.0");
 
         // Unmodified files updated to v1.1.0
-        const otherFile = path.join(githubDir, "agents", "RDPI-Orchestrator.agent.md");
+        const otherFile = path.join(claudeDir, "agents", "pipeline-orchestrator.agent.md");
         const otherContent = await fs.readFile(otherFile, "utf8");
         const otherMeta = extractAstpMetadata(otherContent);
         expect(otherMeta!.version).toBe("1.1.0");
@@ -149,16 +149,16 @@ describe("E2E: update", () => {
 
     // T37: Force update overwrites modified files
     it("T37: force updates all files including modified", async () => {
-        await installRdpi();
+        await installPipeline();
 
         // Modify one file
-        const githubDir = path.join(projectDir, ".github");
-        const modifiedFile = path.join(githubDir, "agents", "rdpi-approve.agent.md");
+        const claudeDir = path.join(projectDir, ".claude");
+        const modifiedFile = path.join(claudeDir, "agents", "pipeline-approve.agent.md");
         const original = await fs.readFile(modifiedFile, "utf8");
         await fs.writeFile(modifiedFile, original + "\n<!-- user edit -->", "utf8");
 
         await setupV2Mocks();
-        await executeUpdate({ force: true, platform: "vscode", target: "project" });
+        await executeUpdate({ force: true, platform: "claude-code", target: "project" });
 
         // Modified file overwritten with v1.1.0
         const content = await fs.readFile(modifiedFile, "utf8");
@@ -169,7 +169,7 @@ describe("E2E: update", () => {
 
     // T39: Non-TTY graceful handling
     it("T39: handles non-TTY gracefully when no target provided", async () => {
-        mockSelectPlatform.mockResolvedValue("vscode");
+        mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockRejectedValue(new Error("Non-TTY: cannot prompt"));
 
         await expect(executeUpdate({})).rejects.toThrow();

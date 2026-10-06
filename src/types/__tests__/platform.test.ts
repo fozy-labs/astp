@@ -1,26 +1,17 @@
 import type { Bundle, Manifest } from "@/types/index.js";
 import { bundleSupportsPlatform, filterBundlesByPlatform, getBundlePlatforms } from "@/types/index.js";
 
-const vscodeBundle: Bundle = {
-    name: "rdpi",
+const claudeBundle: Bundle = {
+    name: "docs",
     version: "1.0.0",
-    description: "VS Code only",
+    description: "Claude Code bundle",
     default: false,
-    platforms: ["vscode"],
+    platforms: ["claude-code"],
     items: [],
 };
 
-const crossPlatformBundle: Bundle = {
-    name: "fozy-labs",
-    version: "1.0.0",
-    description: "Both",
-    default: false,
-    platforms: ["vscode", "claude-code"],
-    items: [],
-};
-
-const legacyBundle: Bundle = {
-    // No platforms field — treated as vscode-only for backwards compatibility.
+const unrestrictedBundle: Bundle = {
+    // No platforms field — supports every platform.
     name: "legacy",
     version: "1.0.0",
     description: "Legacy",
@@ -30,32 +21,26 @@ const legacyBundle: Bundle = {
 
 describe("getBundlePlatforms", () => {
     it("returns declared platforms", () => {
-        expect(getBundlePlatforms(crossPlatformBundle)).toEqual(["vscode", "claude-code"]);
+        expect(getBundlePlatforms(claudeBundle)).toEqual(["claude-code"]);
     });
 
-    it("defaults to vscode when platforms field is missing", () => {
-        expect(getBundlePlatforms(legacyBundle)).toEqual(["vscode"]);
+    it("defaults to all platforms when platforms field is missing", () => {
+        expect(getBundlePlatforms(unrestrictedBundle)).toEqual(["claude-code"]);
     });
 
-    it("defaults to vscode when platforms is an empty array", () => {
-        const bundle: Bundle = { ...vscodeBundle, platforms: [] };
-        expect(getBundlePlatforms(bundle)).toEqual(["vscode"]);
+    it("defaults to all platforms when platforms is an empty array", () => {
+        const bundle: Bundle = { ...claudeBundle, platforms: [] };
+        expect(getBundlePlatforms(bundle)).toEqual(["claude-code"]);
     });
 });
 
 describe("bundleSupportsPlatform", () => {
     it("returns true for declared platform", () => {
-        expect(bundleSupportsPlatform(crossPlatformBundle, "claude-code")).toBe(true);
-        expect(bundleSupportsPlatform(vscodeBundle, "vscode")).toBe(true);
+        expect(bundleSupportsPlatform(claudeBundle, "claude-code")).toBe(true);
     });
 
-    it("returns false for non-declared platform", () => {
-        expect(bundleSupportsPlatform(vscodeBundle, "claude-code")).toBe(false);
-    });
-
-    it("treats legacy bundle as vscode-only", () => {
-        expect(bundleSupportsPlatform(legacyBundle, "vscode")).toBe(true);
-        expect(bundleSupportsPlatform(legacyBundle, "claude-code")).toBe(false);
+    it("treats a bundle without platforms as supporting every platform", () => {
+        expect(bundleSupportsPlatform(unrestrictedBundle, "claude-code")).toBe(true);
     });
 });
 
@@ -64,17 +49,13 @@ describe("filterBundlesByPlatform", () => {
         schemaVersion: 1,
         repository: "fozy-labs/astp",
         bundles: {
-            rdpi: vscodeBundle,
-            "fozy-labs": crossPlatformBundle,
-            legacy: legacyBundle,
+            docs: claudeBundle,
+            legacy: unrestrictedBundle,
         },
     };
 
-    it("includes only platform-compatible bundles", () => {
+    it("includes platform-compatible bundles", () => {
         const claude = filterBundlesByPlatform(manifest, "claude-code");
-        expect(claude.map((b) => b.name)).toEqual(["fozy-labs"]);
-
-        const vscode = filterBundlesByPlatform(manifest, "vscode");
-        expect(vscode.map((b) => b.name).sort()).toEqual(["fozy-labs", "legacy", "rdpi"]);
+        expect(claude.map((b) => b.name).sort()).toEqual(["docs", "legacy"]);
     });
 });

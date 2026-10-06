@@ -2,150 +2,12 @@
     "schemaVersion": 1,
     "repository": "fozy-labs/astp",
     "bundles": {
-        "base": {
-            "name": "base",
-            "version": "1.0.1",
-            "description": "Base skill for VSCode Copilot agent orchestration",
-            "default": true,
-            "platforms": [
-                "vscode"
-            ],
-            "items": [
-                {
-                    "source": "base/skills/orchestrate/SKILL.md",
-                    "target": "skills/orchestrate/SKILL.md",
-                    "category": "skill"
-                }
-            ]
-        },
-        "rdpi": {
-            "name": "rdpi",
-            "version": "1.1.0",
-            "description": "Full RDPI pipeline — agents, instructions, and stage definitions",
-            "default": false,
-            "platforms": [
-                "vscode"
-            ],
-            "items": [
-                {
-                    "source": "rdpi/agents/RDPI-Orchestrator.agent.md",
-                    "target": "agents/RDPI-Orchestrator.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/agents/rdpi-approve.agent.md",
-                    "target": "agents/rdpi-approve.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/agents/rdpi-architect.agent.md",
-                    "target": "agents/rdpi-architect.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/agents/rdpi-codder.agent.md",
-                    "target": "agents/rdpi-codder.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/agents/rdpi-codebase-researcher.agent.md",
-                    "target": "agents/rdpi-codebase-researcher.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/agents/rdpi-design-reviewer.agent.md",
-                    "target": "agents/rdpi-design-reviewer.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/agents/rdpi-external-researcher.agent.md",
-                    "target": "agents/rdpi-external-researcher.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/agents/rdpi-implement-reviewer.agent.md",
-                    "target": "agents/rdpi-implement-reviewer.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/agents/rdpi-plan-reviewer.agent.md",
-                    "target": "agents/rdpi-plan-reviewer.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/agents/rdpi-planner.agent.md",
-                    "target": "agents/rdpi-planner.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/agents/rdpi-problem-analyst.agent.md",
-                    "target": "agents/rdpi-problem-analyst.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/agents/rdpi-qa-designer.agent.md",
-                    "target": "agents/rdpi-qa-designer.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/agents/rdpi-questioner.agent.md",
-                    "target": "agents/rdpi-questioner.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/agents/rdpi-redraft.agent.md",
-                    "target": "agents/rdpi-redraft.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/agents/rdpi-research-reviewer.agent.md",
-                    "target": "agents/rdpi-research-reviewer.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/agents/rdpi-stage-creator.agent.md",
-                    "target": "agents/rdpi-stage-creator.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/agents/rdpi-tester.agent.md",
-                    "target": "agents/rdpi-tester.agent.md",
-                    "category": "agent"
-                },
-                {
-                    "source": "rdpi/instructions/thoughts-workflow.instructions.md",
-                    "target": "instructions/thoughts-workflow.instructions.md",
-                    "category": "instruction"
-                },
-                {
-                    "source": "rdpi/skills/rdpi-01-research/SKILL.md",
-                    "target": "skills/rdpi-01-research/SKILL.md",
-                    "category": "skill"
-                },
-                {
-                    "source": "rdpi/skills/rdpi-02-design/SKILL.md",
-                    "target": "skills/rdpi-02-design/SKILL.md",
-                    "category": "skill"
-                },
-                {
-                    "source": "rdpi/skills/rdpi-03-plan/SKILL.md",
-                    "target": "skills/rdpi-03-plan/SKILL.md",
-                    "category": "skill"
-                },
-                {
-                    "source": "rdpi/skills/rdpi-04-implement/SKILL.md",
-                    "target": "skills/rdpi-04-implement/SKILL.md",
-                    "category": "skill"
-                }
-            ]
-        },
         "fozy-labs": {
             "name": "fozy-labs",
             "version": "1.5.0",
-            "description": "Fozy Labs stack skills — DI, FSD, rx-api, signals (VS Code + Claude Code)",
+            "description": "Fozy Labs stack skills — DI, FSD, rx-api, signals",
             "default": false,
             "platforms": [
-                "vscode",
                 "claude-code"
             ],
             "items": [
@@ -347,7 +209,6 @@
             "description": "Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas",
             "default": false,
             "platforms": [
-                "vscode",
                 "claude-code"
             ],
             "items": [
@@ -394,7 +255,6 @@
             "description": "Design decision derivation — gated procedure for interface, layout, and visual design choices",
             "default": false,
             "platforms": [
-                "vscode",
                 "claude-code"
             ],
             "items": [

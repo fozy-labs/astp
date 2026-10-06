@@ -11,135 +11,135 @@ export function createFixtureManifest(version = "1.0.0"): Manifest {
         schemaVersion: 1,
         repository: "fozy-labs/astp",
         bundles: {
-            base: {
-                name: "base",
+            core: {
+                name: "core",
                 version,
-                description: "Base skill for VSCode Copilot agent orchestration",
+                description: "Core orchestration skill",
                 default: true,
-                platforms: ["vscode"],
+                platforms: ["claude-code"],
                 items: [
                     {
-                        source: "base/skills/orchestrate/SKILL.md",
+                        source: "core/skills/orchestrate/SKILL.md",
                         target: "skills/orchestrate/SKILL.md",
                         category: "skill",
                     },
                 ],
             },
-            rdpi: {
-                name: "rdpi",
+            pipeline: {
+                name: "pipeline",
                 version,
-                description: "Full RDPI pipeline — agents, instructions, and stage definitions",
+                description: "Full pipeline — agents, instructions, and stage definitions",
                 default: false,
-                platforms: ["vscode"],
+                platforms: ["claude-code"],
                 items: [
                     {
-                        source: "rdpi/agents/RDPI-Orchestrator.agent.md",
-                        target: "agents/RDPI-Orchestrator.agent.md",
+                        source: "pipeline/agents/pipeline-orchestrator.agent.md",
+                        target: "agents/pipeline-orchestrator.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/agents/rdpi-approve.agent.md",
-                        target: "agents/rdpi-approve.agent.md",
+                        source: "pipeline/agents/pipeline-approve.agent.md",
+                        target: "agents/pipeline-approve.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/agents/rdpi-architect.agent.md",
-                        target: "agents/rdpi-architect.agent.md",
+                        source: "pipeline/agents/pipeline-architect.agent.md",
+                        target: "agents/pipeline-architect.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/agents/rdpi-codder.agent.md",
-                        target: "agents/rdpi-codder.agent.md",
+                        source: "pipeline/agents/pipeline-codder.agent.md",
+                        target: "agents/pipeline-codder.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/agents/rdpi-codebase-researcher.agent.md",
-                        target: "agents/rdpi-codebase-researcher.agent.md",
+                        source: "pipeline/agents/pipeline-codebase-researcher.agent.md",
+                        target: "agents/pipeline-codebase-researcher.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/agents/rdpi-design-reviewer.agent.md",
-                        target: "agents/rdpi-design-reviewer.agent.md",
+                        source: "pipeline/agents/pipeline-design-reviewer.agent.md",
+                        target: "agents/pipeline-design-reviewer.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/agents/rdpi-external-researcher.agent.md",
-                        target: "agents/rdpi-external-researcher.agent.md",
+                        source: "pipeline/agents/pipeline-external-researcher.agent.md",
+                        target: "agents/pipeline-external-researcher.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/agents/rdpi-implement-reviewer.agent.md",
-                        target: "agents/rdpi-implement-reviewer.agent.md",
+                        source: "pipeline/agents/pipeline-implement-reviewer.agent.md",
+                        target: "agents/pipeline-implement-reviewer.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/agents/rdpi-plan-reviewer.agent.md",
-                        target: "agents/rdpi-plan-reviewer.agent.md",
+                        source: "pipeline/agents/pipeline-plan-reviewer.agent.md",
+                        target: "agents/pipeline-plan-reviewer.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/agents/rdpi-planner.agent.md",
-                        target: "agents/rdpi-planner.agent.md",
+                        source: "pipeline/agents/pipeline-planner.agent.md",
+                        target: "agents/pipeline-planner.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/agents/rdpi-problem-analyst.agent.md",
-                        target: "agents/rdpi-problem-analyst.agent.md",
+                        source: "pipeline/agents/pipeline-problem-analyst.agent.md",
+                        target: "agents/pipeline-problem-analyst.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/agents/rdpi-qa-designer.agent.md",
-                        target: "agents/rdpi-qa-designer.agent.md",
+                        source: "pipeline/agents/pipeline-qa-designer.agent.md",
+                        target: "agents/pipeline-qa-designer.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/agents/rdpi-questioner.agent.md",
-                        target: "agents/rdpi-questioner.agent.md",
+                        source: "pipeline/agents/pipeline-questioner.agent.md",
+                        target: "agents/pipeline-questioner.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/agents/rdpi-redraft.agent.md",
-                        target: "agents/rdpi-redraft.agent.md",
+                        source: "pipeline/agents/pipeline-redraft.agent.md",
+                        target: "agents/pipeline-redraft.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/agents/rdpi-research-reviewer.agent.md",
-                        target: "agents/rdpi-research-reviewer.agent.md",
+                        source: "pipeline/agents/pipeline-research-reviewer.agent.md",
+                        target: "agents/pipeline-research-reviewer.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/agents/rdpi-stage-creator.agent.md",
-                        target: "agents/rdpi-stage-creator.agent.md",
+                        source: "pipeline/agents/pipeline-stage-creator.agent.md",
+                        target: "agents/pipeline-stage-creator.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/agents/rdpi-tester.agent.md",
-                        target: "agents/rdpi-tester.agent.md",
+                        source: "pipeline/agents/pipeline-tester.agent.md",
+                        target: "agents/pipeline-tester.agent.md",
                         category: "agent",
                     },
                     {
-                        source: "rdpi/instructions/thoughts-workflow.instructions.md",
+                        source: "pipeline/instructions/thoughts-workflow.instructions.md",
                         target: "instructions/thoughts-workflow.instructions.md",
                         category: "instruction",
                     },
                     {
-                        source: "rdpi/skills/rdpi-01-research/SKILL.md",
-                        target: "skills/rdpi-01-research/SKILL.md",
+                        source: "pipeline/skills/pipeline-01-research/SKILL.md",
+                        target: "skills/pipeline-01-research/SKILL.md",
                         category: "skill",
                     },
                     {
-                        source: "rdpi/skills/rdpi-02-design/SKILL.md",
-                        target: "skills/rdpi-02-design/SKILL.md",
+                        source: "pipeline/skills/pipeline-02-design/SKILL.md",
+                        target: "skills/pipeline-02-design/SKILL.md",
                         category: "skill",
                     },
                     {
-                        source: "rdpi/skills/rdpi-03-plan/SKILL.md",
-                        target: "skills/rdpi-03-plan/SKILL.md",
+                        source: "pipeline/skills/pipeline-03-plan/SKILL.md",
+                        target: "skills/pipeline-03-plan/SKILL.md",
                         category: "skill",
                     },
                     {
-                        source: "rdpi/skills/rdpi-04-implement/SKILL.md",
-                        target: "skills/rdpi-04-implement/SKILL.md",
+                        source: "pipeline/skills/pipeline-04-implement/SKILL.md",
+                        target: "skills/pipeline-04-implement/SKILL.md",
                         category: "skill",
                     },
                 ],
@@ -195,7 +195,7 @@ function generateTemplateContent(item: TemplateItem, version: string): string {
 // ── Install target from temp dir ──────────────────────────────────────
 
 export function makeProjectTarget(baseDir: string): InstallTarget {
-    return { platform: "vscode", type: "project", rootDir: path.join(baseDir, ".github") };
+    return { platform: "claude-code", type: "project", rootDir: path.join(baseDir, ".claude") };
 }
 
 // ── Cleanup utility ───────────────────────────────────────────────────

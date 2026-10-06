@@ -31,15 +31,6 @@ function createManifest(): Manifest {
         schemaVersion: 1,
         repository: "fozy-labs/astp",
         bundles: {
-            // VS Code only — excluded even though it ships a skill.
-            base: {
-                name: "base",
-                version: "1.0.1",
-                description: "Base bundle",
-                default: true,
-                platforms: ["vscode"],
-                items: [skillItem("base", "skills/orchestrate/SKILL.md")],
-            },
             // Claude Code, but agents only — nothing for the skills CLI to install.
             agentsOnly: {
                 name: "agentsOnly",
@@ -54,13 +45,13 @@ function createManifest(): Manifest {
                 version: "1.1.0",
                 description: "Docs bundle",
                 default: false,
-                platforms: ["vscode", "claude-code"],
+                platforms: ["claude-code"],
                 items: [
                     skillItem("docs", "skills/markdown-craft/SKILL.md"),
                     skillItem("docs", "skills/markdown-craft/references/mermaid-craft.md"),
                 ],
             },
-            // Predates platform support — treated as VS Code only.
+            // No platforms field — supports every platform.
             legacy: {
                 name: "legacy",
                 version: "0.1.0",
@@ -76,12 +67,12 @@ function createManifest(): Manifest {
 
 describe("selectBundles", () => {
     it("keeps only Claude Code bundles that ship at least one skill", () => {
-        expect(selectBundles(createManifest()).map((bundle) => bundle.name)).toEqual(["docs"]);
+        expect(selectBundles(createManifest()).map((bundle) => bundle.name)).toEqual(["docs", "legacy"]);
     });
 
-    it("treats a bundle without platforms as VS Code only", () => {
+    it("treats a bundle without platforms as supporting every platform", () => {
         const manifest = createManifest();
-        expect(selectBundles(manifest).some((bundle) => bundle.name === "legacy")).toBe(false);
+        expect(selectBundles(manifest).some((bundle) => bundle.name === "legacy")).toBe(true);
     });
 
     it("sorts bundles by name for a deterministic output", () => {
@@ -94,7 +85,7 @@ describe("selectBundles", () => {
             platforms: ["claude-code"],
             items: [skillItem("alpha", "skills/alpha-skill/SKILL.md")],
         };
-        expect(selectBundles(manifest).map((bundle) => bundle.name)).toEqual(["alpha", "docs"]);
+        expect(selectBundles(manifest).map((bundle) => bundle.name)).toEqual(["alpha", "docs", "legacy"]);
     });
 });
 
@@ -122,6 +113,11 @@ describe("collectSkillLocations", () => {
                 skillName: "markdown-craft",
                 dir: `${TEMPLATES_DIR}/docs/skills/markdown-craft`,
             },
+            {
+                pluginName: "legacy",
+                skillName: "legacy-skill",
+                dir: `${TEMPLATES_DIR}/legacy/skills/legacy-skill`,
+            },
         ]);
     });
 });
@@ -141,6 +137,13 @@ describe("buildMarketplace", () => {
                 description: "Docs bundle",
                 version: "1.1.0",
                 skills: ["./skills/markdown-craft"],
+            },
+            {
+                name: "legacy",
+                source: "./templates/legacy",
+                description: "Legacy bundle",
+                version: "0.1.0",
+                skills: ["./skills/legacy-skill"],
             },
         ]);
     });
@@ -253,7 +256,7 @@ describe("validateManifestSources", () => {
 
     it("ignores unpublished bundles", () => {
         const manifest = createManifest();
-        manifest.bundles.base.items[0].source = "wrong/path.md";
+        manifest.bundles.agentsOnly.items[0].source = "wrong/path.md";
         expect(validateManifestSources(manifest)).toEqual([]);
     });
 });
