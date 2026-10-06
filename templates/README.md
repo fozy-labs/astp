@@ -25,9 +25,14 @@ templates/
 ├── docs/                  ← bundle: docs (vscode + claude-code)
 │   └── skills/
 │       └── markdown-craft/
-└── design/                ← bundle: design (vscode + claude-code)
+├── design/                ← bundle: design (vscode + claude-code)
+│   └── skills/
+│       └── design-derivation/
+└── matt/                  ← bundle: matt (claude-code only)
     └── skills/
-        └── design-derivation/
+        ├── ask-matt/
+        ├── retro/
+        └── writing-for-agents/
 ```
 
 Each bundle directory's internal structure mirrors the install target structure. For example, `rdpi/agents/rdpi-approve.agent.md` installs to `<install-root>/agents/rdpi-approve.agent.md`.

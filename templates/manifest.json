@@ -464,6 +464,42 @@
                     "category": "skill"
                 }
             ]
+        },
+        "matt": {
+            "name": "matt",
+            "version": "1.0.0",
+            "description": "Matt Pocock's agent-flow skills — ask-matt router, session retro, writing-for-agents (Claude Code)",
+            "default": false,
+            "platforms": [
+                "claude-code"
+            ],
+            "items": [
+                {
+                    "source": "matt/skills/ask-matt/SKILL.md",
+                    "target": "skills/ask-matt/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/ask-matt/PHASE-BOUNDARIES.md",
+                    "target": "skills/ask-matt/PHASE-BOUNDARIES.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/retro/SKILL.md",
+                    "target": "skills/retro/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/writing-for-agents/SKILL.md",
+                    "target": "skills/writing-for-agents/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/writing-for-agents/SKILL-MECHANICS.md",
+                    "target": "skills/writing-for-agents/SKILL-MECHANICS.md",
+                    "category": "skill"
+                }
+            ]
         }
     }
 }

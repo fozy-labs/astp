@@ -38,6 +38,17 @@
                 "./skills/fozy-labs-rx-api",
                 "./skills/fozy-labs-signals"
             ]
+        },
+        {
+            "name": "matt",
+            "source": "./templates/matt",
+            "description": "Matt Pocock's agent-flow skills — ask-matt router, session retro, writing-for-agents (Claude Code)",
+            "version": "1.0.0",
+            "skills": [
+                "./skills/ask-matt",
+                "./skills/retro",
+                "./skills/writing-for-agents"
+            ]
         }
     ]
 }

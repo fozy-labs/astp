@@ -343,7 +343,7 @@ describe("committed marketplace", () => {
 
     it("publishes the claude-code bundles", async () => {
         const marketplace = buildMarketplace(await readRepoManifest());
-        expect(marketplace.plugins.map((plugin) => plugin.name)).toEqual(["design", "docs", "fozy-labs"]);
+        expect(marketplace.plugins.map((plugin) => plugin.name)).toEqual(["design", "docs", "fozy-labs", "matt"]);
     });
 
     it("keeps templates/manifest.json internally consistent", async () => {
