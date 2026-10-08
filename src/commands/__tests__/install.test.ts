@@ -36,8 +36,10 @@ vi.mock("@/core/index.js", async (importOriginal) => {
         resolveBundle: vi.fn(),
         downloadBundle: vi.fn(),
         loadInstalled: vi.fn(),
+        readUnitBlockFiles: vi.fn(async () => new Map()),
         syncBundle: vi.fn(),
         writeLock: vi.fn(),
+        assertBundleBlocks: vi.fn(),
         assertBundleSources: vi.fn(),
     };
 });
@@ -48,6 +50,7 @@ vi.mock("@/ui/prompts.js", () => ({
     selectBundles: vi.fn(),
     confirmInstall: vi.fn(),
     isInteractive: vi.fn(),
+    selectBlocks: vi.fn(),
     selectUnits: vi.fn(),
     showSuccess: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
@@ -134,6 +137,8 @@ beforeEach(async () => {
         removed: [],
         skipped: [],
         kept: [],
+        keptBlocks: [],
+        conflictBlocks: [],
     });
     mockWriteLock.mockResolvedValue(undefined);
     mockConfirmInstall.mockResolvedValue(true);
@@ -221,7 +226,7 @@ describe("executeInstall", () => {
         await executeInstall({});
 
         expect(mockConfirmInstall).toHaveBeenCalled();
-        expect(mockDownloadBundle).not.toHaveBeenCalled();
+        // Bundles download before the confirmation: block prompts need content.
         expect(mockSyncBundle).not.toHaveBeenCalled();
     });
 

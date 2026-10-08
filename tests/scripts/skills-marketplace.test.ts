@@ -14,6 +14,7 @@ import {
     selectBundles,
     serializeMarketplace,
     TEMPLATES_DIR,
+    validateBlockSources,
     validateManifestSources,
     validateSkillFile,
 } from "../../scripts/skills-marketplace.ts";
@@ -284,6 +285,43 @@ describe("validateSkillFile", () => {
         ],
     ])("rejects %s", (_case, content, expected) => {
         expect(validateSkillFile(location, content)).toContainEqual(expect.stringMatching(expected));
+    });
+});
+
+// ── Blocks ───────────────────────────────────────────────────────────
+
+describe("block exclusions", () => {
+    const excluded = new Set(["templates/legacy/skills/legacy-skill"]);
+
+    it("drops an excluded skill from names, locations and plugins", () => {
+        const manifest = createManifest();
+        expect(collectSkillNames(manifest.bundles.legacy, excluded)).toEqual([]);
+        expect(collectSkillLocations(manifest, excluded).map((location) => location.skillName)).toEqual([
+            "markdown-craft",
+        ]);
+        expect(
+            buildMarketplace(manifest, excluded).plugins.flatMap((plugin) => plugin.skills),
+        ).toEqual(["./skills/markdown-craft"]);
+    });
+
+    it("drops a bundle whose skills are all excluded", () => {
+        const manifest = createManifest();
+        expect(selectBundles(manifest, excluded).map((bundle) => bundle.name)).toEqual(["docs"]);
+        expect(buildMarketplace(manifest, excluded).plugins.map((plugin) => plugin.name)).toEqual(["docs"]);
+    });
+});
+
+describe("validateBlockSources", () => {
+    it("reports template block parse errors with their source", () => {
+        const errors = validateBlockSources(
+            new Map([["docs/rules/x.md", "---\ndescription: x\n---\n\n<astp-block>\nBody\n</astp-block>\n"]]),
+        );
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toMatch(/^docs\/rules\/x\.md: line \d+: /);
+    });
+
+    it("accepts files without template tags", () => {
+        expect(validateBlockSources(new Map([["docs/agents/a.agent.md", "# Agent\n"]]))).toEqual([]);
     });
 });
 

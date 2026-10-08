@@ -30,6 +30,8 @@ vi.mock("@/ui/prompts.js", () => ({
     isInteractive: vi.fn(),
     showInfo: vi.fn(),
     showSuccess: vi.fn(),
+    warnBlockConflicts: vi.fn(),
+    warnKeptBlocks: vi.fn(),
     warnKeptRemoved: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));

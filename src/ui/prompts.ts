@@ -179,6 +179,27 @@ export async function selectNewUnits(bundleName: string, units: TemplateUnit[]):
     return selected as string[];
 }
 
+export interface BlockOption {
+    /** `<file target>#<name>`. */
+    key: string;
+    name: string;
+    file: string;
+}
+
+export async function selectBlocks(unitPath: string, blocks: BlockOption[], initial: string[]): Promise<string[]> {
+    const selected = await p.multiselect({
+        message: `Select blocks in ${unitPath}:\n(Space = toggle, Enter = confirm)`,
+        options: blocks.map((block) => ({ value: block.key, label: block.name, hint: block.file })),
+        initialValues: initial,
+        required: false,
+    });
+    if (p.isCancel(selected)) {
+        p.cancel("Cancelled.");
+        process.exit(0);
+    }
+    return selected as string[];
+}
+
 function pathLabel(relativePath: string): string {
     return relativePath.split("/").at(-1) ?? relativePath;
 }
@@ -304,6 +325,20 @@ export function warnKeptRemoved(units: FileStatus[]): void {
     const fileCount = units.filter((unit) => unit.kind === "file").length;
     p.log.warn(
         `${describeUnitCounts(fileCount, skillCount)} not selected or removed upstream but modified locally — kept:\n${paths}\nUse --force to delete them.`,
+    );
+}
+
+export function warnKeptBlocks(keys: string[]): void {
+    const list = keys.map((key) => `  • ${key}`).join("\n");
+    p.log.warn(
+        `${keys.length} block${keys.length === 1 ? "" : "s"} not selected or removed upstream but changed locally — kept:\n${list}\nUse --force to delete them.`,
+    );
+}
+
+export function warnBlockConflicts(keys: string[]): void {
+    const list = keys.map((key) => `  • ${key}`).join("\n");
+    p.log.warn(
+        `${keys.length} block${keys.length === 1 ? "" : "s"} changed locally and in the template — the new version was added as a <FILL_INSTRUCTION>:\n${list}`,
     );
 }
 

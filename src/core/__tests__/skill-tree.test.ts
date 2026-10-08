@@ -144,3 +144,56 @@ describe("computeSkillTreeHash", () => {
         expect(await computeSkillTreeHash(skillDir)).toBe(initialHash);
     });
 });
+
+describe("block files in tree hashes", () => {
+    let tempDir: string;
+
+    beforeEach(async () => {
+        tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "astp-skill-blocks-"));
+    });
+
+    afterEach(async () => {
+        await fs.rm(tempDir, { recursive: true, force: true });
+    });
+
+    it("a block file contributes only its frontmatter", async () => {
+        const dir = path.join(tempDir, "skill");
+        await fs.mkdir(dir, { recursive: true });
+        await fs.writeFile(path.join(dir, "SKILL.md"), "---\nname: s\n---\n\n<a>\nv1\n</a>\n");
+        await fs.writeFile(path.join(dir, "other.md"), "plain\n");
+        const blockFiles = new Set(["SKILL.md"]);
+        const before = await computeSkillTreeHash(dir, { blockFiles });
+
+        await fs.writeFile(path.join(dir, "SKILL.md"), "---\nname: s\n---\n\n<a>\nfilled by user\n</a>\nextra\n");
+        expect(await computeSkillTreeHash(dir, { blockFiles })).toBe(before);
+        await fs.writeFile(path.join(dir, "SKILL.md"), "---\nname: changed\n---\n\n<a>\nfilled\n</a>\n");
+        expect(await computeSkillTreeHash(dir, { blockFiles })).not.toBe(before);
+    });
+
+    it("computeTemplateUnitHash honours blockFiles for file units and skills", async () => {
+        const tpl = path.join(tempDir, "tpl");
+        await fs.mkdir(path.join(tpl, "skills/s"), { recursive: true });
+        await fs.writeFile(path.join(tpl, "rules.md"), "---\nd: x\n---\n<a>\nt\n</a>\n");
+        await fs.writeFile(path.join(tpl, "skills/s/SKILL.md"), "---\nname: s\n---\n<a>\nt\n</a>\n");
+
+        const fileUnit = {
+            kind: "file" as const,
+            relativePath: "rules.md",
+            item: { source: "b/rules.md", target: "rules.md", category: "rule" as const },
+        };
+        const withBlocks = await computeTemplateUnitHash(tpl, fileUnit, { blockFiles: new Set(["rules.md"]) });
+        const without = await computeTemplateUnitHash(tpl, fileUnit);
+        expect(withBlocks).not.toBe(without);
+
+        const skillUnit = {
+            kind: "skill" as const,
+            relativePath: "skills/s",
+            items: [{ source: "b/skills/s/SKILL.md", target: "skills/s/SKILL.md", category: "skill" as const }],
+        };
+        const skillWith = await computeTemplateUnitHash(tpl, skillUnit, { blockFiles: new Set(["SKILL.md"]) });
+        const installed = path.join(tempDir, "installed/skills/s");
+        await fs.mkdir(installed, { recursive: true });
+        await fs.writeFile(path.join(installed, "SKILL.md"), "---\nname: s\n---\n<a>\nfilled\n</a>\n");
+        expect(await computeSkillTreeHash(installed, { blockFiles: new Set(["SKILL.md"]) })).toBe(skillWith);
+    });
+});

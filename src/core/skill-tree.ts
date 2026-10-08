@@ -2,30 +2,41 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { extractFrontmatter } from "./blocks.js";
 import { computeHash, stripAstpFields } from "./frontmatter.js";
 import type { TemplateUnit } from "./units.js";
 
-export async function computeSkillTreeHash(
-    skillDir: string,
-    options: { stripRootAstpFields?: boolean } = {},
-): Promise<string> {
+export interface TreeHashOptions {
+    stripRootAstpFields?: boolean;
+    /** Files with `<astp-block>` blocks contribute only their frontmatter to the hash. */
+    blockFiles?: ReadonlySet<string>;
+}
+
+export async function computeSkillTreeHash(skillDir: string, options: TreeHashOptions = {}): Promise<string> {
     const files = await findRegularFiles(skillDir);
     const relativePaths = files.map((filePath) => path.relative(skillDir, filePath).split(path.sep).join("/"));
     return computeFileListHash(skillDir, relativePaths, options);
 }
 
-export async function computeTemplateUnitHash(tempDir: string, unit: TemplateUnit): Promise<string> {
+export async function computeTemplateUnitHash(
+    tempDir: string,
+    unit: TemplateUnit,
+    options: TreeHashOptions = {},
+): Promise<string> {
     if (unit.kind === "file") {
-        return computeHash(await fs.readFile(path.join(tempDir, unit.item.target), "utf8"));
+        const content = await fs.readFile(path.join(tempDir, unit.item.target), "utf8");
+        return options.blockFiles?.has(unit.item.target)
+            ? computeHash(extractFrontmatter(content))
+            : computeHash(content);
     }
     const relativePaths = unit.items.map((item) => path.posix.relative(unit.relativePath, item.target));
-    return computeFileListHash(path.join(tempDir, unit.relativePath), relativePaths);
+    return computeFileListHash(path.join(tempDir, unit.relativePath), relativePaths, options);
 }
 
 async function computeFileListHash(
     rootDir: string,
     relativePaths: string[],
-    options: { stripRootAstpFields?: boolean } = {},
+    options: TreeHashOptions = {},
 ): Promise<string> {
     const lines: Array<{ path: string; line: string }> = [];
     for (const relativePath of relativePaths) {
@@ -34,7 +45,9 @@ async function computeFileListHash(
         const bytes =
             options.stripRootAstpFields && relativePath === "SKILL.md"
                 ? Buffer.from(stripAstpFields(fileBytes.toString("utf8")), "utf8")
-                : fileBytes;
+                : options.blockFiles?.has(relativePath)
+                  ? Buffer.from(extractFrontmatter(fileBytes.toString("utf8")), "utf8")
+                  : fileBytes;
         const normalizedBytes = normalizeLineEndings(bytes);
         const fileHash = createHash("sha256").update(normalizedBytes).digest("hex");
         lines.push({ path: relativePath, line: `${fileHash}  ${relativePath}\n` });

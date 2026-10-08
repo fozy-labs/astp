@@ -12,8 +12,9 @@ import type {
     UpdateReport,
 } from "@/types/index.js";
 
+import { blockHash, frontmatterHash, parseInstalledBlocks } from "./blocks.js";
 import { computeHash, extractAstpMetadata, stripAstpFields } from "./frontmatter.js";
-import type { Lock } from "./lock.js";
+import type { Lock, LockUnit } from "./lock.js";
 import { readLock } from "./lock.js";
 import { computeSkillTreeHash } from "./skill-tree.js";
 import { groupTemplateItems } from "./units.js";
@@ -32,13 +33,14 @@ export async function loadInstalled(rootDir: string): Promise<{ lock: Lock; bund
     for (const [bundleName, bundle] of Object.entries(lock.bundles)) {
         const units = await Promise.all(
             Object.entries(bundle.units).map(async ([relativePath, unit]): Promise<InstalledUnit> => {
-                const state = await getLockUnitState(rootDir, relativePath, unit.kind, unit.hash);
+                const { state, blocks } = await getLockUnitState(rootDir, relativePath, unit);
                 return {
                     kind: unit.kind,
                     relativePath,
                     version: unit.version,
                     origin: "lock",
                     state,
+                    ...(blocks ? { blocks } : {}),
                 };
             }),
         );
@@ -97,7 +99,9 @@ export function compareVersions(installed: InstalledBundle[], manifest: Manifest
 
         const units = classifyUnits(bundle, manifestBundle);
         const cmp = compareSemver(bundle.version, manifestBundle.version);
-        const diverged = units.some((unit) => ["missing", "new", "removed"].includes(unit.state));
+        const diverged =
+            units.some((unit) => ["missing", "new", "removed"].includes(unit.state)) ||
+            bundle.units.some((unit) => unit.blocks?.missing);
         const cleanLegacy = bundle.units.some(
             (unit) =>
                 unit.origin === "legacy" &&
@@ -176,21 +180,93 @@ function compareSemver(a: string, b: string): number {
 async function getLockUnitState(
     rootDir: string,
     relativePath: string,
-    kind: "file" | "skill",
-    expectedHash: string,
-): Promise<InstalledUnit["state"]> {
+    unit: LockUnit,
+): Promise<{ state: InstalledUnit["state"]; blocks?: InstalledUnit["blocks"] }> {
     const unitPath = path.join(rootDir, relativePath);
     let stat;
     try {
         stat = await fs.lstat(unitPath);
     } catch (error) {
-        if (["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) return "missing";
+        if (["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) return { state: "missing" };
         throw error;
     }
-    if ((kind === "file" && !stat.isFile()) || (kind === "skill" && !stat.isDirectory())) return "modified";
-    const hash =
-        kind === "file" ? computeHash(await fs.readFile(unitPath, "utf8")) : await computeSkillTreeHash(unitPath);
-    return hash === expectedHash ? "unmodified" : "modified";
+    if ((unit.kind === "file" && !stat.isFile()) || (unit.kind === "skill" && !stat.isDirectory())) {
+        return { state: "modified" };
+    }
+
+    const blockKeys = Object.keys(unit.blocks ?? {}).concat(unit.declinedBlocks ?? []);
+    if (blockKeys.length === 0) {
+        const hash =
+            unit.kind === "file"
+                ? computeHash(await fs.readFile(unitPath, "utf8"))
+                : await computeSkillTreeHash(unitPath);
+        return { state: hash === unit.hash ? "unmodified" : "modified" };
+    }
+
+    // Unit with blocks: the hash covers frontmatter only; blocks are verified individually.
+    const blockFiles = [...new Set(blockKeys.map((key) => key.slice(0, key.lastIndexOf("#"))))];
+    const blockInfo = { missing: false, dirty: false, parseFailed: false };
+    let modified = false;
+
+    if (unit.kind === "file") {
+        const content = await fs.readFile(unitPath, "utf8");
+        modified = frontmatterHash(content) !== unit.hash;
+        inspectBlockFile(content, relativePath, unit.blocks ?? {}, blockInfo);
+        if (blockInfo.parseFailed) modified = true;
+    } else {
+        const relativeBlockFiles = new Set(
+            blockFiles
+                .filter((file) => file.startsWith(`${relativePath}/`))
+                .map((file) => file.slice(relativePath.length + 1)),
+        );
+        modified = (await computeSkillTreeHash(unitPath, { blockFiles: relativeBlockFiles })) !== unit.hash;
+        for (const file of relativeBlockFiles) {
+            let content: string | null = null;
+            try {
+                content = await fs.readFile(path.join(unitPath, file), "utf8");
+            } catch (error) {
+                if (!["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error;
+            }
+            if (content === null) {
+                modified = true;
+                continue;
+            }
+            const fileTarget = `${relativePath}/${file}`;
+            inspectBlockFile(content, fileTarget, unit.blocks ?? {}, blockInfo);
+            if (blockInfo.parseFailed) modified = true;
+        }
+    }
+
+    return {
+        state: modified ? "modified" : "unmodified",
+        blocks: { missing: blockInfo.missing, dirty: blockInfo.dirty },
+    };
+}
+
+function inspectBlockFile(
+    content: string,
+    fileTarget: string,
+    lockBlocks: Record<string, string>,
+    info: { missing: boolean; dirty: boolean; parseFailed: boolean },
+): void {
+    const names = Object.keys(lockBlocks)
+        .filter((key) => key.startsWith(`${fileTarget}#`))
+        .map((key) => key.slice(fileTarget.length + 1));
+    const parsed = parseInstalledBlocks(content, names);
+    if (!parsed) {
+        info.parseFailed = true;
+        info.missing = true;
+        return;
+    }
+    for (const name of names) {
+        const region = parsed.blocks.get(name);
+        if (!region) {
+            info.missing = true;
+            continue;
+        }
+        if (blockHash(region.content) !== lockBlocks[`${fileTarget}#${name}`]) info.dirty = true;
+    }
+    if (parsed.outsideText.trim() !== "") info.dirty = true;
 }
 
 async function scanLegacy(rootDir: string, lock: Lock): Promise<Map<string, InstalledUnit[]>> {

@@ -7,6 +7,7 @@ export {
     isInteractive,
     outro,
     selectAction,
+    selectBlocks,
     selectBundles,
     selectInstalledBundles,
     selectNewUnits,
@@ -17,7 +18,10 @@ export {
     showSuccess,
     showUpdateReport,
     spinner,
+    warnBlockConflicts,
+    warnKeptBlocks,
     warnKeptRemoved,
     warnLegacyModified,
     warnModified,
 } from "./prompts.js";
+export type { BlockOption } from "./prompts.js";

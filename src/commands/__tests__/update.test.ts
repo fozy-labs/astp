@@ -32,11 +32,13 @@ import { executeUpdate } from "../update.js";
 
 vi.mock("@/core/index.js", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@/core/index.js")>()),
+    assertBundleBlocks: vi.fn(),
     assertBundleSources: vi.fn(),
     compareVersions: vi.fn(),
     downloadBundle: vi.fn(),
     fetchManifest: vi.fn(),
     loadInstalled: vi.fn(),
+    readUnitBlockFiles: vi.fn(async () => new Map()),
     syncBundle: vi.fn(),
     writeLock: vi.fn(),
 }));
@@ -54,6 +56,8 @@ vi.mock("@/ui/prompts.js", () => ({
     showInfo: vi.fn(),
     showSuccess: vi.fn(),
     showUpdateReport: vi.fn(),
+    warnBlockConflicts: vi.fn(),
+    warnKeptBlocks: vi.fn(),
     warnKeptRemoved: vi.fn(),
     warnLegacyModified: vi.fn(),
     warnModified: vi.fn(),
@@ -149,7 +153,14 @@ beforeEach(async () => {
     mockCompareVersions.mockReturnValue(updateReport());
     mockDownloadBundle.mockResolvedValue(tempDir);
     mockAssertBundleSources.mockResolvedValue(undefined);
-    mockSyncBundle.mockResolvedValue({ installed: [], removed: [], skipped: [], kept: [] });
+    mockSyncBundle.mockResolvedValue({
+        installed: [],
+        removed: [],
+        skipped: [],
+        kept: [],
+        keptBlocks: [],
+        conflictBlocks: [],
+    });
     mockWriteLock.mockResolvedValue(undefined);
     mockIsInteractive.mockReturnValue(false);
     mockSelectNewUnits.mockImplementation(async (_name, units) => units.map((unit) => unit.relativePath));
@@ -170,6 +181,8 @@ describe("executeUpdate", () => {
             removed: [],
             skipped: [],
             kept: [],
+            keptBlocks: [],
+            conflictBlocks: [],
         });
 
         await executeUpdate({ force: true, platform: "claude-code", target: "project" });
@@ -233,6 +246,8 @@ describe("executeUpdate", () => {
             removed: [{ targetPath: testItem.target, kind: "file", state: "unmodified" }],
             skipped: [],
             kept: [],
+            keptBlocks: [],
+            conflictBlocks: [],
         });
 
         await executeUpdate({ platform: "claude-code", target: "project" });
@@ -286,6 +301,8 @@ describe("executeUpdate", () => {
             removed: [{ targetPath: "agents/old.agent.md", kind: "file", state: "unmodified" }],
             skipped: [{ targetPath: testItem.target, kind: "file", state: "modified" }],
             kept: [{ targetPath: keptUnit.relativePath, kind: "file", state: "modified" }],
+            keptBlocks: [],
+            conflictBlocks: [],
         });
 
         await executeUpdate({ platform: "claude-code", target: "project" });
@@ -348,6 +365,8 @@ describe("executeUpdate", () => {
             removed: [],
             skipped: [{ targetPath: testItem.target, kind: "file", state: "modified" }],
             kept: [],
+            keptBlocks: [],
+            conflictBlocks: [],
         });
 
         await executeUpdate({ platform: "claude-code", target: "project" });

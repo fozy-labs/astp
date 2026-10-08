@@ -101,3 +101,64 @@ describe("lock file", () => {
         await expect(fs.access(path.join(rootDir, "astp.lock"))).rejects.toMatchObject({ code: "ENOENT" });
     });
 });
+
+describe("lock block fields", () => {
+    let rootDir: string;
+
+    beforeEach(async () => {
+        rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "astp-lock-blocks-"));
+    });
+
+    afterEach(async () => {
+        await fs.rm(rootDir, { recursive: true, force: true });
+    });
+
+    it("round-trips blocks and declinedBlocks with sorted keys", async () => {
+        await writeLock(rootDir, {
+            schemaVersion: 1,
+            bundles: {
+                core: {
+                    source: "repo",
+                    declined: [],
+                    units: {
+                        "rules/x.md": {
+                            kind: "file",
+                            version: "1.0.0",
+                            hash: "abc",
+                            blocks: { "rules/x.md#b": "2", "rules/x.md#a": "1" },
+                            declinedBlocks: ["rules/x.md#c", "rules/x.md#c"],
+                        },
+                    },
+                },
+            },
+        });
+        const lock = await readLock(rootDir);
+        const unit = lock.bundles.core!.units["rules/x.md"]!;
+        expect(Object.keys(unit.blocks!)).toEqual(["rules/x.md#a", "rules/x.md#b"]);
+        expect(unit.declinedBlocks).toEqual(["rules/x.md#c"]);
+    });
+
+    it.each([
+        ["blocks without declinedBlocks", { blocks: { "a/b.md#x": "h" } }],
+        ["declinedBlocks without blocks", { declinedBlocks: ["a/b.md#x"] }],
+        ["non-hash block value", { blocks: { "a/b.md#x": 5 }, declinedBlocks: [] }],
+        ["invalid block name", { blocks: { "a/b.md#X": "h" }, declinedBlocks: [] }],
+        ["unsafe file part", { blocks: { "../x.md#a": "h" }, declinedBlocks: [] }],
+        ["non-string declinedBlocks entry", { blocks: {}, declinedBlocks: [3] }],
+    ])("rejects %s", async (_label, fields) => {
+        await fs.writeFile(
+            path.join(rootDir, "astp.lock"),
+            JSON.stringify({
+                schemaVersion: 1,
+                bundles: {
+                    core: {
+                        source: "repo",
+                        declined: [],
+                        units: { "a/b.md": { kind: "file", version: "1.0.0", hash: "h", ...fields } },
+                    },
+                },
+            }),
+        );
+        await expect(readLock(rootDir)).rejects.toThrow(/Invalid lock file/);
+    });
+});

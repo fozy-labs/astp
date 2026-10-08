@@ -1,17 +1,20 @@
 import fs from "node:fs/promises";
 
 import {
+    assertBundleBlocks,
     assertBundleSources,
     downloadBundle,
     fetchManifest,
     groupTemplateItems,
     loadInstalled,
+    readUnitBlockFiles,
     resolveBundle,
     resolveUnitPaths,
     syncBundle,
     validateUnitTargets,
     writeLock,
 } from "@/core/index.js";
+import type { BlockSelections } from "@/core/index.js";
 import type { Bundle, FileStatus, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { bundleSupportsPlatform, getBundlePlatforms, resolveTarget } from "@/types/index.js";
 import { describeUnitCounts } from "@/ui/format.js";
@@ -24,10 +27,14 @@ import {
     selectUnits,
     showSuccess,
     spinner,
+    warnBlockConflicts,
+    warnKeptBlocks,
     warnKeptRemoved,
     warnLegacyModified,
     warnModified,
 } from "@/ui/prompts.js";
+
+import { selectInstallBlocks } from "./blocks.js";
 
 export interface InstallOptions {
     bundle?: string;
@@ -41,6 +48,8 @@ interface BundlePlan {
     bundle: Bundle;
     selected: Set<string>;
     declined: Set<string>;
+    tempDir?: string;
+    blockSelections: BlockSelections;
 }
 
 export async function executeInstall(options: InstallOptions): Promise<void> {
@@ -96,23 +105,42 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             selected = paths;
             declined = new Set();
         }
-        plans.push({ bundle, selected, declined });
+        plans.push({ bundle, selected, declined, blockSelections: new Map() });
     }
 
-    const selectedUnits = plans.flatMap((plan) =>
-        groupTemplateItems(plan.bundle.items).filter((unit) => plan.selected.has(unit.relativePath)),
-    );
-    if (isInteractive() && !(await confirmInstall(selectedBundles, target, selectedUnits))) return;
-
-    const totals = { installed: [] as FileStatus[], skipped: [] as FileStatus[], kept: [] as FileStatus[] };
-    for (const plan of plans) {
-        s.start(`Downloading ${plan.bundle.name}...`);
-        const tempDir = await downloadBundle(manifest.repository, plan.bundle.name);
-        try {
+    try {
+        // Block choices need the template content, so every bundle is downloaded
+        // before the block prompts and the confirmation.
+        for (const plan of plans) {
+            s.start(`Downloading ${plan.bundle.name}...`);
+            plan.tempDir = await downloadBundle(manifest.repository, plan.bundle.name);
             s.stop(`Downloaded ${plan.bundle.name}.`);
             const units = groupTemplateItems(plan.bundle.items);
             validateUnitTargets(target.rootDir, units);
-            await assertBundleSources(tempDir, plan.bundle.name, units);
+            await assertBundleSources(plan.tempDir, plan.bundle.name, units);
+            await assertBundleBlocks(plan.tempDir, plan.bundle.name, units);
+
+            const lockBundle = installedState.lock.bundles[plan.bundle.name];
+            for (const unit of units) {
+                if (!plan.selected.has(unit.relativePath)) continue;
+                const blockFiles = await readUnitBlockFiles(plan.tempDir, unit);
+                if (blockFiles.size === 0) continue;
+                const selections = await selectInstallBlocks(
+                    unit.relativePath,
+                    blockFiles,
+                    lockBundle?.units[unit.relativePath],
+                );
+                for (const [target, selection] of selections) plan.blockSelections.set(target, selection);
+            }
+        }
+
+        const selectedUnits = plans.flatMap((plan) =>
+            groupTemplateItems(plan.bundle.items).filter((unit) => plan.selected.has(unit.relativePath)),
+        );
+        if (isInteractive() && !(await confirmInstall(selectedBundles, target, selectedUnits))) return;
+
+        const totals = { installed: [] as FileStatus[], skipped: [] as FileStatus[], kept: [] as FileStatus[] };
+        for (const plan of plans) {
             s.start(`Installing ${plan.bundle.name}...`);
             const result = await syncBundle({
                 target,
@@ -120,9 +148,10 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 bundle: plan.bundle,
                 installed: installedState.bundles.find((entry) => entry.bundleName === plan.bundle.name),
                 lock: installedState.lock,
-                tempDir,
+                tempDir: plan.tempDir!,
                 selected: plan.selected,
                 declined: plan.declined,
+                blockSelections: plan.blockSelections,
                 force: options.force ?? false,
             });
             await writeLock(target.rootDir, installedState.lock);
@@ -134,20 +163,24 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             if (modified.length > 0) warnModified(modified);
             if (legacy.length > 0) warnLegacyModified(legacy);
             if (result.kept.length > 0) warnKeptRemoved(result.kept);
+            if (result.keptBlocks.length > 0) warnKeptBlocks(result.keptBlocks);
+            if (result.conflictBlocks.length > 0) warnBlockConflicts(result.conflictBlocks);
             s.stop(`Installed ${plan.bundle.name}.`);
-        } finally {
-            await fs.rm(tempDir, { recursive: true, force: true });
+        }
+
+        const installedCounts = countStatuses(totals.installed);
+        const skippedCounts = countStatuses(totals.skipped);
+        const keptCounts = countStatuses(totals.kept);
+        showSuccess(
+            `Installed ${installedCounts} to ${target.rootDir}${totals.skipped.length ? `, skipped ${skippedCounts}` : ""}${
+                totals.kept.length ? `, kept ${keptCounts}` : ""
+            }`,
+        );
+    } finally {
+        for (const plan of plans) {
+            if (plan.tempDir) await fs.rm(plan.tempDir, { recursive: true, force: true });
         }
     }
-
-    const installedCounts = countStatuses(totals.installed);
-    const skippedCounts = countStatuses(totals.skipped);
-    const keptCounts = countStatuses(totals.kept);
-    showSuccess(
-        `Installed ${installedCounts} to ${target.rootDir}${totals.skipped.length ? `, skipped ${skippedCounts}` : ""}${
-            totals.kept.length ? `, kept ${keptCounts}` : ""
-        }`,
-    );
 }
 
 function countStatuses(statuses: FileStatus[]): string {

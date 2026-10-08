@@ -6,6 +6,14 @@ export interface LockUnit {
     kind: "file" | "skill";
     version: string;
     hash: string;
+    /**
+     * Block state for units whose template has `<astp-block>` files: key is
+     * `<root-relative file target>#<block name>`, value the template block hash.
+     * Present iff the unit has at least one file with blocks.
+     */
+    blocks?: Record<string, string>;
+    /** Deselected block keys, like `declined` for units. Present iff `blocks` is. */
+    declinedBlocks?: string[];
 }
 
 export interface LockBundle {
@@ -69,7 +77,16 @@ export async function writeLock(rootDir: string, lock: Lock): Promise<void> {
                         .sort()
                         .map((unitPath) => {
                             const unit = bundle.units[unitPath]!;
-                            return [unitPath, { hash: unit.hash, kind: unit.kind, version: unit.version }];
+                            const entry: LockUnit = { hash: unit.hash, kind: unit.kind, version: unit.version };
+                            if (unit.blocks || unit.declinedBlocks) {
+                                entry.blocks = Object.fromEntries(
+                                    Object.keys(unit.blocks ?? {})
+                                        .sort()
+                                        .map((key) => [key, unit.blocks![key]!]),
+                                );
+                                entry.declinedBlocks = [...new Set(unit.declinedBlocks ?? [])].sort();
+                            }
+                            return [unitPath, entry];
                         }),
                 );
                 return [
@@ -118,6 +135,26 @@ function validateLock(data: unknown): asserts data is Lock {
             if (typeof unit.hash !== "string") {
                 throw new Error(`unit '${bundleName}/${unitPath}'.hash must be a string`);
             }
+            if (unit.blocks !== undefined || unit.declinedBlocks !== undefined) {
+                if (!isRecord(unit.blocks)) {
+                    throw new Error(`unit '${bundleName}/${unitPath}'.blocks must be an object`);
+                }
+                if (!Array.isArray(unit.declinedBlocks)) {
+                    throw new Error(`unit '${bundleName}/${unitPath}'.declinedBlocks must be an array`);
+                }
+                for (const [key, hash] of Object.entries(unit.blocks)) {
+                    validateBlockKey(key, `unit '${bundleName}/${unitPath}'.blocks`);
+                    if (typeof hash !== "string") {
+                        throw new Error(`unit '${bundleName}/${unitPath}'.blocks['${key}'] must be a string`);
+                    }
+                }
+                for (const key of unit.declinedBlocks) {
+                    if (typeof key !== "string") {
+                        throw new Error(`unit '${bundleName}/${unitPath}'.declinedBlocks must be an array of strings`);
+                    }
+                    validateBlockKey(key, `unit '${bundleName}/${unitPath}'.declinedBlocks`);
+                }
+            }
         }
     }
 }
@@ -131,6 +168,17 @@ function validateUnitPath(unitPath: string, field: string): void {
         unitPath.split(/[/\\]/).some((segment) => segment === "" || segment === "." || segment === "..")
     ) {
         throw new Error(`${field} must be a safe relative path`);
+    }
+}
+
+const BLOCK_NAME_REGEX = /^[a-z][a-z0-9_]*$/;
+
+function validateBlockKey(key: string, field: string): void {
+    const separator = key.lastIndexOf("#");
+    if (separator <= 0) throw new Error(`${field} keys must look like '<file>#<name>'`);
+    validateUnitPath(key.slice(0, separator), field);
+    if (!BLOCK_NAME_REGEX.test(key.slice(separator + 1))) {
+        throw new Error(`${field} key '${key}' has an invalid block name`);
     }
 }
 

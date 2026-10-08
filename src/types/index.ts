@@ -48,7 +48,7 @@ export interface TemplateItem {
     category: ItemCategory;
 }
 
-export type ItemCategory = "agent" | "skill" | "instruction";
+export type ItemCategory = "agent" | "skill" | "rule";
 
 // ── Install Target Types (§3.2) ──────────────────────────────────────
 
@@ -84,6 +84,12 @@ export interface InstalledUnit {
     version: string;
     origin: "lock" | "legacy";
     state: "unmodified" | "modified" | "missing";
+    /**
+     * Block state, present only for units whose template has `<astp-block>` files.
+     * `missing`: a recorded block name is absent from its file.
+     * `dirty`: a recorded block changed locally or the file has consumer text outside blocks.
+     */
+    blocks?: { missing: boolean; dirty: boolean };
 }
 
 /** Files and skill directories grouped by bundle after scanning the install target. */
