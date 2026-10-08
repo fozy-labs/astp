@@ -112,6 +112,7 @@ export type InstalledUnit = InstalledFileUnit | InstalledSkillUnit;
 /** Files and skill directories grouped by bundle after scanning the install target. */
 export interface InstalledBundle {
     bundleName: string;
+    /** Oldest unmodified unit version, or newest installed-unit version if all are modified or legacy. */
     version: string;
     units: InstalledUnit[];
 }

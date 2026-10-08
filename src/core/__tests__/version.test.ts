@@ -5,6 +5,7 @@ import path from "node:path";
 import type { InstalledBundle, Manifest } from "@/types/index.js";
 
 import { computeHash, injectAstpFields } from "../frontmatter.js";
+import { computeSkillTreeHash } from "../skill-tree.js";
 import { compareVersions, detectModified, scanInstalled } from "../version.js";
 
 describe("compareVersions", () => {
@@ -310,6 +311,37 @@ describe("scanInstalled", () => {
         await fs.rm(tempDir, { recursive: true, force: true });
     });
 
+    async function writeManagedFile(relativePath: string, version: string, modified = false): Promise<void> {
+        const original = `---
+name: ${path.basename(relativePath)}
+---
+Body`;
+        const content = injectAstpFields(
+            original,
+            { source: "fozy-labs/astp", bundle: "pipeline", version },
+            computeHash(original),
+        );
+        const filePath = path.join(tempDir, relativePath);
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.writeFile(filePath, content);
+        if (modified) await fs.appendFile(filePath, "\nEdited");
+    }
+
+    async function writeManagedSkill(relativePath: string, version: string, modified = false): Promise<void> {
+        const skillDir = path.join(tempDir, relativePath);
+        const skillFilePath = path.join(skillDir, "SKILL.md");
+        const original = `---
+name: ${path.basename(relativePath)}
+---
+Skill body`;
+        await fs.mkdir(skillDir, { recursive: true });
+        await fs.writeFile(skillFilePath, original);
+        const hash = await computeSkillTreeHash(skillDir);
+        const content = injectAstpFields(original, { source: "fozy-labs/astp", bundle: "pipeline", version }, hash);
+        await fs.writeFile(skillFilePath, content);
+        if (modified) await fs.appendFile(skillFilePath, "\nEdited");
+    }
+
     // T26: Scan returns only astp-managed files
     it("T26: scans directory and returns only astp-managed files", async () => {
         const managed1 = `---
@@ -394,6 +426,35 @@ Content`;
         expect(units.find((unit) => unit.targetPath === "agents/new.md")?.state).toBe("new");
     });
 
+    it("uses the oldest version among clean installed units", async () => {
+        await writeManagedSkill("skills/a", "1.0.0");
+        await writeManagedFile("agents/b.md", "1.1.0");
+        await writeManagedFile("agents/c.md", "1.1.0");
+
+        const installed = await scanInstalled(tempDir);
+
+        expect(installed[0].units).toHaveLength(3);
+        expect(installed[0].version).toBe("1.0.0");
+    });
+
+    it("ignores modified old units when choosing the bundle version", async () => {
+        await writeManagedSkill("skills/a", "1.0.0", true);
+        await writeManagedFile("agents/b.md", "1.1.0");
+
+        const installed = await scanInstalled(tempDir);
+
+        expect(installed[0].version).toBe("1.1.0");
+    });
+
+    it("falls back to the newest version when every installed unit is modified", async () => {
+        await writeManagedFile("agents/a.md", "1.0.0", true);
+        await writeManagedFile("agents/b.md", "1.1.0", true);
+
+        const installed = await scanInstalled(tempDir);
+
+        expect(installed[0].version).toBe("1.1.0");
+    });
+
     it("uses the newest version across installed file units", async () => {
         const original = `---
 name: agent
@@ -407,12 +468,14 @@ Body`;
                 { source: "fozy-labs/astp", bundle: "pipeline", version },
                 computeHash(original),
             );
-            await fs.writeFile(path.join(tempDir, "agents", `${index}.md`), content);
+            const filePath = path.join(tempDir, "agents", `${index}.md`);
+            await fs.writeFile(filePath, content);
+            if (index < 4) await fs.appendFile(filePath, "\nEdited");
         }
 
         const installed = await scanInstalled(tempDir);
         expect(installed[0].units).toHaveLength(5);
-        expect(installed[0].units[0].metadata.version).toBe("1.0.0");
+        expect(installed[0].units.filter((unit) => unit.metadata.version === "1.0.0")).toHaveLength(4);
         expect(installed[0].version).toBe("1.1.0");
     });
 });

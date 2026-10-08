@@ -94,14 +94,28 @@ export async function scanInstalled(installRoot: string): Promise<InstalledBundl
         if (units.length > 0) bundleUnits.set(file.metadata.bundle, units);
     }
 
-    return Array.from(bundleUnits.entries()).map(([bundleName, units]) => ({
-        bundleName,
-        version: units.reduce(
-            (newest, unit) => (compareSemver(unit.metadata.version, newest) > 0 ? unit.metadata.version : newest),
-            units[0]?.metadata.version ?? "",
-        ),
-        units,
-    }));
+    return Promise.all(
+        Array.from(bundleUnits.entries()).map(async ([bundleName, units]) => {
+            const statuses = await detectModifiedUnits(units);
+            const unmodifiedUnits = units.filter((_, index) => statuses[index]?.state === "unmodified");
+            return {
+                bundleName,
+                version:
+                    unmodifiedUnits.length > 0
+                        ? unmodifiedUnits.reduce(
+                              (oldest, unit) =>
+                                  compareSemver(unit.metadata.version, oldest) < 0 ? unit.metadata.version : oldest,
+                              unmodifiedUnits[0]?.metadata.version ?? "",
+                          )
+                        : units.reduce(
+                              (newest, unit) =>
+                                  compareSemver(unit.metadata.version, newest) > 0 ? unit.metadata.version : newest,
+                              units[0]?.metadata.version ?? "",
+                          ),
+                units,
+            };
+        }),
+    );
 }
 
 function findOwningSkill(

@@ -8,6 +8,7 @@ import { executeDelete } from "@/commands/delete.js";
 import { executeInstall } from "@/commands/install.js";
 import { executeUpdate } from "@/commands/update.js";
 import {
+    compareVersions,
     computeHash,
     computeSkillTreeHash,
     detectModified,
@@ -310,6 +311,46 @@ describe("E2E: skill directory units", () => {
         await executeUpdate({ force: true, platform: "claude-code", target: "project" });
         expect(await fs.readFile(referencePath, "utf8")).not.toBe("User edit");
         expect(extractAstpMetadata(await fs.readFile(path.join(skillRoot(), "SKILL.md"), "utf8"))?.version).toBe("1.1.0");
+    });
+
+    it("retries a restored old-version skill when another skill already reached the new version", async () => {
+        const targets = ["skills/a/SKILL.md", "skills/b/SKILL.md"];
+        manifest = skillManifest("1.0.0", targets);
+        await installSkillpack();
+
+        const installRoot = path.join(projectDir, ".claude");
+        const skillAPath = path.join(installRoot, "skills", "a", "SKILL.md");
+        const originalSkillA = await fs.readFile(skillAPath);
+        await fs.appendFile(skillAPath, "\nUSER EDIT");
+
+        manifest = skillManifest("1.1.0", targets);
+        mockFetchManifest.mockResolvedValue(manifest);
+        const templateDir = await setupBundle();
+        await fs.writeFile(
+            path.join(templateDir, "skills", "a", "SKILL.md"),
+            `---
+name: Skill A
+---
+Skill A v1.1 content`,
+        );
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(await fs.readFile(skillAPath, "utf8")).toContain("USER EDIT");
+        expect(compareVersions(await scanInstalled(installRoot), manifest).updates).toHaveLength(0);
+
+        await fs.writeFile(skillAPath, originalSkillA);
+        const restoredReport = compareVersions(await scanInstalled(installRoot), manifest);
+        expect(restoredReport.updates).toHaveLength(1);
+        expect(restoredReport.updates[0]).toMatchObject({
+            installedVersion: "1.0.0",
+            availableVersion: "1.1.0",
+        });
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        const updatedSkillA = await fs.readFile(skillAPath, "utf8");
+        expect(extractAstpMetadata(updatedSkillA)).toMatchObject({ bundle: "skillpack", version: "1.1.0" });
+        expect(updatedSkillA).toContain("Skill A v1.1 content");
     });
 
     it("retries a new skill after its unmanaged directory collision is removed", async () => {
