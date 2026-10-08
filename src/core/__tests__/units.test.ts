@@ -1,4 +1,4 @@
-import { groupTemplateItems } from "../units.js";
+import { groupTemplateItems, resolveUnitPaths } from "../units.js";
 
 describe("groupTemplateItems", () => {
     it("groups skill assets under the outermost SKILL.md and leaves non-skill items as files", () => {
@@ -63,5 +63,22 @@ describe("groupTemplateItems", () => {
                 },
             ]),
         ).toThrow("Skill item 'skills/alpha/references/guide.md' has no owning SKILL.md");
+    });
+});
+
+describe("resolveUnitPaths", () => {
+    const units = [{ relativePath: "skills/alpha" }, { relativePath: "skills/group/alpha" }];
+
+    it("matches names and full paths", () => {
+        expect(resolveUnitPaths(["skills/alpha"], units, "core")).toEqual(new Set(["skills/alpha"]));
+    });
+
+    it("rejects ambiguous final path segments and unknown names", () => {
+        expect(() => resolveUnitPaths(["alpha"], units, "core")).toThrow(
+            "Unit 'alpha' is ambiguous in bundle 'core'. Use the full path:",
+        );
+        expect(() => resolveUnitPaths(["missing"], units, "core")).toThrow(
+            "Unknown unit 'missing' in bundle 'core'. Available: alpha",
+        );
     });
 });

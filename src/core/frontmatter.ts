@@ -32,31 +32,6 @@ function extractField(fields: string, key: string): string | undefined {
     return match ? match[1].trim() : undefined;
 }
 
-export function injectAstpFields(content: string, metadata: Omit<InstalledFileMetadata, "hash">, hash: string): string {
-    const astpBlock = [
-        `astp-source: ${metadata.source}`,
-        `astp-bundle: ${metadata.bundle}`,
-        `astp-version: ${metadata.version}`,
-        `astp-hash: ${hash}`,
-    ].join("\n");
-
-    const match = content.match(FM_REGEX);
-    if (match) {
-        const opening = match[1];
-        const existingFields = match[2];
-        const closing = match[3];
-        const body = content.substring(match[0].length);
-
-        // Existing fields may or may not end with \n
-        const sep = existingFields.length > 0 && !existingFields.endsWith("\n") ? "\n" : "";
-
-        return `${opening}${existingFields}${sep}${astpBlock}\n${closing}${body}`;
-    }
-
-    // No frontmatter — prepend new block
-    return `---\n${astpBlock}\n---\n${content}`;
-}
-
 export function stripAstpFields(content: string): string {
     const match = content.match(FM_REGEX);
     if (!match) return content;
@@ -85,4 +60,32 @@ export function computeHash(content: string): string {
     // Normalize CRLF → LF before hashing (R14)
     const normalized = content.replace(/\r\n/g, "\n");
     return createHash("sha256").update(normalized, "utf8").digest("hex");
+}
+
+export function readDescription(content: string): string | null {
+    const match = content.match(FM_REGEX);
+    if (!match) return null;
+    const lines = match[2].split(/\r?\n/);
+    for (let index = 0; index < lines.length; index++) {
+        const line = lines[index]!;
+        const field = line.match(/^description:\s*(.*)$/);
+        if (!field) continue;
+        const value = field[1]!.trim();
+        if (["|", "|-", ">", ">-"].includes(value)) {
+            const block: string[] = [];
+            const indentation = line.match(/^\s*/)?.[0].length ?? 0;
+            for (let next = index + 1; next < lines.length; next++) {
+                const blockLine = lines[next]!;
+                if (blockLine.trim() === "") continue;
+                const blockIndentation = blockLine.match(/^\s*/)?.[0].length ?? 0;
+                if (blockIndentation <= indentation) break;
+                block.push(blockLine.trim());
+            }
+            return block.length > 0 ? block.join(" ") : null;
+        }
+        if (!value) return null;
+        const quoted = value.match(/^(["'])(.*)\1$/);
+        return quoted ? quoted[2]! : value;
+    }
+    return null;
 }

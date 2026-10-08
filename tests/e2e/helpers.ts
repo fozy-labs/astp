@@ -225,9 +225,9 @@ function generateTemplateContent(item: TemplateItem, version: string): string | 
 
     switch (item.category) {
         case "agent":
-            return `---\nname: ${name}\n---\n# ${name}\n\nAgent v${version} description.\n`;
+            return `---\nname: ${name}\ndescription: ${name} description\n---\n# ${name}\n\nAgent v${version} description.\n`;
         case "skill":
-            return `---\nname: ${name}\n---\n# ${name}\n\nSkill v${version} content.\n`;
+            return `---\nname: ${name}\ndescription: ${name} description\n---\n# ${name}\n\nSkill v${version} content.\n`;
         case "instruction":
             return `---\ndescription: ${name}\n---\n# ${name}\n\nInstruction v${version} content.\n`;
         default:

@@ -29,10 +29,11 @@ astp install fozy-labs --target project
 | Command | Description |
 |---------|-------------|
 | `astp` | Launch interactive wizard |
-| `astp install [bundle] [--force]` | Install a bundle to the selected target |
+| `astp install [bundle] [--skill <name>] [--force]` | Install a bundle or selected units to the selected target |
 | `astp update [--force]` | Update installed files to latest versions |
 | `astp check` | Check for updates and bundles out of sync with the manifest |
-| `astp delete [bundle] [--force]` | Remove an installed bundle |
+| `astp delete [bundle] [--skill <name>] [--force]` | Remove an installed bundle or selected units |
+| `astp list [bundle] [--json]` | List available and installed bundles or bundle units |
 
 All commands accept `--platform <claude-code>` and `--target <project|user>` to skip interactive prompts. Resolved roots:
 
@@ -43,10 +44,10 @@ All commands accept `--platform <claude-code>` and `--target <project|user>` to 
 ### install
 
 ```bash
-astp install [bundle] [--force] [--platform <claude-code>] [--target <project|user>]
+astp install [bundle] [--skill <name>]... [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Install template bundles. Locally modified or unmanaged files and skills are skipped by default; use `--force` to overwrite them. Without arguments, prompts for target directory and bundle selection (the platform prompt is skipped while only one platform is supported). With `--platform` and `--target`, runs non-interactively. Bundles that don't support the requested platform are rejected with a clear error.
+Install template bundles. Locally modified or unmanaged files and skills are skipped by default; use `--force` to overwrite them. Repeat `--skill` to select units by name or path. Without arguments, prompts for target directory and bundle selection (the platform prompt is skipped while only one platform is supported). Passing a bundle name with `--platform` and `--target` runs non-interactively. Bundles that don't support the requested platform are rejected with a clear error.
 
 ### update
 
@@ -67,10 +68,18 @@ Compare installed versions and unit state against the remote manifest. Out-of-sy
 ### delete
 
 ```bash
-astp delete [bundle] [--force] [--platform <claude-code>] [--target <project|user>]
+astp delete [bundle] [--skill <name>]... [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Remove the files of an installed bundle. Without a bundle name, prompts to pick from the bundles found in the target. Modified files are kept by default — use `--force` to delete them too.
+Remove the files of an installed bundle. Repeat `--skill` to select units by name or path. Without a bundle name, prompts to pick from the bundles found in the target. Modified files are kept by default — use `--force` to delete them too.
+
+### list
+
+```bash
+astp list [bundle] [--json] [--platform <claude-code>] [--target <project|user>]
+```
+
+List bundles and installed unit state. Add a bundle name for per-unit status and descriptions; `--json` prints machine-readable output.
 
 ## Bundles
 
@@ -96,7 +105,7 @@ npx skills add fozy-labs/astp --skill markdown-craft   # install one skill
 
 Discovery is driven by `.claude-plugin/marketplace.json`, generated from `templates/manifest.json`. Only bundles that support `claude-code` **and** ship skills are published — all three current bundles qualify.
 
-> **Pick one installer per project.** `npx skills` symlinks skills from its own cache and tracks them in `skills-lock.json`; `astp` writes real files and tracks them through `astp-*` frontmatter. Neither sees the other's installs: `astp check`, `astp update` and `astp delete` ignore skills added by `npx skills`, and installing the same skill both ways leaves a file and a symlink fighting over one path.
+> **Pick one installer per project.** `npx skills` symlinks skills from its own cache and tracks them in `skills-lock.json`; `astp` writes real files and tracks them in `astp.lock`. Neither sees the other's installs: `astp check`, `astp update` and `astp delete` ignore skills added by `npx skills`, and installing the same skill both ways leaves a file and a symlink fighting over one path.
 
 
 ## CI/CD
@@ -123,20 +132,9 @@ astp install fozy-labs --platform claude-code --target project
 
 ## How it works
 
-`astp` fetches template files from the [`fozy-labs/astp`](https://github.com/fozy-labs/astp) GitHub repository using [giget](https://github.com/unjs/giget). A `manifest.json` file in the repository defines available bundles, their versions, and file mappings.
+`astp` fetches template files from the [`fozy-labs/astp`](https://github.com/fozy-labs/astp) GitHub repository using [giget](https://github.com/unjs/giget). A `manifest.json` file in the repository defines available bundles, their versions, and file mappings. Install state lives in `astp.lock`; commit it in projects. Installed files are byte-identical to their templates.
 
-Agent and instruction files receive `astp-*` frontmatter. Skills store it only in the root `SKILL.md`, whose `astp-hash` covers every regular file in the skill directory. Legacy installs are reported by `astp check`; run `astp update --force` to migrate them.
-
-```yaml
----
-astp-source: fozy-labs/astp
-astp-bundle: fozy-labs
-astp-version: 1.0.0
-astp-hash: <sha256>
----
-```
-
-These fields enable version tracking, update detection, and local modification detection without requiring a separate lock file.
+Installs from astp <= 0.3.1 carry `astp-*` fields — `astp update` migrates unmodified ones, and `astp update --force` replaces modified ones.
 
 ## Maintaining
 

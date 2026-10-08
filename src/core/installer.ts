@@ -4,43 +4,30 @@ import path from "node:path";
 
 import type { InstallTarget, TemplateItem } from "@/types/index.js";
 
-import { computeHash, injectAstpFields } from "./frontmatter.js";
+import { computeHash } from "./frontmatter.js";
 import { computeSkillTreeHash } from "./skill-tree.js";
 import type { SkillTemplateUnit, TemplateUnit } from "./units.js";
 
-export async function installFile(
-    tempDir: string,
-    item: TemplateItem,
-    target: InstallTarget,
-    meta: { source: string; bundle: string; version: string },
-): Promise<void> {
+export async function installFile(tempDir: string, item: TemplateItem, target: InstallTarget): Promise<string> {
     // giget downloads the bundle subdirectory, so file paths inside tempDir
     // mirror item.target (source path without the bundle prefix)
     const sourceFile = path.join(tempDir, item.target);
     validateTargetPath(target.rootDir, item.target);
 
-    const content = await fs.readFile(sourceFile, "utf8");
-    const hash = computeHash(content);
-    const finalContent = injectAstpFields(content, meta, hash);
-
+    const content = await fs.readFile(sourceFile);
     const targetFile = path.join(target.rootDir, item.target);
     await fs.mkdir(path.dirname(targetFile), { recursive: true });
-    await fs.writeFile(targetFile, finalContent, "utf8");
+    await fs.rm(targetFile, { recursive: true, force: true });
+    await fs.writeFile(targetFile, content);
+    return computeHash(content.toString("utf8"));
 }
 
-export async function installSkill(
-    tempDir: string,
-    unit: SkillTemplateUnit,
-    target: InstallTarget,
-    meta: { source: string; bundle: string; version: string },
-): Promise<void> {
+export async function installSkill(tempDir: string, unit: SkillTemplateUnit, target: InstallTarget): Promise<string> {
     const skillDir = path.join(target.rootDir, unit.relativePath);
     validateTargetPath(target.rootDir, unit.relativePath);
     for (const item of unit.items) validateTargetPath(target.rootDir, item.target);
 
-    const skillMdPath = path.posix.join(unit.relativePath, "SKILL.md");
-    const skillMd = unit.items.find((item) => item.target === skillMdPath);
-    if (!skillMd) {
+    if (!unit.items.some((item) => item.target === path.posix.join(unit.relativePath, "SKILL.md"))) {
         throw new Error(`Skill directory '${unit.relativePath}' has no SKILL.md item.`);
     }
 
@@ -60,16 +47,10 @@ export async function installSkill(
         }
 
         const hash = await computeSkillTreeHash(stagingDir);
-        const stagingSkillFile = path.join(
-            stagingDir,
-            path.relative(skillDir, path.join(target.rootDir, skillMd.target)),
-        );
-        const content = await fs.readFile(stagingSkillFile, "utf8");
-        await fs.writeFile(stagingSkillFile, injectAstpFields(content, meta, hash), "utf8");
-
         await fs.rm(skillDir, { recursive: true, force: true });
         await fs.rename(stagingDir, skillDir);
         stagingCreated = false;
+        return hash;
     } catch (error) {
         if (stagingCreated) {
             await fs.rm(stagingDir, { recursive: true, force: true }).catch(() => undefined);

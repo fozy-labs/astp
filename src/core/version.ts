@@ -4,154 +4,69 @@ import path from "node:path";
 import type {
     Bundle,
     BundleUpdate,
-    FileState,
     FileStatus,
     InstalledBundle,
-    InstalledFileUnit,
-    InstalledSkillUnit,
+    InstalledFileMetadata,
     InstalledUnit,
     Manifest,
     UpdateReport,
 } from "@/types/index.js";
 
 import { computeHash, extractAstpMetadata, stripAstpFields } from "./frontmatter.js";
-import { validateUnitTargets } from "./installer.js";
+import type { Lock } from "./lock.js";
+import { readLock } from "./lock.js";
 import { computeSkillTreeHash } from "./skill-tree.js";
-import type { TemplateUnit } from "./units.js";
 import { groupTemplateItems } from "./units.js";
 
 interface TaggedMarkdown {
     filePath: string;
     relativePath: string;
     content: string;
-    metadata: NonNullable<ReturnType<typeof extractAstpMetadata>>;
+    metadata: InstalledFileMetadata;
 }
 
-export async function scanInstalled(installRoot: string): Promise<InstalledBundle[]> {
-    const markdownPaths = await findMdFiles(installRoot);
-    const tagged: TaggedMarkdown[] = [];
+export async function loadInstalled(rootDir: string): Promise<{ lock: Lock; bundles: InstalledBundle[] }> {
+    const lock = await readLock(rootDir);
+    const bundles = new Map<string, InstalledBundle>();
 
-    for (const filePath of markdownPaths) {
-        const content = await fs.readFile(filePath, "utf8");
-        const metadata = extractAstpMetadata(content);
-        if (!metadata) continue;
-        tagged.push({
-            filePath,
-            relativePath: path.relative(installRoot, filePath).split(path.sep).join("/"),
-            content,
-            metadata,
-        });
-    }
-
-    const taggedSkills = tagged.filter((file) => path.posix.basename(file.relativePath) === "SKILL.md");
-    const skillUnits = new Map<string, InstalledSkillUnit>();
-    const rootSkills = taggedSkills.filter(
-        (file) =>
-            !taggedSkills.some(
-                (candidate) =>
-                    candidate.relativePath !== file.relativePath &&
-                    file.relativePath.startsWith(`${path.posix.dirname(candidate.relativePath)}/`),
-            ),
-    );
-    for (const file of rootSkills) {
-        const relativePath = path.posix.dirname(file.relativePath);
-        const oldHash = computeHash(stripAstpFields(file.content));
-        skillUnits.set(file.relativePath, {
-            kind: "skill",
-            dirPath: path.dirname(file.filePath),
-            skillFilePath: file.filePath,
-            relativePath,
-            metadata: file.metadata,
-            legacy: file.metadata.hash === oldHash,
-        });
-    }
-    for (const file of taggedSkills) {
-        if (skillUnits.has(file.relativePath)) continue;
-        const owner = findOwningSkill(file.relativePath, skillUnits);
-        if (owner) owner.legacy = true;
-    }
-
-    const bundleUnits = new Map<string, InstalledUnit[]>();
-    for (const file of tagged) {
-        const units = bundleUnits.get(file.metadata.bundle) ?? [];
-        const skill = skillUnits.get(file.relativePath);
-        if (skill) {
-            units.push(skill);
-        } else {
-            const owner = findOwningSkill(file.relativePath, skillUnits);
-            if (owner) {
-                owner.legacy = true;
-            } else {
-                const fileUnit: InstalledFileUnit = {
-                    kind: "file",
-                    filePath: file.filePath,
-                    relativePath: file.relativePath,
-                    metadata: file.metadata,
+    for (const [bundleName, bundle] of Object.entries(lock.bundles)) {
+        const units = await Promise.all(
+            Object.entries(bundle.units).map(async ([relativePath, unit]): Promise<InstalledUnit> => {
+                const state = await getLockUnitState(rootDir, relativePath, unit.kind, unit.hash);
+                return {
+                    kind: unit.kind,
+                    relativePath,
+                    version: unit.version,
+                    origin: "lock",
+                    state,
                 };
-                units.push(fileUnit);
-            }
-        }
-        if (units.length > 0) bundleUnits.set(file.metadata.bundle, units);
-    }
-
-    return Promise.all(
-        Array.from(bundleUnits.entries()).map(async ([bundleName, units]) => {
-            const statuses = await detectModifiedUnits(units);
-            const unmodifiedUnits = units.filter((_, index) => statuses[index]?.state === "unmodified");
-            return {
-                bundleName,
-                version:
-                    unmodifiedUnits.length > 0
-                        ? unmodifiedUnits.reduce(
-                              (oldest, unit) =>
-                                  compareSemver(unit.metadata.version, oldest) < 0 ? unit.metadata.version : oldest,
-                              unmodifiedUnits[0]?.metadata.version ?? "",
-                          )
-                        : units.reduce(
-                              (newest, unit) =>
-                                  compareSemver(unit.metadata.version, newest) > 0 ? unit.metadata.version : newest,
-                              units[0]?.metadata.version ?? "",
-                          ),
-                units,
-            };
-        }),
-    );
-}
-
-function findOwningSkill(
-    relativePath: string,
-    skillUnits: Map<string, InstalledSkillUnit>,
-): InstalledSkillUnit | undefined {
-    const skillRoots = Array.from(skillUnits.entries())
-        .filter(([skillFilePath]) => relativePath.startsWith(`${path.posix.dirname(skillFilePath)}/`))
-        .sort(([a], [b]) => {
-            const rootA = path.posix.dirname(a);
-            const rootB = path.posix.dirname(b);
-            return rootA.length < rootB.length ? -1 : rootA.length > rootB.length ? 1 : 0;
+            }),
+        );
+        bundles.set(bundleName, {
+            bundleName,
+            version: chooseBundleVersion(units),
+            units,
+            declined: bundle.declined,
         });
-    return skillRoots[0]?.[1];
-}
-
-async function findMdFiles(dir: string): Promise<string[]> {
-    const results: string[] = [];
-
-    let entries;
-    try {
-        entries = await fs.readdir(dir, { withFileTypes: true });
-    } catch {
-        return results;
     }
 
-    for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-            results.push(...(await findMdFiles(fullPath)));
-        } else if (entry.isFile() && entry.name.endsWith(".md")) {
-            results.push(fullPath);
+    const legacyByBundle = await scanLegacy(rootDir, lock);
+    for (const [bundleName, legacyUnits] of legacyByBundle) {
+        const bundle = bundles.get(bundleName);
+        if (bundle) {
+            bundle.units.push(...legacyUnits);
+            bundle.version = chooseBundleVersion(bundle.units);
+        } else {
+            bundles.set(bundleName, {
+                bundleName,
+                version: chooseBundleVersion(legacyUnits),
+                units: legacyUnits,
+                declined: [],
+            });
         }
     }
 
-    return results;
+    return { lock, bundles: [...bundles.values()] };
 }
 
 export function compareVersions(installed: InstalledBundle[], manifest: Manifest): UpdateReport {
@@ -162,21 +77,17 @@ export function compareVersions(installed: InstalledBundle[], manifest: Manifest
 
     for (const bundle of installed) {
         const manifestBundle = manifest.bundles[bundle.bundleName];
-        const manifestSkillPaths = new Set(
-            manifestBundle
-                ? groupTemplateItems(manifestBundle.items)
-                      .filter((unit) => unit.kind === "skill")
-                      .map((unit) => unit.relativePath)
-                : [],
-        );
-        for (const unit of bundle.units) {
-            if (unit.kind === "skill" && unit.legacy) {
-                legacySkills.push({
-                    bundleName: bundle.bundleName,
-                    targetPath: unit.relativePath,
-                    inManifest: manifestSkillPaths.has(unit.relativePath),
-                });
-            }
+        const manifestUnits = manifestBundle ? groupTemplateItems(manifestBundle.items) : [];
+        const manifestPaths = new Map(manifestUnits.map((unit) => [unit.relativePath, unit.kind]));
+
+        for (const unit of bundle.units.filter((candidate) => candidate.origin === "legacy")) {
+            legacySkills.push({
+                bundleName: bundle.bundleName,
+                targetPath: unit.relativePath,
+                kind: unit.kind,
+                clean: unit.state === "unmodified",
+                inManifest: manifestPaths.get(unit.relativePath) === unit.kind,
+            });
         }
 
         if (!manifestBundle) {
@@ -184,10 +95,16 @@ export function compareVersions(installed: InstalledBundle[], manifest: Manifest
             continue;
         }
 
-        const cmp = compareSemver(bundle.version, manifestBundle.version);
         const units = classifyUnits(bundle, manifestBundle);
-        const diverged = units.some((unit) => unit.state === "new" || unit.state === "removed");
-        if (cmp < 0 || (cmp === 0 && diverged)) {
+        const cmp = compareSemver(bundle.version, manifestBundle.version);
+        const diverged = units.some((unit) => ["missing", "new", "removed"].includes(unit.state));
+        const cleanLegacy = bundle.units.some(
+            (unit) =>
+                unit.origin === "legacy" &&
+                unit.state === "unmodified" &&
+                manifestPaths.get(unit.relativePath) === unit.kind,
+        );
+        if (cmp < 0 || (cmp === 0 && (diverged || cleanLegacy))) {
             updates.push({
                 bundleName: bundle.bundleName,
                 installedVersion: bundle.version,
@@ -204,210 +121,179 @@ export function compareVersions(installed: InstalledBundle[], manifest: Manifest
 
 function classifyUnits(installed: InstalledBundle, manifestBundle: Bundle): FileStatus[] {
     const statuses: FileStatus[] = [];
-    const installedPaths = new Set(installed.units.map((unit) => `${unit.kind}\0${unit.relativePath}`));
+    const installedByPath = new Map(installed.units.map((unit) => [`${unit.kind}\0${unit.relativePath}`, unit]));
     const manifestUnits = groupTemplateItems(manifestBundle.items);
-    const manifestPaths = new Set(manifestUnits.map((unit) => `${unit.kind}\0${unit.relativePath}`));
+    const manifestPaths = new Map(manifestUnits.map((unit) => [unit.relativePath, unit.kind]));
+    const declined = new Set(installed.declined);
 
     for (const unit of installed.units) {
-        statuses.push({
-            targetPath: unit.relativePath,
-            kind: unit.kind,
-            state: manifestPaths.has(`${unit.kind}\0${unit.relativePath}`) ? "unmodified" : "removed",
-        });
+        if (manifestPaths.get(unit.relativePath) !== unit.kind) {
+            statuses.push({ targetPath: unit.relativePath, kind: unit.kind, state: "removed" });
+        } else {
+            statuses.push({
+                targetPath: unit.relativePath,
+                kind: unit.kind,
+                state: unit.origin === "legacy" ? "legacy" : unit.state,
+            });
+        }
     }
 
     for (const unit of manifestUnits) {
-        if (!installedPaths.has(`${unit.kind}\0${unit.relativePath}`)) {
+        if (!installedByPath.has(`${unit.kind}\0${unit.relativePath}`) && !declined.has(unit.relativePath)) {
             statuses.push({ targetPath: unit.relativePath, kind: unit.kind, state: "new" });
         }
     }
-
     return statuses;
 }
 
+function chooseBundleVersion(units: InstalledUnit[]): string {
+    const clean = units.filter((unit) => unit.state === "unmodified");
+    const candidates = clean.length > 0 ? clean : units;
+    if (candidates.length === 0) return "";
+    return candidates.reduce((selected, unit) => {
+        const comparison = compareSemver(unit.version, selected);
+        return clean.length > 0 ? (comparison < 0 ? unit.version : selected) : comparison > 0 ? unit.version : selected;
+    }, candidates[0]!.version);
+}
+
 function compareSemver(a: string, b: string): number {
-    const parse = (v: string): number[] | null => {
-        const parts = v.split(".").map(Number);
-        return parts.some(isNaN) ? null : parts;
+    const parse = (value: string): number[] | null => {
+        const parts = value.split(".").map(Number);
+        return parts.some(Number.isNaN) ? null : parts;
     };
-
-    const va = parse(a);
-    const vb = parse(b);
-
-    if (!va) return -1;
-    if (!vb) return 0;
-
-    for (let i = 0; i < Math.max(va.length, vb.length); i++) {
-        const na = va[i] ?? 0;
-        const nb = vb[i] ?? 0;
-        if (na < nb) return -1;
-        if (na > nb) return 1;
+    const left = parse(a);
+    const right = parse(b);
+    if (!left) return -1;
+    if (!right) return 0;
+    for (let index = 0; index < Math.max(left.length, right.length); index++) {
+        const aPart = left[index] ?? 0;
+        const bPart = right[index] ?? 0;
+        if (aPart !== bPart) return aPart < bPart ? -1 : 1;
     }
-
     return 0;
 }
 
-export async function detectModified(bundle: InstalledBundle, _installRoot: string): Promise<FileStatus[]> {
-    return detectModifiedUnits(bundle.units);
+async function getLockUnitState(
+    rootDir: string,
+    relativePath: string,
+    kind: "file" | "skill",
+    expectedHash: string,
+): Promise<InstalledUnit["state"]> {
+    const unitPath = path.join(rootDir, relativePath);
+    let stat;
+    try {
+        stat = await fs.lstat(unitPath);
+    } catch (error) {
+        if (["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) return "missing";
+        throw error;
+    }
+    if ((kind === "file" && !stat.isFile()) || (kind === "skill" && !stat.isDirectory())) return "modified";
+    const hash =
+        kind === "file" ? computeHash(await fs.readFile(unitPath, "utf8")) : await computeSkillTreeHash(unitPath);
+    return hash === expectedHash ? "unmodified" : "modified";
 }
 
-async function detectModifiedUnits(units: InstalledUnit[]): Promise<FileStatus[]> {
-    const results: FileStatus[] = [];
-
-    for (const unit of units) {
-        if (unit.kind === "skill") {
-            if (unit.legacy) {
-                results.push({ targetPath: unit.relativePath, kind: "skill", state: "legacy" });
-                continue;
-            }
-            if (!unit.metadata.hash) {
-                results.push({ targetPath: unit.relativePath, kind: "skill", state: "modified" });
-                continue;
-            }
-            const currentHash = await computeSkillTreeHash(unit.dirPath);
-            const state: FileState = currentHash === unit.metadata.hash ? "unmodified" : "modified";
-            results.push({ targetPath: unit.relativePath, kind: "skill", state });
+async function scanLegacy(rootDir: string, lock: Lock): Promise<Map<string, InstalledUnit[]>> {
+    const markdownPaths = await findMdFiles(rootDir);
+    const ignoredPaths = Object.values(lock.bundles).flatMap((bundle) => Object.keys(bundle.units));
+    const tagged: TaggedMarkdown[] = [];
+    for (const filePath of markdownPaths) {
+        const relativePath = path.relative(rootDir, filePath).split(path.sep).join("/");
+        if (
+            ignoredPaths.some((lockedPath) => relativePath === lockedPath || relativePath.startsWith(`${lockedPath}/`))
+        ) {
             continue;
         }
-
-        const content = await fs.readFile(unit.filePath, "utf8");
-        if (!unit.metadata.hash) {
-            results.push({ targetPath: unit.relativePath, kind: "file", state: "modified" });
-            continue;
-        }
-
-        const currentHash = computeHash(stripAstpFields(content));
-        const state: FileState = currentHash === unit.metadata.hash ? "unmodified" : "modified";
-        results.push({ targetPath: unit.relativePath, kind: "file", state });
+        const content = await fs.readFile(filePath, "utf8");
+        const metadata = extractAstpMetadata(content);
+        if (metadata) tagged.push({ filePath, relativePath, content, metadata });
     }
 
+    const skillFiles = tagged.filter((file) => path.posix.basename(file.relativePath) === "SKILL.md");
+    const rootSkills = skillFiles.filter(
+        (file) =>
+            !skillFiles.some(
+                (candidate) =>
+                    candidate.relativePath !== file.relativePath &&
+                    file.relativePath.startsWith(`${path.posix.dirname(candidate.relativePath)}/`),
+            ),
+    );
+    const skillRoots = new Map(rootSkills.map((file) => [path.posix.dirname(file.relativePath), file]));
+    const results = new Map<string, InstalledUnit[]>();
+
+    for (const [relativePath, root] of skillRoots) {
+        const clean = await isCleanLegacySkill(path.dirname(root.filePath), root);
+        addLegacy(results, root.metadata.bundle, {
+            kind: "skill",
+            relativePath,
+            version: root.metadata.version,
+            origin: "legacy",
+            state: clean ? "unmodified" : "modified",
+        });
+    }
+
+    for (const file of tagged) {
+        if ([...skillRoots.keys()].some((root) => file.relativePath.startsWith(`${root}/`))) continue;
+        addLegacy(results, file.metadata.bundle, {
+            kind: "file",
+            relativePath: file.relativePath,
+            version: file.metadata.version,
+            origin: "legacy",
+            state:
+                file.metadata.hash && computeHash(stripAstpFields(file.content)) === file.metadata.hash
+                    ? "unmodified"
+                    : "modified",
+        });
+    }
     return results;
 }
 
-export async function findBlockedUnits(
-    installRoot: string,
-    bundleName: string,
-    units: TemplateUnit[],
-): Promise<FileStatus[]> {
-    validateUnitTargets(installRoot, units);
-
-    const blocked: FileStatus[] = [];
-    for (const unit of units) {
-        const unitPath = path.join(installRoot, unit.relativePath);
-        let unitStat;
-        try {
-            unitStat = await fs.lstat(unitPath);
-        } catch (error) {
-            if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
-            throw error;
-        }
-
-        if (unit.kind === "file") {
-            if (!unitStat.isFile()) {
-                blocked.push({ targetPath: unit.relativePath, kind: "file", state: "modified" });
-                continue;
-            }
-            const content = await fs.readFile(unitPath, "utf8");
-            const metadata = extractAstpMetadata(content);
-            if (
-                !metadata ||
-                metadata.bundle !== bundleName ||
-                !metadata.hash ||
-                computeHash(stripAstpFields(content)) !== metadata.hash
-            ) {
-                blocked.push({ targetPath: unit.relativePath, kind: "file", state: "modified" });
-            }
-            continue;
-        }
-
-        if (!unitStat.isDirectory()) {
-            blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "modified" });
-            continue;
-        }
-        const skillFilePath = path.join(unitPath, "SKILL.md");
-        let skillFileStat;
-        try {
-            skillFileStat = await fs.lstat(skillFilePath);
-        } catch (error) {
-            if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-                blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "modified" });
-                continue;
-            }
-            throw error;
-        }
-        if (!skillFileStat.isFile()) {
-            blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "modified" });
-            continue;
-        }
-        const content = await fs.readFile(skillFilePath, "utf8");
+async function isCleanLegacySkill(skillDir: string, root: TaggedMarkdown): Promise<boolean> {
+    if (
+        root.metadata.hash &&
+        (await computeSkillTreeHash(skillDir, { stripRootAstpFields: true })) === root.metadata.hash
+    ) {
+        return true;
+    }
+    const files = await findRegularFiles(skillDir);
+    if (files.length === 0 || files.some((file) => !file.endsWith(".md"))) return false;
+    for (const filePath of files) {
+        const content = await fs.readFile(filePath, "utf8");
         const metadata = extractAstpMetadata(content);
-        if (!metadata || metadata.bundle !== bundleName) {
-            blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "modified" });
-            continue;
-        }
-        const contentHash = computeHash(stripAstpFields(content));
-        if (metadata.hash === contentHash) {
-            blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "legacy" });
-            continue;
-        }
-        if (!metadata.hash || (await computeSkillTreeHash(unitPath)) !== metadata.hash) {
-            blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "modified" });
-        }
+        if (!metadata?.hash || computeHash(stripAstpFields(content)) !== metadata.hash) return false;
     }
-
-    return blocked;
+    return true;
 }
 
-export async function removeUnits(
-    units: InstalledUnit[],
-    installRoot: string,
-    force = false,
-): Promise<{ removed: FileStatus[]; skipped: FileStatus[] }> {
-    const statuses = await detectModifiedUnits(units);
-    const statusesByPath = new Map(statuses.map((status) => [`${status.kind}\0${status.targetPath}`, status]));
-    const skipped = statuses.filter((status) => status.state === "modified" || status.state === "legacy");
-    const removed: FileStatus[] = [];
-
-    for (const unit of units) {
-        const status = statusesByPath.get(`${unit.kind}\0${unit.relativePath}`);
-        if ((status?.state === "modified" || status?.state === "legacy") && !force) continue;
-
-        const unitPath = unit.kind === "skill" ? unit.dirPath : unit.filePath;
-        await fs.rm(unitPath, { recursive: unit.kind === "skill", force: true });
-        await removeEmptyDirectories(
-            unit.kind === "skill" ? path.dirname(unit.dirPath) : path.dirname(unit.filePath),
-            installRoot,
-        );
-        if (status) removed.push(status);
-    }
-
-    return { removed, skipped: force ? [] : skipped };
+function addLegacy(bundles: Map<string, InstalledUnit[]>, bundleName: string, unit: InstalledUnit): void {
+    const units = bundles.get(bundleName) ?? [];
+    units.push(unit);
+    bundles.set(bundleName, units);
 }
 
-export async function removeBundle(
-    bundle: InstalledBundle,
-    installRoot: string,
-    force = false,
-): Promise<{ removed: string[]; skipped: FileStatus[] }> {
-    const result = await removeUnits(bundle.units, installRoot, force);
-    return { removed: result.removed.map((status) => status.targetPath), skipped: result.skipped };
+async function findMdFiles(dir: string): Promise<string[]> {
+    const results: string[] = [];
+    let entries;
+    try {
+        entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        return results;
+    }
+    for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) results.push(...(await findMdFiles(fullPath)));
+        else if (entry.isFile() && entry.name.endsWith(".md")) results.push(fullPath);
+    }
+    return results;
 }
 
-async function removeEmptyDirectories(startDir: string, installRoot: string): Promise<void> {
-    const normalizedRoot = path.resolve(installRoot);
-    let currentDir = path.resolve(startDir);
-
-    while (currentDir.startsWith(normalizedRoot) && currentDir !== normalizedRoot) {
-        let entries;
-        try {
-            entries = await fs.readdir(currentDir);
-        } catch {
-            return;
-        }
-
-        if (entries.length > 0) return;
-
-        await fs.rmdir(currentDir);
-        currentDir = path.dirname(currentDir);
+async function findRegularFiles(dir: string): Promise<string[]> {
+    const results: string[] = [];
+    for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+        const filePath = path.join(dir, entry.name);
+        if (entry.isDirectory()) results.push(...(await findRegularFiles(filePath)));
+        else if (entry.isFile()) results.push(filePath);
     }
+    return results;
 }

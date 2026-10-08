@@ -47,3 +47,30 @@ export function groupTemplateItems(items: TemplateItem[]): TemplateUnit[] {
 
     return units;
 }
+
+export function resolveUnitPaths(
+    requested: string[],
+    units: Array<{ relativePath: string }>,
+    bundleName: string,
+): Set<string> {
+    const resolved = new Set<string>();
+    for (const value of requested) {
+        const matches = units.filter(
+            (unit) => unit.relativePath === value || path.posix.basename(unit.relativePath) === value,
+        );
+        if (matches.length === 0) {
+            const available = [...new Set(units.map((unit) => path.posix.basename(unit.relativePath)))].sort();
+            throw new Error(`Unknown unit '${value}' in bundle '${bundleName}'. Available: ${available.join(", ")}`);
+        }
+        if (matches.length > 1) {
+            throw new Error(
+                `Unit '${value}' is ambiguous in bundle '${bundleName}'. Use the full path: ${matches
+                    .map((unit) => unit.relativePath)
+                    .sort()
+                    .join(", ")}`,
+            );
+        }
+        resolved.add(matches[0]!.relativePath);
+    }
+    return resolved;
+}

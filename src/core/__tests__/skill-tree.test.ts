@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { computeSkillTreeHash } from "../skill-tree.js";
+import { computeSkillTreeHash, computeTemplateUnitHash } from "../skill-tree.js";
 
 describe("computeSkillTreeHash", () => {
     let tempDir: string;
@@ -55,7 +55,7 @@ describe("computeSkillTreeHash", () => {
         expect(await computeSkillTreeHash(tempDir)).not.toBe(initialHash);
     });
 
-    it("ignores astp metadata in the root SKILL.md and normalizes CRLF", async () => {
+    it("hashes root metadata by default and strips it only when requested", async () => {
         const source = await fs.mkdtemp(path.join(os.tmpdir(), "astp-skill-source-"));
         const installed = await fs.mkdtemp(path.join(os.tmpdir(), "astp-skill-installed-"));
         try {
@@ -67,11 +67,45 @@ describe("computeSkillTreeHash", () => {
             );
             await fs.writeFile(path.join(installed, "references.md"), "line 1\r\nline 2\r\n");
 
-            expect(await computeSkillTreeHash(installed)).toBe(await computeSkillTreeHash(source));
+            expect(await computeSkillTreeHash(installed)).not.toBe(await computeSkillTreeHash(source));
+            expect(await computeSkillTreeHash(installed, { stripRootAstpFields: true })).toBe(
+                await computeSkillTreeHash(source),
+            );
         } finally {
             await fs.rm(source, { recursive: true, force: true });
             await fs.rm(installed, { recursive: true, force: true });
         }
+    });
+
+    it("matches the template-unit hash to the installed skill tree hash", async () => {
+        const template = path.join(tempDir, "template");
+        const installed = path.join(tempDir, "installed");
+        await fs.mkdir(path.join(template, "skills", "sample"), { recursive: true });
+        await fs.mkdir(path.join(installed, "skills", "sample"), { recursive: true });
+        await fs.writeFile(path.join(template, "skills", "sample", "SKILL.md"), "# Sample\n");
+        await fs.writeFile(path.join(template, "skills", "sample", "asset.bin"), Buffer.from([0, 255]));
+        await fs.cp(path.join(template, "skills", "sample"), path.join(installed, "skills", "sample"), {
+            recursive: true,
+        });
+        const unit = {
+            kind: "skill" as const,
+            relativePath: "skills/sample",
+            items: [
+                {
+                    source: "bundle/skills/sample/SKILL.md",
+                    target: "skills/sample/SKILL.md",
+                    category: "skill" as const,
+                },
+                {
+                    source: "bundle/skills/sample/asset.bin",
+                    target: "skills/sample/asset.bin",
+                    category: "skill" as const,
+                },
+            ],
+        };
+        expect(await computeTemplateUnitHash(template, unit)).toBe(
+            await computeSkillTreeHash(path.join(installed, "skills", "sample")),
+        );
     });
 
     it("hashes astp metadata in a nested SKILL.md as ordinary file content", async () => {

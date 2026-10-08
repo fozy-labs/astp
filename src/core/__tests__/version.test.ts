@@ -2,480 +2,118 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import type { InstalledBundle, Manifest } from "@/types/index.js";
-
-import { computeHash, injectAstpFields } from "../frontmatter.js";
+import { computeHash } from "../frontmatter.js";
+import { writeLock } from "../lock.js";
 import { computeSkillTreeHash } from "../skill-tree.js";
-import { compareVersions, detectModified, scanInstalled } from "../version.js";
+import { loadInstalled } from "../version.js";
 
-describe("compareVersions", () => {
-    const createManifest = (bundleVersion: string): Manifest => ({
-        schemaVersion: 1,
-        repository: "fozy-labs/astp",
-        bundles: {
-            pipeline: {
-                name: "pipeline",
-                version: bundleVersion,
-                description: "Pipeline",
-                default: false,
-                items: [{ source: "pipeline/agents/a.md", target: "agents/a.md", category: "agent" }],
-            },
-        },
+describe("loadInstalled", () => {
+    let rootDir: string;
+
+    beforeEach(async () => {
+        rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "astp-installed-"));
     });
 
-    const createInstalled = (version: string): InstalledBundle[] => [
-        {
-            bundleName: "pipeline",
-            version,
-            units: [
-                {
-                    kind: "file",
-                    filePath: "/root/agents/a.md",
-                    relativePath: "agents/a.md",
-                    metadata: {
-                        source: "fozy-labs/astp",
-                        bundle: "pipeline",
-                        version,
-                        hash: "abc",
-                    },
-                },
-            ],
-        },
-    ];
-
-    // T08: Update available
-    it("T08: detects update when manifest version is newer", () => {
-        const report = compareVersions(createInstalled("1.0.0"), createManifest("1.2.0"));
-        expect(report.updates).toHaveLength(1);
-        expect(report.updates[0].installedVersion).toBe("1.0.0");
-        expect(report.updates[0].availableVersion).toBe("1.2.0");
+    afterEach(async () => {
+        await fs.rm(rootDir, { recursive: true, force: true });
     });
 
-    // T09: Same version
-    it("T09: reports up to date when versions match", () => {
-        const report = compareVersions(createInstalled("1.0.0"), createManifest("1.0.0"));
-        expect(report.upToDate).toHaveLength(1);
-        expect(report.updates).toHaveLength(0);
-    });
-
-    it("reports a same-version bundle as an update when a manifest unit is missing", () => {
-        const manifest = createManifest("1.0.0");
-        manifest.bundles.pipeline.items.push({
-            source: "pipeline/agents/b.md",
-            target: "agents/b.md",
-            category: "agent",
-        });
-
-        const report = compareVersions(createInstalled("1.0.0"), manifest);
-
-        expect(report.updates).toHaveLength(1);
-        expect(report.updates[0].units).toContainEqual({
-            targetPath: "agents/b.md",
-            kind: "file",
-            state: "new",
-        });
-    });
-
-    it("reports a same-version bundle as an update when an installed unit is orphaned", () => {
-        const manifest = createManifest("1.0.0");
-        manifest.bundles.pipeline.items = [];
-
-        const report = compareVersions(createInstalled("1.0.0"), manifest);
-
-        expect(report.updates).toHaveLength(1);
-        expect(report.updates[0].units).toContainEqual({
-            targetPath: "agents/a.md",
-            kind: "file",
-            state: "removed",
-        });
-    });
-
-    // T10: Installed newer (no downgrade)
-    it("T10: reports up to date when installed is newer (no downgrade)", () => {
-        const report = compareVersions(createInstalled("2.0.0"), createManifest("1.0.0"));
-        expect(report.upToDate).toHaveLength(1);
-        expect(report.updates).toHaveLength(0);
-    });
-
-    it("does not downgrade an installed-newer bundle even when a manifest unit is missing", () => {
-        const manifest = createManifest("1.0.0");
-        manifest.bundles.pipeline.items.push({
-            source: "pipeline/agents/b.md",
-            target: "agents/b.md",
-            category: "agent",
-        });
-
-        const report = compareVersions(createInstalled("2.0.0"), manifest);
-
-        expect(report.upToDate).toHaveLength(1);
-        expect(report.updates).toHaveLength(0);
-    });
-
-    // T11: Invalid semver
-    it("T11: handles invalid semver gracefully", () => {
-        const report = compareVersions(createInstalled("not-a-version"), createManifest("1.0.0"));
-        expect(report.updates).toHaveLength(1);
-    });
-
-    it("classifies bundles not in manifest as notInManifest", () => {
-        const manifest: Manifest = {
+    it("reports lock units as unmodified, modified, missing, and kind-mismatched", async () => {
+        await fs.mkdir(path.join(rootDir, "skills/sample"), { recursive: true });
+        await fs.mkdir(path.join(rootDir, "as-dir"));
+        await fs.writeFile(path.join(rootDir, "skills/sample/SKILL.md"), "# Sample\n");
+        await fs.writeFile(path.join(rootDir, "changed.md"), "edited");
+        await writeLock(rootDir, {
             schemaVersion: 1,
-            repository: "fozy-labs/astp",
             bundles: {
                 core: {
-                    name: "core",
-                    version: "1.0.0",
-                    description: "Core",
-                    default: true,
-                    items: [],
+                    source: "repo",
+                    declined: [],
+                    units: {
+                        "skills/sample": {
+                            kind: "skill",
+                            version: "1.0.0",
+                            hash: await computeSkillTreeHash(path.join(rootDir, "skills/sample")),
+                        },
+                        "changed.md": { kind: "file", version: "1.0.0", hash: "wrong" },
+                        "missing.md": { kind: "file", version: "1.0.0", hash: "gone" },
+                        "as-dir": { kind: "file", version: "1.0.0", hash: "wrong" },
+                    },
                 },
             },
-        };
-
-        const report = compareVersions(createInstalled("1.0.0"), manifest);
-        expect(report.notInManifest).toHaveLength(1);
-        expect(report.notInManifest[0].bundleName).toBe("pipeline");
-    });
-
-    it("marks legacy skills according to their presence in the manifest", () => {
-        const manifest = createManifest("1.0.0");
-        manifest.bundles.pipeline.items.push({
-            source: "pipeline/skills/sample/SKILL.md",
-            target: "skills/sample/SKILL.md",
-            category: "skill",
-        });
-        const createLegacyBundle = (bundleName: string, relativePaths: string[]): InstalledBundle => ({
-            bundleName,
-            version: "1.0.0",
-            units: relativePaths.map((relativePath) => ({
-                kind: "skill",
-                dirPath: `/root/${relativePath}`,
-                skillFilePath: `/root/${relativePath}/SKILL.md`,
-                relativePath,
-                metadata: {
-                    source: "fozy-labs/astp",
-                    bundle: bundleName,
-                    version: "1.0.0",
-                    hash: "legacy",
-                },
-                legacy: true,
-            })),
         });
 
-        const report = compareVersions(
-            [
-                createLegacyBundle("pipeline", ["skills/sample", "skills/removed"]),
-                createLegacyBundle("retired", ["skills/retired"]),
-            ],
-            manifest,
+        const loaded = await loadInstalled(rootDir);
+        expect(loaded.bundles[0]?.units).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ relativePath: "skills/sample", state: "unmodified" }),
+                expect.objectContaining({ relativePath: "changed.md", state: "modified" }),
+                expect.objectContaining({ relativePath: "missing.md", state: "missing" }),
+                expect.objectContaining({ relativePath: "as-dir", state: "modified" }),
+            ]),
         );
-
-        expect(report.legacySkills).toEqual([
-            { bundleName: "pipeline", targetPath: "skills/sample", inManifest: true },
-            { bundleName: "pipeline", targetPath: "skills/removed", inManifest: false },
-            { bundleName: "retired", targetPath: "skills/retired", inManifest: false },
-        ]);
-    });
-});
-
-describe("detectModified", () => {
-    let tempDir: string;
-
-    beforeEach(async () => {
-        tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "astp-detect-"));
     });
 
-    afterEach(async () => {
-        await fs.rm(tempDir, { recursive: true, force: true });
-    });
-
-    // T20: Hash matches → unmodified
-    it("T20: returns unmodified when hash matches", async () => {
-        const original = `---
-name: test
----
-Body`;
-        const hash = computeHash(original);
-        const content = injectAstpFields(
-            original,
-            { source: "fozy-labs/astp", bundle: "test", version: "1.0.0" },
-            hash,
+    it("finds clean and modified legacy file units", async () => {
+        const cleanContent = "---\nname: clean\n---\n# clean\n";
+        const clean = `---\nname: clean\nastp-source: repo\nastp-bundle: core\nastp-version: 0.3.1\nastp-hash: ${computeHash(cleanContent)}\n---\n# clean\n`;
+        await fs.writeFile(path.join(rootDir, "clean.md"), clean);
+        await fs.writeFile(path.join(rootDir, "changed.md"), clean.replaceAll("clean", "changed") + "\nlocal edit");
+        const loaded = await loadInstalled(rootDir);
+        expect(loaded.bundles[0]?.units).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ relativePath: "clean.md", origin: "legacy", state: "unmodified" }),
+                expect.objectContaining({ relativePath: "changed.md", origin: "legacy", state: "modified" }),
+            ]),
         );
+    });
 
-        const filePath = path.join(tempDir, "agent.md");
-        await fs.writeFile(filePath, content);
-
-        const bundle: InstalledBundle = {
-            bundleName: "test",
-            version: "1.0.0",
-            units: [
-                {
-                    kind: "file",
-                    filePath,
-                    relativePath: "agent.md",
-                    metadata: {
-                        source: "fozy-labs/astp",
-                        bundle: "test",
-                        version: "1.0.0",
-                        hash,
-                    },
-                },
-            ],
+    it("detects clean legacy skills in the per-file and root-tree formats", async () => {
+        const v031 = path.join(rootDir, "skills", "v031");
+        await fs.mkdir(v031, { recursive: true });
+        const addLegacyFields = (content: string, version: string) => {
+            const hash = computeHash(content);
+            return `---\nastp-source: repo\nastp-bundle: core\nastp-version: ${version}\nastp-hash: ${hash}\n---\n${content}`;
         };
+        const v031Root = "# v031 skill\n";
+        const v031Reference = "# reference\n";
+        await fs.writeFile(path.join(v031, "SKILL.md"), addLegacyFields(v031Root, "0.3.1"));
+        await fs.writeFile(path.join(v031, "reference.md"), addLegacyFields(v031Reference, "0.3.1"));
 
-        const result = await detectModified(bundle, tempDir);
-        expect(result[0].state).toBe("unmodified");
-    });
-
-    // T21: Hash mismatch → modified
-    it("T21: returns modified when hash differs", async () => {
-        const original = `---
-name: test
----
-Body`;
-        const hash = computeHash(original);
-        let content = injectAstpFields(original, { source: "fozy-labs/astp", bundle: "test", version: "1.0.0" }, hash);
-        content += "\n<!-- user edit -->";
-
-        const filePath = path.join(tempDir, "agent.md");
-        await fs.writeFile(filePath, content);
-
-        const bundle: InstalledBundle = {
-            bundleName: "test",
-            version: "1.0.0",
-            units: [
-                {
-                    kind: "file",
-                    filePath,
-                    relativePath: "agent.md",
-                    metadata: {
-                        source: "fozy-labs/astp",
-                        bundle: "test",
-                        version: "1.0.0",
-                        hash,
-                    },
-                },
-            ],
-        };
-
-        const result = await detectModified(bundle, tempDir);
-        expect(result[0].state).toBe("modified");
-    });
-
-    // T22: Missing astp-hash → treated as modified
-    it("T22: treats missing astp-hash as modified", async () => {
-        const original = `---
-name: test
----
-Body`;
-        const content = injectAstpFields(
-            original,
-            { source: "fozy-labs/astp", bundle: "test", version: "1.0.0" },
-            "somehash",
+        const issue8 = path.join(rootDir, "skills", "issue8");
+        await fs.mkdir(issue8, { recursive: true });
+        const issue8Root = "---\nname: issue8\n---\n# issue8\n";
+        await fs.writeFile(path.join(issue8, "SKILL.md"), issue8Root);
+        const treeHash = await computeSkillTreeHash(issue8);
+        await fs.writeFile(
+            path.join(issue8, "SKILL.md"),
+            `---\nname: issue8\nastp-source: repo\nastp-bundle: core\nastp-version: 0.4.0\nastp-hash: ${treeHash}\n---\n# issue8\n`,
         );
 
-        const filePath = path.join(tempDir, "agent.md");
-        await fs.writeFile(filePath, content);
-
-        const bundle: InstalledBundle = {
-            bundleName: "test",
-            version: "1.0.0",
-            units: [
-                {
-                    kind: "file",
-                    filePath,
-                    relativePath: "agent.md",
-                    metadata: {
-                        source: "fozy-labs/astp",
-                        bundle: "test",
-                        version: "1.0.0",
-                        hash: "",
-                    },
-                },
-            ],
-        };
-
-        const result = await detectModified(bundle, tempDir);
-        expect(result[0].state).toBe("modified");
-    });
-});
-
-describe("scanInstalled", () => {
-    let tempDir: string;
-
-    beforeEach(async () => {
-        tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "astp-scan-"));
-    });
-
-    afterEach(async () => {
-        await fs.rm(tempDir, { recursive: true, force: true });
-    });
-
-    async function writeManagedFile(relativePath: string, version: string, modified = false): Promise<void> {
-        const original = `---
-name: ${path.basename(relativePath)}
----
-Body`;
-        const content = injectAstpFields(
-            original,
-            { source: "fozy-labs/astp", bundle: "pipeline", version },
-            computeHash(original),
+        const loaded = await loadInstalled(rootDir);
+        expect(loaded.bundles[0]?.units).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ relativePath: "skills/v031", kind: "skill", state: "unmodified" }),
+                expect.objectContaining({ relativePath: "skills/issue8", kind: "skill", state: "unmodified" }),
+            ]),
         );
-        const filePath = path.join(tempDir, relativePath);
-        await fs.mkdir(path.dirname(filePath), { recursive: true });
-        await fs.writeFile(filePath, content);
-        if (modified) await fs.appendFile(filePath, "\nEdited");
-    }
+    });
 
-    async function writeManagedSkill(relativePath: string, version: string, modified = false): Promise<void> {
-        const skillDir = path.join(tempDir, relativePath);
-        const skillFilePath = path.join(skillDir, "SKILL.md");
-        const original = `---
-name: ${path.basename(relativePath)}
----
-Skill body`;
+    it("marks modified legacy skills as modified", async () => {
+        const skillDir = path.join(rootDir, "skills", "sample");
         await fs.mkdir(skillDir, { recursive: true });
-        await fs.writeFile(skillFilePath, original);
-        const hash = await computeSkillTreeHash(skillDir);
-        const content = injectAstpFields(original, { source: "fozy-labs/astp", bundle: "pipeline", version }, hash);
-        await fs.writeFile(skillFilePath, content);
-        if (modified) await fs.appendFile(skillFilePath, "\nEdited");
-    }
-
-    // T26: Scan returns only astp-managed files
-    it("T26: scans directory and returns only astp-managed files", async () => {
-        const managed1 = `---
-name: agent1
-astp-source: fozy-labs/astp
-astp-bundle: pipeline
-astp-version: 1.0.0
-astp-hash: abc123
----
-Content 1`;
-
-        const managed2 = `---
-astp-source: fozy-labs/astp
-astp-bundle: pipeline
-astp-version: 1.0.0
-astp-hash: def456
----
-Content 2`;
-
-        const unmanaged = `---
-name: custom-agent
----
-My custom content`;
-
-        await fs.mkdir(path.join(tempDir, "agents"), { recursive: true });
-        await fs.writeFile(path.join(tempDir, "agents", "managed1.md"), managed1);
-        await fs.writeFile(path.join(tempDir, "agents", "managed2.md"), managed2);
-        await fs.writeFile(path.join(tempDir, "agents", "custom.md"), unmanaged);
-
-        const result = await scanInstalled(tempDir);
-        expect(result).toHaveLength(1);
-        expect(result[0].bundleName).toBe("pipeline");
-        expect(result[0].units).toHaveLength(2);
-    });
-
-    // T27: Update detection with mixed file states
-    it("T27: update detection with mixed file states", async () => {
-        const managedContent = `---
-astp-source: fozy-labs/astp
-astp-bundle: pipeline
-astp-version: 1.0.0
-astp-hash: somehash
----
-Content`;
-
-        await fs.mkdir(path.join(tempDir, "agents"), { recursive: true });
-        await fs.writeFile(path.join(tempDir, "agents", "a.md"), managedContent);
-
-        const installed = await scanInstalled(tempDir);
-
-        const manifest: Manifest = {
-            schemaVersion: 1,
-            repository: "fozy-labs/astp",
-            bundles: {
-                pipeline: {
-                    name: "pipeline",
-                    version: "2.0.0",
-                    description: "Pipeline",
-                    default: false,
-                    items: [
-                        {
-                            source: "pipeline/agents/a.md",
-                            target: "agents/a.md",
-                            category: "agent",
-                        },
-                        {
-                            source: "pipeline/agents/new.md",
-                            target: "agents/new.md",
-                            category: "agent",
-                        },
-                    ],
-                },
-            },
-        };
-
-        const report = compareVersions(installed, manifest);
-        expect(report.updates).toHaveLength(1);
-        expect(report.updates[0].availableVersion).toBe("2.0.0");
-
-        const units = report.updates[0].units;
-        expect(units.find((unit) => unit.targetPath === "agents/a.md")?.state).toBe("unmodified");
-        expect(units.find((unit) => unit.targetPath === "agents/new.md")?.state).toBe("new");
-    });
-
-    it("uses the oldest version among clean installed units", async () => {
-        await writeManagedSkill("skills/a", "1.0.0");
-        await writeManagedFile("agents/b.md", "1.1.0");
-        await writeManagedFile("agents/c.md", "1.1.0");
-
-        const installed = await scanInstalled(tempDir);
-
-        expect(installed[0].units).toHaveLength(3);
-        expect(installed[0].version).toBe("1.0.0");
-    });
-
-    it("ignores modified old units when choosing the bundle version", async () => {
-        await writeManagedSkill("skills/a", "1.0.0", true);
-        await writeManagedFile("agents/b.md", "1.1.0");
-
-        const installed = await scanInstalled(tempDir);
-
-        expect(installed[0].version).toBe("1.1.0");
-    });
-
-    it("falls back to the newest version when every installed unit is modified", async () => {
-        await writeManagedFile("agents/a.md", "1.0.0", true);
-        await writeManagedFile("agents/b.md", "1.1.0", true);
-
-        const installed = await scanInstalled(tempDir);
-
-        expect(installed[0].version).toBe("1.1.0");
-    });
-
-    it("uses the newest version across installed file units", async () => {
-        const original = `---
-name: agent
----
-Body`;
-        await fs.mkdir(path.join(tempDir, "agents"), { recursive: true });
-        for (let index = 0; index < 5; index++) {
-            const version = index === 4 ? "1.1.0" : "1.0.0";
-            const content = injectAstpFields(
-                original,
-                { source: "fozy-labs/astp", bundle: "pipeline", version },
-                computeHash(original),
-            );
-            const filePath = path.join(tempDir, "agents", `${index}.md`);
-            await fs.writeFile(filePath, content);
-            if (index < 4) await fs.appendFile(filePath, "\nEdited");
-        }
-
-        const installed = await scanInstalled(tempDir);
-        expect(installed[0].units).toHaveLength(5);
-        expect(installed[0].units.filter((unit) => unit.metadata.version === "1.0.0")).toHaveLength(4);
-        expect(installed[0].version).toBe("1.1.0");
+        const content = "# sample\n";
+        await fs.writeFile(
+            path.join(skillDir, "SKILL.md"),
+            `---\nastp-source: repo\nastp-bundle: core\nastp-version: 0.3.1\nastp-hash: ${computeHash(content)}\n---\n${content}`,
+        );
+        await fs.writeFile(
+            path.join(skillDir, "reference.md"),
+            `---\nastp-source: repo\nastp-bundle: core\nastp-version: 0.3.1\nastp-hash: ${computeHash("# original\n")}\n---\n# edited\n`,
+        );
+        const loaded = await loadInstalled(rootDir);
+        expect(loaded.bundles[0]?.units).toContainEqual(
+            expect.objectContaining({ relativePath: "skills/sample", kind: "skill", state: "modified" }),
+        );
     });
 });

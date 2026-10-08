@@ -1,4 +1,4 @@
-import { compareVersions, fetchManifest, scanInstalled } from "@/core/index.js";
+import { compareVersions, fetchManifest, loadInstalled } from "@/core/index.js";
 import type { InstallTargetType, Platform } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { selectPlatform, selectTarget, showCheckReport, showInfo, spinner } from "@/ui/prompts.js";
@@ -14,10 +14,10 @@ export async function executeCheck(options: CheckOptions): Promise<void> {
 
     const s = spinner();
     s.start("Scanning installed files...");
-    const installed = await scanInstalled(target.rootDir);
+    const installed = await loadInstalled(target.rootDir);
     s.stop("Scan complete.");
 
-    if (installed.length === 0) {
+    if (installed.bundles.length === 0) {
         showInfo("No astp-managed files found.");
         return;
     }
@@ -26,6 +26,6 @@ export async function executeCheck(options: CheckOptions): Promise<void> {
     const manifest = await fetchManifest();
     s.stop("Manifest fetched.");
 
-    const report = compareVersions(installed, manifest);
+    const report = compareVersions(installed.bundles, manifest);
     showCheckReport(report);
 }

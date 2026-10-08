@@ -5,19 +5,18 @@ import {
     compareVersions,
     downloadBundle,
     fetchManifest,
-    findBlockedUnits,
     groupTemplateItems,
-    installFile,
-    installSkill,
-    removeUnits,
-    scanInstalled,
+    loadInstalled,
+    syncBundle,
     validateUnitTargets,
+    writeLock,
 } from "@/core/index.js";
-import type { TemplateUnit } from "@/core/units.js";
-import type { InstalledUnit, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
+import type { FileStatus, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { describeUnitCounts } from "@/ui/format.js";
 import {
+    isInteractive,
+    selectNewUnits,
     selectPlatform,
     selectTarget,
     showInfo,
@@ -25,7 +24,7 @@ import {
     showUpdateReport,
     spinner,
     warnKeptRemoved,
-    warnLegacySkills,
+    warnLegacyModified,
     warnModified,
 } from "@/ui/prompts.js";
 
@@ -40,160 +39,103 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
     const target: InstallTarget = options.target
         ? resolveTarget(platform, options.target)
         : await selectTarget(platform);
-
-    const s = spinner();
-    s.start("Scanning installed files...");
-    const installed = await scanInstalled(target.rootDir);
-    s.stop("Scan complete.");
-
-    if (installed.length === 0) {
+    const installedState = await loadInstalled(target.rootDir);
+    if (installedState.bundles.length === 0) {
         showInfo("No astp-managed files found.");
         return;
     }
 
+    const s = spinner();
     s.start("Fetching manifest...");
     const manifest = await fetchManifest();
     s.stop("Manifest fetched.");
-
-    const report = compareVersions(installed, manifest);
-    const legacySkills = report.legacySkills;
-    const migratableLegacy = legacySkills.filter((skill) => skill.inManifest);
-    const unavailableLegacy = legacySkills.filter((skill) => !skill.inManifest);
-
-    if (!options.force && migratableLegacy.length > 0) {
-        warnLegacySkills(migratableLegacy);
+    const report = compareVersions(installedState.bundles, manifest);
+    const bundleNames = new Set(report.updates.map((update) => update.bundleName));
+    if (options.force) {
+        for (const bundle of installedState.bundles) {
+            if (bundle.units.some((unit) => unit.state === "modified") && manifest.bundles[bundle.bundleName]) {
+                bundleNames.add(bundle.bundleName);
+            }
+        }
     }
-    if (unavailableLegacy.length > 0) warnLegacySkills(unavailableLegacy, false);
-
-    if (report.updates.length === 0 && (!options.force || migratableLegacy.length === 0)) {
-        if (legacySkills.length === 0) showInfo("All bundles up to date.");
+    if (report.updates.length > 0 || report.notInManifest.length > 0) showUpdateReport(report);
+    if (bundleNames.size === 0) {
+        if (report.notInManifest.length === 0) showInfo("All bundles up to date.");
         return;
     }
 
-    let skippedFiles = 0;
-    let skippedSkills = 0;
-    const legacyPathsByBundle = new Map<string, Set<string>>();
-    const migratablePathsByBundle = new Map<string, Set<string>>();
-    for (const skill of legacySkills) {
-        const paths = legacyPathsByBundle.get(skill.bundleName) ?? new Set<string>();
-        paths.add(skill.targetPath);
-        legacyPathsByBundle.set(skill.bundleName, paths);
-    }
-    for (const skill of migratableLegacy) {
-        const paths = migratablePathsByBundle.get(skill.bundleName) ?? new Set<string>();
-        paths.add(skill.targetPath);
-        migratablePathsByBundle.set(skill.bundleName, paths);
-    }
+    const totals = {
+        installed: [] as FileStatus[],
+        removed: [] as FileStatus[],
+        skipped: [] as FileStatus[],
+        kept: [] as FileStatus[],
+    };
+    for (const bundleName of bundleNames) {
+        const bundle = manifest.bundles[bundleName];
+        if (!bundle) continue;
+        const installed = installedState.bundles.find((entry) => entry.bundleName === bundleName);
+        const units = groupTemplateItems(bundle.items);
+        const manifestPaths = new Set(units.map((unit) => unit.relativePath));
+        const tracked = new Set(
+            installed?.units.filter((unit) => manifestPaths.has(unit.relativePath)).map((unit) => unit.relativePath) ??
+                [],
+        );
+        const oldDeclined = new Set(installed?.declined.filter((unitPath) => manifestPaths.has(unitPath)) ?? []);
+        const newUnits = units.filter((unit) => !tracked.has(unit.relativePath) && !oldDeclined.has(unit.relativePath));
+        const checked =
+            isInteractive() && newUnits.length > 0
+                ? new Set(await selectNewUnits(bundleName, newUnits))
+                : new Set(newUnits.map((unit) => unit.relativePath));
+        const selected = new Set([...tracked, ...checked]);
+        const declined = new Set([
+            ...oldDeclined,
+            ...newUnits.filter((unit) => !checked.has(unit.relativePath)).map((unit) => unit.relativePath),
+        ]);
 
-    const plan: Array<{ bundleName: string; units: TemplateUnit[]; orphans: InstalledUnit[] }> = [];
-    for (const update of report.updates) {
-        const bundleName = update.bundleName;
-        const installedBundle = installed.find((bundle) => bundle.bundleName === bundleName);
-        const manifestBundle = manifest.bundles[bundleName];
-        if (!manifestBundle) continue;
-
-        const units = groupTemplateItems(manifestBundle.items);
-        const manifestPaths = new Set(units.map((unit) => `${unit.kind}\0${unit.relativePath}`));
-        const orphans =
-            installedBundle?.units.filter((unit) => !manifestPaths.has(`${unit.kind}\0${unit.relativePath}`)) ?? [];
-        plan.push({ bundleName, units, orphans });
-    }
-
-    if (options.force) {
-        const versionUpdates = new Set(report.updates.map((update) => update.bundleName));
-        for (const [bundleName, legacyPaths] of migratablePathsByBundle) {
-            if (versionUpdates.has(bundleName)) continue;
-            const bundle = manifest.bundles[bundleName];
-            if (!bundle) continue;
-            const units = groupTemplateItems(bundle.items).filter(
-                (unit) => unit.kind === "skill" && legacyPaths.has(unit.relativePath),
-            );
-            if (units.length > 0) plan.push({ bundleName, units, orphans: [] });
-        }
-    }
-
-    if (report.updates.length > 0) showUpdateReport(report);
-
-    let updatedFiles = 0;
-    let updatedSkills = 0;
-    let removedFiles = 0;
-    let removedSkills = 0;
-    for (const plannedBundle of plan) {
-        const bundleName = plannedBundle.bundleName;
-        const manifestBundle = manifest.bundles[bundleName];
-        if (!manifestBundle) continue;
-
-        validateUnitTargets(target.rootDir, plannedBundle.units);
-        let tempDir: string | undefined;
-        if (plannedBundle.units.length > 0) {
-            s.start(`Downloading ${bundleName}...`);
-            tempDir = await downloadBundle(manifest.repository, bundleName);
-            s.stop(`Downloaded ${bundleName}.`);
-        }
-
+        validateUnitTargets(target.rootDir, units);
+        s.start(`Downloading ${bundleName}...`);
+        const tempDir = await downloadBundle(manifest.repository, bundleName);
         try {
-            if (tempDir) {
-                await assertBundleSources(tempDir, bundleName, groupTemplateItems(manifestBundle.items));
-            }
-
-            if (plannedBundle.orphans.length > 0) {
-                const result = await removeUnits(plannedBundle.orphans, target.rootDir, options.force);
-                if (result.skipped.length > 0) warnKeptRemoved(result.skipped);
-                removedFiles += result.removed.filter((status) => status.kind === "file").length;
-                removedSkills += result.removed.filter((status) => status.kind === "skill").length;
-                skippedFiles += result.skipped.filter((status) => status.kind === "file").length;
-                skippedSkills += result.skipped.filter((status) => status.kind === "skill").length;
-            }
-
-            const legacyPaths = legacyPathsByBundle.get(bundleName) ?? new Set<string>();
-            const statuses = await findBlockedUnits(target.rootDir, bundleName, plannedBundle.units);
-            const modified = statuses.filter(
-                (status) => status.state === "modified" && !legacyPaths.has(status.targetPath),
-            );
-            if (!options.force && modified.length > 0) {
-                warnModified(modified);
-                skippedFiles += modified.filter((status) => status.kind === "file").length;
-                skippedSkills += modified.filter((status) => status.kind === "skill").length;
-            }
-
-            if (!options.force) skippedSkills += legacyPaths.size;
-
-            const skippedPaths = new Set([
-                ...(options.force ? [] : modified.map((status) => status.targetPath)),
-                ...(options.force ? [] : legacyPaths),
-            ]);
-            const installUnits = plannedBundle.units.filter(
-                (unit) => options.force || !skippedPaths.has(unit.relativePath),
-            );
-            if (tempDir && installUnits.length > 0) {
-                s.start(`Installing ${bundleName}...`);
-                for (const unit of installUnits) {
-                    const metadata = {
-                        source: manifest.repository,
-                        bundle: bundleName,
-                        version: manifestBundle.version,
-                    };
-                    if (unit.kind === "skill") {
-                        await installSkill(tempDir, unit, target, metadata);
-                        updatedSkills++;
-                    } else {
-                        await installFile(tempDir, unit.item, target, metadata);
-                        updatedFiles++;
-                    }
-                }
-                s.stop(`Installed ${bundleName}.`);
-            }
+            s.stop(`Downloaded ${bundleName}.`);
+            await assertBundleSources(tempDir, bundleName, units);
+            s.start(`Updating ${bundleName}...`);
+            const result = await syncBundle({
+                rootDir: target.rootDir,
+                manifest,
+                bundle,
+                installed,
+                lock: installedState.lock,
+                tempDir,
+                selected,
+                declined,
+                force: options.force ?? false,
+            });
+            await writeLock(target.rootDir, installedState.lock);
+            totals.installed.push(...result.installed);
+            totals.removed.push(...result.removed);
+            totals.skipped.push(...result.skipped);
+            totals.kept.push(...result.kept);
+            const legacy = result.skipped.filter((status) => status.state === "legacy");
+            const modified = result.skipped.filter((status) => status.state !== "legacy");
+            if (modified.length > 0) warnModified(modified);
+            if (legacy.length > 0) warnLegacyModified(legacy);
+            if (result.kept.length > 0) warnKeptRemoved(result.kept);
+            s.stop(`Updated ${bundleName}.`);
         } finally {
-            if (tempDir) await fs.rm(tempDir, { recursive: true, force: true });
+            await fs.rm(tempDir, { recursive: true, force: true });
         }
     }
 
-    const updatedCounts = describeUnitCounts(updatedFiles, updatedSkills);
-    const skippedCounts = describeUnitCounts(skippedFiles, skippedSkills);
-    const removedCounts = describeUnitCounts(removedFiles, removedSkills);
     showSuccess(
-        `Updated ${updatedCounts}${skippedFiles + skippedSkills > 0 ? `, skipped ${skippedCounts}` : ""}${
-            removedFiles + removedSkills > 0 ? `, removed ${removedCounts}` : ""
-        }`,
+        `Updated ${countStatuses(totals.installed)}${totals.skipped.length ? `, skipped ${countStatuses(totals.skipped)}` : ""}${
+            totals.removed.length ? `, removed ${countStatuses(totals.removed)}` : ""
+        }${totals.kept.length ? `, kept ${countStatuses(totals.kept)}` : ""}`,
+    );
+}
+
+function countStatuses(statuses: FileStatus[]): string {
+    return describeUnitCounts(
+        statuses.filter((status) => status.kind === "file").length,
+        statuses.filter((status) => status.kind === "skill").length,
     );
 }
