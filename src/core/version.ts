@@ -36,7 +36,13 @@ export async function scanInstalled(installRoot: string): Promise<InstalledBundl
 
     return Array.from(bundleMap.entries()).map(([bundleName, files]) => ({
         bundleName,
-        version: files[0].metadata.version,
+        version: files.reduce(
+            (newest, file) =>
+                compareSemver(newest.metadata.version, file.metadata.version) < 0
+                    ? file
+                    : newest,
+            files[0],
+        ).metadata.version,
         files,
     }));
 }

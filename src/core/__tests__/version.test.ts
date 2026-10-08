@@ -255,6 +255,27 @@ My custom content`;
         expect(result[0].files).toHaveLength(2);
     });
 
+    it("uses the maximum installed version across files in a bundle", async () => {
+        const files = [
+            ["a-old.md", "1.0.0"],
+            ["b-old.md", "1.0.0"],
+            ["c-old.md", "1.0.0"],
+            ["d-old.md", "1.0.0"],
+            ["z-new.md", "1.1.0"],
+        ];
+
+        for (const [name, version] of files) {
+            await fs.writeFile(
+                path.join(tempDir, name),
+                `---\nastp-source: fozy-labs/astp\nastp-bundle: pipeline\nastp-version: ${version}\nastp-hash: hash\n---\nContent`,
+            );
+        }
+
+        const result = await scanInstalled(tempDir);
+
+        expect(result[0].version).toBe("1.1.0");
+    });
+
     // T27: Update detection with mixed file states
     it("T27: update detection with mixed file states", async () => {
         const managedContent = `---
