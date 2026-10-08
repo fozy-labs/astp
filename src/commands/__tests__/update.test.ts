@@ -5,69 +5,79 @@ import path from "node:path";
 import { afterEach, vi } from "vitest";
 
 import {
+    assertBundleSources,
     compareVersions,
-    computeSkillTreeHash,
     downloadBundle,
     fetchManifest,
-    findBlockedUnits,
-    installFile,
-    installSkill,
-    removeUnits,
-    scanInstalled,
+    loadInstalled,
+    syncBundle,
+    writeLock,
 } from "@/core/index.js";
 import type { Bundle, InstalledBundle, InstallTarget, Manifest, TemplateItem, UpdateReport } from "@/types/index.js";
-import { selectPlatform, selectTarget, showInfo, showSuccess, warnLegacySkills, warnModified } from "@/ui/prompts.js";
+import { resolveTarget } from "@/types/index.js";
+import {
+    isInteractive,
+    selectNewUnits,
+    selectPlatform,
+    selectTarget,
+    showInfo,
+    showSuccess,
+    showUpdateReport,
+    warnKeptRemoved,
+    warnLegacyModified,
+    warnModified,
+} from "@/ui/prompts.js";
 
 import { executeUpdate } from "../update.js";
 
-// Mock core modules
-vi.mock("@/core/index.js", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("@/core/index.js")>();
-    return {
-        ...actual,
-        fetchManifest: vi.fn(),
-        scanInstalled: vi.fn(),
-        compareVersions: vi.fn(),
-        findBlockedUnits: vi.fn(),
-        downloadBundle: vi.fn(),
-        installFile: vi.fn(),
-        installSkill: vi.fn(),
-        removeUnits: vi.fn(),
-    };
-});
+vi.mock("@/core/index.js", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/core/index.js")>()),
+    assertBundleSources: vi.fn(),
+    compareVersions: vi.fn(),
+    downloadBundle: vi.fn(),
+    fetchManifest: vi.fn(),
+    loadInstalled: vi.fn(),
+    syncBundle: vi.fn(),
+    writeLock: vi.fn(),
+}));
 
-// Mock prompts
+vi.mock("@/types/index.js", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/types/index.js")>()),
+    resolveTarget: vi.fn(),
+}));
+
 vi.mock("@/ui/prompts.js", () => ({
+    isInteractive: vi.fn(),
+    selectNewUnits: vi.fn(),
     selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     showInfo: vi.fn(),
     showSuccess: vi.fn(),
     showUpdateReport: vi.fn(),
-    warnLegacySkills: vi.fn(),
+    warnKeptRemoved: vi.fn(),
+    warnLegacyModified: vi.fn(),
     warnModified: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
 
-const mockFetchManifest = vi.mocked(fetchManifest);
-const mockScanInstalled = vi.mocked(scanInstalled);
+const mockAssertBundleSources = vi.mocked(assertBundleSources);
 const mockCompareVersions = vi.mocked(compareVersions);
-const mockFindBlockedUnits = vi.mocked(findBlockedUnits);
 const mockDownloadBundle = vi.mocked(downloadBundle);
-const mockInstallFile = vi.mocked(installFile);
-const mockInstallSkill = vi.mocked(installSkill);
-const mockRemoveUnits = vi.mocked(removeUnits);
+const mockFetchManifest = vi.mocked(fetchManifest);
+const mockLoadInstalled = vi.mocked(loadInstalled);
+const mockSyncBundle = vi.mocked(syncBundle);
+const mockWriteLock = vi.mocked(writeLock);
+const mockResolveTarget = vi.mocked(resolveTarget);
+const mockIsInteractive = vi.mocked(isInteractive);
+const mockSelectNewUnits = vi.mocked(selectNewUnits);
 const mockSelectPlatform = vi.mocked(selectPlatform);
 const mockSelectTarget = vi.mocked(selectTarget);
 const mockShowInfo = vi.mocked(showInfo);
 const mockShowSuccess = vi.mocked(showSuccess);
-const mockWarnLegacySkills = vi.mocked(warnLegacySkills);
+const mockShowUpdateReport = vi.mocked(showUpdateReport);
+const mockWarnKeptRemoved = vi.mocked(warnKeptRemoved);
+const mockWarnLegacyModified = vi.mocked(warnLegacyModified);
 const mockWarnModified = vi.mocked(warnModified);
-
-const temporaryRoots: string[] = [];
-
-afterEach(async () => {
-    await Promise.all(temporaryRoots.splice(0).map((rootDir) => fs.rm(rootDir, { recursive: true, force: true })));
-});
 
 const testTarget: InstallTarget = {
     platform: "claude-code",
@@ -96,206 +106,80 @@ const testManifest: Manifest = {
     bundles: { pipeline: testBundle },
 };
 
-const testInstalledBundle: InstalledBundle = {
-    bundleName: "pipeline",
-    version: "1.0.0",
-    units: [
-        {
-            kind: "file",
-            filePath: "/project/.claude/agents/pipeline-approve.agent.md",
-            relativePath: "agents/pipeline-approve.agent.md",
-            metadata: {
-                source: "fozy-labs/astp",
-                bundle: "pipeline",
-                version: "1.0.0",
-                hash: "abc123",
-            },
-        },
+function createInstalledUnit(
+    state: "unmodified" | "modified" | "missing" = "unmodified",
+    relativePath = testItem.target,
+    origin: "lock" | "legacy" = "lock",
+    kind: "file" | "skill" = "file",
+) {
+    return { kind, relativePath, version: "1.0.0", origin, state };
+}
+
+function createInstalledBundle(
+    units: InstalledBundle["units"] = [createInstalledUnit()],
+    version = "1.0.0",
+): InstalledBundle {
+    return { bundleName: "pipeline", version, units, declined: [] };
+}
+
+const createState = (bundles: InstalledBundle[] = [createInstalledBundle()]) => ({
+    bundles,
+    lock: { schemaVersion: 1 as const, bundles: {} },
+});
+
+const updateReport = (
+    units: UpdateReport["updates"][number]["units"] = [
+        { targetPath: testItem.target, kind: "file", state: "unmodified" },
     ],
-};
-
-const legacyBundle: InstalledBundle = {
-    ...testInstalledBundle,
-    version: "1.0.0",
-    units: [
-        ...testInstalledBundle.units,
-        {
-            kind: "skill",
-            dirPath: "/project/.claude/skills/sample",
-            skillFilePath: "/project/.claude/skills/sample/SKILL.md",
-            relativePath: "skills/sample",
-            metadata: {
-                source: "fozy-labs/astp",
-                bundle: "pipeline",
-                version: "1.0.0",
-                hash: "legacy-hash",
-            },
-            legacy: true,
-        },
-    ],
-};
-
-const legacyBundleWithRemovedSkill: InstalledBundle = {
-    ...legacyBundle,
-    units: [
-        ...legacyBundle.units,
-        {
-            kind: "skill",
-            dirPath: "/project/.claude/skills/removed",
-            skillFilePath: "/project/.claude/skills/removed/SKILL.md",
-            relativePath: "skills/removed",
-            metadata: {
-                source: "fozy-labs/astp",
-                bundle: "pipeline",
-                version: "1.0.0",
-                hash: "legacy-hash",
-            },
-            legacy: true,
-        },
-    ],
-};
-
-const legacyManifest: Manifest = {
-    ...testManifest,
-    bundles: {
-        pipeline: {
-            ...testBundle,
-            version: "1.0.0",
-            items: [
-                testItem,
-                {
-                    source: "pipeline/skills/sample/SKILL.md",
-                    target: "skills/sample/SKILL.md",
-                    category: "skill",
-                },
-            ],
-        },
-    },
-};
-
-const noUpdatesReport: UpdateReport = {
-    updates: [],
-    upToDate: [testInstalledBundle],
-    notInManifest: [],
-    legacySkills: [],
-};
-
-const updatesReport: UpdateReport = {
-    updates: [
-        {
-            bundleName: "pipeline",
-            installedVersion: "1.0.0",
-            availableVersion: "1.1.0",
-            units: [{ targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "unmodified" }],
-        },
-    ],
+): UpdateReport => ({
+    updates: [{ bundleName: "pipeline", installedVersion: "1.0.0", availableVersion: "1.1.0", units }],
     upToDate: [],
     notInManifest: [],
     legacySkills: [],
-};
+});
 
-async function prepareDroppedSkill(item: TemplateItem) {
-    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "astp-update-"));
-    temporaryRoots.push(rootDir);
-    const dirPath = path.join(rootDir, "skills/a");
-    const skillFilePath = path.join(dirPath, "SKILL.md");
-    const notesFilePath = path.join(dirPath, "notes.md");
-    await fs.mkdir(dirPath, { recursive: true });
-    await fs.writeFile(skillFilePath, "# Original skill\n");
-    await fs.writeFile(notesFilePath, "Original notes\n");
+let tempDir: string;
 
-    const actual = await vi.importActual<typeof import("@/core/index.js")>("@/core/index.js");
-    mockRemoveUnits.mockImplementation(actual.removeUnits);
-    mockSelectTarget.mockResolvedValue({ platform: "claude-code", type: "project", rootDir });
-
-    const installedBundle: InstalledBundle = {
-        bundleName: "pipeline",
-        version: "1.0.0",
-        units: [
-            {
-                kind: "skill",
-                dirPath,
-                skillFilePath,
-                relativePath: "skills/a",
-                metadata: {
-                    source: "fozy-labs/astp",
-                    bundle: "pipeline",
-                    version: "1.0.0",
-                    hash: await computeSkillTreeHash(dirPath),
-                },
-                legacy: false,
-            },
-        ],
-    };
-    const manifest: Manifest = {
-        ...testManifest,
-        bundles: { pipeline: { ...testBundle, version: "1.1.0", items: [item] } },
-    };
-    mockScanInstalled.mockResolvedValue([installedBundle]);
-    mockFetchManifest.mockResolvedValue(manifest);
-    mockCompareVersions.mockReturnValue({
-        updates: [
-            {
-                bundleName: "pipeline",
-                installedVersion: "1.0.0",
-                availableVersion: "1.1.0",
-                units: [{ targetPath: "skills/a", kind: "skill", state: "removed" }],
-            },
-        ],
-        upToDate: [],
-        notInManifest: [],
-        legacySkills: [],
-    });
-    mockFindBlockedUnits.mockResolvedValue([]);
-
-    return { rootDir, skillFilePath, notesFilePath };
-}
-
-async function createTempBundle(items: TemplateItem[]): Promise<string> {
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "astp-update-bundle-"));
-    temporaryRoots.push(tempDir);
-    await Promise.all(
-        items.map(async (item) => {
-            const sourcePath = path.join(tempDir, item.target);
-            await fs.mkdir(path.dirname(sourcePath), { recursive: true });
-            await fs.writeFile(sourcePath, "template content\n");
-        }),
-    );
-    return tempDir;
-}
-
-async function mockBundleDownload(items: TemplateItem[]): Promise<string> {
-    const tempDir = await createTempBundle(items);
-    mockDownloadBundle.mockResolvedValue(tempDir);
-    return tempDir;
-}
-
-beforeEach(() => {
+beforeEach(async () => {
     vi.clearAllMocks();
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "astp-update-test-"));
+    mockResolveTarget.mockReturnValue(testTarget);
+    mockFetchManifest.mockResolvedValue(testManifest);
+    mockLoadInstalled.mockResolvedValue(createState());
+    mockCompareVersions.mockReturnValue(updateReport());
+    mockDownloadBundle.mockResolvedValue(tempDir);
+    mockAssertBundleSources.mockResolvedValue(undefined);
+    mockSyncBundle.mockResolvedValue({ installed: [], removed: [], skipped: [], kept: [] });
+    mockWriteLock.mockResolvedValue(undefined);
+    mockIsInteractive.mockReturnValue(false);
+    mockSelectNewUnits.mockImplementation(async (_name, units) => units.map((unit) => unit.relativePath));
+    mockSelectPlatform.mockResolvedValue("claude-code");
+    mockSelectTarget.mockResolvedValue(testTarget);
+});
+
+afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
 });
 
 describe("executeUpdate", () => {
-    // T41: CLI argument parsing — --force flag
-    it("T41: accepts force option and passes to update flow", async () => {
-        mockScanInstalled.mockResolvedValue([testInstalledBundle]);
-        mockFetchManifest.mockResolvedValue(testManifest);
-        mockCompareVersions.mockReturnValue(updatesReport);
-        mockFindBlockedUnits.mockResolvedValue([
-            { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
-        ]);
-        await mockBundleDownload(testBundle.items);
-        mockInstallFile.mockResolvedValue(undefined);
+    it("passes --force to the shared sync flow", async () => {
+        const modified = createInstalledBundle([createInstalledUnit("modified")]);
+        mockLoadInstalled.mockResolvedValue(createState([modified]));
+        mockSyncBundle.mockResolvedValue({
+            installed: [{ targetPath: testItem.target, kind: "file", state: "unmodified" }],
+            removed: [],
+            skipped: [],
+            kept: [],
+        });
 
         await executeUpdate({ force: true, platform: "claude-code", target: "project" });
 
-        // With --force, modified files should still be installed
-        expect(mockInstallFile).toHaveBeenCalledTimes(1);
-        expect(mockInstallSkill).not.toHaveBeenCalled();
+        expect(mockSyncBundle).toHaveBeenCalledWith(expect.objectContaining({ force: true }));
         expect(mockWarnModified).not.toHaveBeenCalled();
     });
 
-    it("shows info when no installed files found", async () => {
-        mockScanInstalled.mockResolvedValue([]);
+    it("shows info when no installed files are found", async () => {
+        mockLoadInstalled.mockResolvedValue(createState([]));
 
         await executeUpdate({ platform: "claude-code", target: "project" });
 
@@ -303,10 +187,13 @@ describe("executeUpdate", () => {
         expect(mockFetchManifest).not.toHaveBeenCalled();
     });
 
-    it("shows info when all bundles up to date", async () => {
-        mockScanInstalled.mockResolvedValue([testInstalledBundle]);
-        mockFetchManifest.mockResolvedValue(testManifest);
-        mockCompareVersions.mockReturnValue(noUpdatesReport);
+    it("shows info when all bundles are up to date", async () => {
+        mockCompareVersions.mockReturnValue({
+            updates: [],
+            upToDate: [createInstalledBundle()],
+            notInManifest: [],
+            legacySkills: [],
+        });
 
         await executeUpdate({ platform: "claude-code", target: "project" });
 
@@ -314,186 +201,205 @@ describe("executeUpdate", () => {
         expect(mockDownloadBundle).not.toHaveBeenCalled();
     });
 
-    it("removes orphans without downloading when the manifest has no units", async () => {
-        const emptyManifest: Manifest = {
-            ...testManifest,
-            bundles: { pipeline: { ...testBundle, items: [] } },
-        };
-        mockScanInstalled.mockResolvedValue([testInstalledBundle]);
-        mockFetchManifest.mockResolvedValue(emptyManifest);
-        mockCompareVersions.mockReturnValue(updatesReport);
-        mockFindBlockedUnits.mockResolvedValue([]);
-        mockRemoveUnits.mockResolvedValue({ removed: [], skipped: [] });
+    it("warns about modified lock and legacy units when versions match", async () => {
+        const lockUnit = createInstalledUnit("modified");
+        const legacyUnit = createInstalledUnit("modified", "skills/old", "legacy", "skill");
+        const installed = createInstalledBundle([lockUnit, legacyUnit], "1.1.0");
+        mockLoadInstalled.mockResolvedValue(createState([installed]));
+        mockCompareVersions.mockReturnValue({
+            updates: [],
+            upToDate: [installed],
+            notInManifest: [],
+            legacySkills: [],
+        });
 
         await executeUpdate({ platform: "claude-code", target: "project" });
 
-        expect(mockRemoveUnits).toHaveBeenCalledWith(testInstalledBundle.units, expect.any(String), undefined);
+        expect(mockWarnModified).toHaveBeenCalledWith([
+            { targetPath: testItem.target, kind: "file", state: "modified" },
+        ]);
+        expect(mockWarnLegacyModified).toHaveBeenCalledWith([
+            { targetPath: "skills/old", kind: "skill", state: "legacy" },
+        ]);
+        expect(mockShowInfo).toHaveBeenCalledWith("All bundles up to date.");
         expect(mockDownloadBundle).not.toHaveBeenCalled();
     });
 
-    it("does not remove a dropped skill when downloading the replacement fails", async () => {
-        const { skillFilePath, notesFilePath } = await prepareDroppedSkill({
-            source: "pipeline/skills/a/b/SKILL.md",
-            target: "skills/a/b/SKILL.md",
-            category: "skill",
+    it("downloads and verifies an empty manifest bundle before removing its orphans", async () => {
+        const emptyBundle = { ...testBundle, items: [] };
+        mockFetchManifest.mockResolvedValue({ ...testManifest, bundles: { pipeline: emptyBundle } });
+        mockSyncBundle.mockResolvedValue({
+            installed: [],
+            removed: [{ targetPath: testItem.target, kind: "file", state: "unmodified" }],
+            skipped: [],
+            kept: [],
         });
-        mockDownloadBundle.mockRejectedValue(new Error("network down"));
 
-        await expect(executeUpdate({ platform: "claude-code" })).rejects.toThrow("network down");
+        await executeUpdate({ platform: "claude-code", target: "project" });
 
-        await expect(fs.readFile(skillFilePath, "utf8")).resolves.toBe("# Original skill\n");
-        await expect(fs.readFile(notesFilePath, "utf8")).resolves.toBe("Original notes\n");
+        expect(mockDownloadBundle).toHaveBeenCalledWith("fozy-labs/astp", "pipeline");
+        expect(mockSyncBundle).toHaveBeenCalledWith(expect.objectContaining({ bundle: emptyBundle }));
+        expect(mockWriteLock).toHaveBeenCalled();
     });
 
-    it("does not remove a dropped skill when the downloaded bundle is missing a source", async () => {
-        const { skillFilePath, notesFilePath } = await prepareDroppedSkill({
-            source: "pipeline/skills/a/b/SKILL.md",
-            target: "skills/a/b/SKILL.md",
-            category: "skill",
-        });
-        const tempDir = await createTempBundle([]);
-        mockDownloadBundle.mockResolvedValue(tempDir);
+    it("does not sync dropped units when downloading the replacement fails", async () => {
+        mockDownloadBundle.mockRejectedValue(new Error("network down"));
 
-        await expect(executeUpdate({ platform: "claude-code" })).rejects.toThrow(
+        await expect(executeUpdate({ platform: "claude-code", target: "project" })).rejects.toThrow("network down");
+
+        expect(mockSyncBundle).not.toHaveBeenCalled();
+    });
+
+    it("does not sync dropped units when the downloaded bundle is missing a source", async () => {
+        mockAssertBundleSources.mockRejectedValue(new Error("missing files listed in the manifest"));
+
+        await expect(executeUpdate({ platform: "claude-code", target: "project" })).rejects.toThrow(
             /missing files listed in the manifest/,
         );
 
-        expect(mockInstallSkill).not.toHaveBeenCalled();
-        await expect(fs.readFile(skillFilePath, "utf8")).resolves.toBe("# Original skill\n");
-        await expect(fs.readFile(notesFilePath, "utf8")).resolves.toBe("Original notes\n");
-        await expect(fs.stat(tempDir)).rejects.toMatchObject({ code: "ENOENT" });
+        expect(mockSyncBundle).not.toHaveBeenCalled();
+        expect(mockWriteLock).not.toHaveBeenCalled();
     });
 
-    it("does not remove a dropped skill when a manifest target is invalid", async () => {
-        const { skillFilePath, notesFilePath } = await prepareDroppedSkill({
-            source: "pipeline/skills/a/b/SKILL.md",
-            target: "skills/../../evil/SKILL.md",
-            category: "skill",
-        });
-
-        await expect(executeUpdate({ platform: "claude-code" })).rejects.toThrow(/Invalid target path/);
-
-        expect(mockDownloadBundle).not.toHaveBeenCalled();
-        await expect(fs.readFile(skillFilePath, "utf8")).resolves.toBe("# Original skill\n");
-        await expect(fs.readFile(notesFilePath, "utf8")).resolves.toBe("Original notes\n");
-    });
-
-    it("removes orphans and installs nothing when every manifest unit is blocked", async () => {
-        const orphanUnit: InstalledBundle["units"][number] = {
-            kind: "file",
-            filePath: "/project/.claude/agents/old.agent.md",
-            relativePath: "agents/old.agent.md",
-            metadata: {
-                source: "fozy-labs/astp",
-                bundle: "pipeline",
-                version: "1.0.0",
-                hash: "abc123",
-            },
+    it("does not download or sync dropped units when a manifest target is invalid", async () => {
+        const invalidBundle: Bundle = {
+            ...testBundle,
+            items: [{ ...testItem, target: "skills/../../evil/SKILL.md" }],
         };
-        const installedBundle: InstalledBundle = {
-            ...testInstalledBundle,
-            units: [...testInstalledBundle.units, orphanUnit],
-        };
-        mockScanInstalled.mockResolvedValue([installedBundle]);
-        mockFetchManifest.mockResolvedValue(testManifest);
-        mockCompareVersions.mockReturnValue(updatesReport);
-        mockFindBlockedUnits.mockResolvedValue([{ targetPath: testItem.target, kind: "file", state: "modified" }]);
-        mockRemoveUnits.mockResolvedValue({ removed: [], skipped: [] });
-        const tempDir = await mockBundleDownload([testItem]);
+        mockFetchManifest.mockResolvedValue({ ...testManifest, bundles: { pipeline: invalidBundle } });
 
-        await executeUpdate({ platform: "claude-code", target: "project" });
-
-        expect(mockRemoveUnits).toHaveBeenCalledWith([orphanUnit], expect.any(String), undefined);
-        expect(mockDownloadBundle).toHaveBeenCalledTimes(1);
-        expect(mockInstallFile).not.toHaveBeenCalled();
-        expect(mockInstallSkill).not.toHaveBeenCalled();
-        await expect(fs.stat(tempDir)).rejects.toMatchObject({ code: "ENOENT" });
-    });
-
-    it("migrates only legacy skills when the bundle version is current", async () => {
-        mockScanInstalled.mockResolvedValue([legacyBundle]);
-        mockFetchManifest.mockResolvedValue(legacyManifest);
-        mockCompareVersions.mockReturnValue({
-            updates: [],
-            upToDate: [legacyBundle],
-            notInManifest: [],
-            legacySkills: [{ bundleName: "pipeline", targetPath: "skills/sample", inManifest: true }],
-        });
-        await mockBundleDownload(legacyManifest.bundles.pipeline?.items ?? []);
-        mockInstallFile.mockResolvedValue(undefined);
-        mockInstallSkill.mockResolvedValue(undefined);
-
-        await executeUpdate({ force: true, platform: "claude-code", target: "project" });
-
-        expect(mockInstallSkill).toHaveBeenCalledTimes(1);
-        expect(mockInstallFile).not.toHaveBeenCalled();
-    });
-
-    it("distinguishes legacy skills missing from the manifest", async () => {
-        mockScanInstalled.mockResolvedValue([legacyBundleWithRemovedSkill]);
-        mockFetchManifest.mockResolvedValue(legacyManifest);
-        mockCompareVersions.mockReturnValue({
-            updates: [],
-            upToDate: [legacyBundleWithRemovedSkill],
-            notInManifest: [],
-            legacySkills: [
-                { bundleName: "pipeline", targetPath: "skills/sample", inManifest: true },
-                { bundleName: "pipeline", targetPath: "skills/removed", inManifest: false },
-            ],
-        });
-
-        await executeUpdate({ platform: "claude-code", target: "project" });
-
-        expect(mockWarnLegacySkills).toHaveBeenCalledWith([
-            { bundleName: "pipeline", targetPath: "skills/sample", inManifest: true },
-        ]);
-        expect(mockWarnLegacySkills).toHaveBeenCalledWith(
-            [{ bundleName: "pipeline", targetPath: "skills/removed", inManifest: false }],
-            false,
+        await expect(executeUpdate({ platform: "claude-code", target: "project" })).rejects.toThrow(
+            /Invalid target path/,
         );
+
         expect(mockDownloadBundle).not.toHaveBeenCalled();
-        expect(mockShowInfo).not.toHaveBeenCalledWith("All bundles up to date.");
+        expect(mockSyncBundle).not.toHaveBeenCalled();
+    });
+
+    it("removes orphans and reports modified units skipped by sync", async () => {
+        const modifiedUnit = createInstalledUnit("modified");
+        const orphanUnit = createInstalledUnit("unmodified", "agents/old.agent.md");
+        const keptUnit = createInstalledUnit("modified", "agents/kept.agent.md");
+        mockLoadInstalled.mockResolvedValue(createState([createInstalledBundle([modifiedUnit, orphanUnit, keptUnit])]));
+        mockSyncBundle.mockResolvedValue({
+            installed: [],
+            removed: [{ targetPath: "agents/old.agent.md", kind: "file", state: "unmodified" }],
+            skipped: [{ targetPath: testItem.target, kind: "file", state: "modified" }],
+            kept: [{ targetPath: keptUnit.relativePath, kind: "file", state: "modified" }],
+        });
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(mockSyncBundle).toHaveBeenCalled();
+        expect(mockWarnModified).toHaveBeenCalledWith([
+            { targetPath: testItem.target, kind: "file", state: "modified" },
+        ]);
+        expect(mockWarnKeptRemoved).toHaveBeenCalledWith([
+            { targetPath: keptUnit.relativePath, kind: "file", state: "modified" },
+        ]);
+        expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining("removed 1 file"));
+    });
+
+    it("migrates only matching clean legacy units when the bundle version is current", async () => {
+        const legacyBundle = createInstalledBundle([
+            createInstalledUnit("unmodified", "skills/sample", "legacy", "skill"),
+            createInstalledUnit("modified", "skills/old", "legacy", "skill"),
+        ]);
+        const manifestBundle: Bundle = {
+            ...testBundle,
+            version: "1.0.0",
+            items: [{ source: "pipeline/skills/sample/SKILL.md", target: "skills/sample/SKILL.md", category: "skill" }],
+        };
+        mockLoadInstalled.mockResolvedValue(createState([legacyBundle]));
+        mockFetchManifest.mockResolvedValue({ ...testManifest, bundles: { pipeline: manifestBundle } });
+        mockCompareVersions.mockReturnValue(
+            updateReport([{ targetPath: "skills/sample", kind: "skill", state: "legacy" }]),
+        );
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(mockSyncBundle).toHaveBeenCalledWith(
+            expect.objectContaining({
+                installed: legacyBundle,
+                bundle: manifestBundle,
+                selected: new Set(["skills/sample"]),
+            }),
+        );
+        expect(mockWarnLegacyModified).not.toHaveBeenCalled();
+    });
+
+    it("reports legacy units absent from the manifest", async () => {
+        const report = updateReport();
+        report.legacySkills = [
+            { bundleName: "pipeline", targetPath: "skills/removed", kind: "skill", clean: true, inManifest: false },
+        ];
+        mockCompareVersions.mockReturnValue(report);
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(mockShowUpdateReport).toHaveBeenCalledWith(report);
     });
 
     it("skips modified files without --force", async () => {
-        mockScanInstalled.mockResolvedValue([testInstalledBundle]);
-        mockFetchManifest.mockResolvedValue(testManifest);
-        mockCompareVersions.mockReturnValue(updatesReport);
-        mockFindBlockedUnits.mockResolvedValue([
-            { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
-        ]);
-        await mockBundleDownload(testBundle.items);
+        const modified = createInstalledBundle([createInstalledUnit("modified")]);
+        mockLoadInstalled.mockResolvedValue(createState([modified]));
+        mockSyncBundle.mockResolvedValue({
+            installed: [],
+            removed: [],
+            skipped: [{ targetPath: testItem.target, kind: "file", state: "modified" }],
+            kept: [],
+        });
 
         await executeUpdate({ platform: "claude-code", target: "project" });
 
-        expect(mockWarnModified).toHaveBeenCalled();
-        expect(mockInstallFile).not.toHaveBeenCalled();
+        expect(mockWarnModified).toHaveBeenCalledWith([
+            { targetPath: testItem.target, kind: "file", state: "modified" },
+        ]);
+        expect(mockSyncBundle).toHaveBeenCalledWith(expect.objectContaining({ force: false }));
     });
 
     it("overwrites modified files with --force", async () => {
-        mockScanInstalled.mockResolvedValue([testInstalledBundle]);
-        mockFetchManifest.mockResolvedValue(testManifest);
-        mockCompareVersions.mockReturnValue(updatesReport);
-        mockFindBlockedUnits.mockResolvedValue([
-            { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
-        ]);
-        await mockBundleDownload(testBundle.items);
-        mockInstallFile.mockResolvedValue(undefined);
+        const modified = createInstalledBundle([createInstalledUnit("modified")]);
+        mockLoadInstalled.mockResolvedValue(createState([modified]));
+        mockCompareVersions.mockReturnValue({
+            updates: [],
+            upToDate: [modified],
+            notInManifest: [],
+            legacySkills: [],
+        });
 
         await executeUpdate({ force: true, platform: "claude-code", target: "project" });
 
-        expect(mockInstallFile).toHaveBeenCalledTimes(1);
-        expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining("1 file"));
+        expect(mockSyncBundle).toHaveBeenCalledWith(expect.objectContaining({ force: true }));
+        expect(mockWarnModified).not.toHaveBeenCalled();
     });
 
     it("prompts for platform and target when not provided", async () => {
-        mockSelectPlatform.mockResolvedValue("claude-code");
-        mockSelectTarget.mockResolvedValue(testTarget);
-        mockScanInstalled.mockResolvedValue([]);
-
         await executeUpdate({});
 
         expect(mockSelectPlatform).toHaveBeenCalled();
         expect(mockSelectTarget).toHaveBeenCalledWith("claude-code");
+    });
+
+    it("selects new units when an interactive update offers them", async () => {
+        const manifestBundle: Bundle = {
+            ...testBundle,
+            items: [testItem, { source: "pipeline/agents/new.md", target: "agents/new.md", category: "agent" }],
+        };
+        mockFetchManifest.mockResolvedValue({ ...testManifest, bundles: { pipeline: manifestBundle } });
+        mockIsInteractive.mockReturnValue(true);
+        mockSelectNewUnits.mockResolvedValue([]);
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(mockSelectNewUnits).toHaveBeenCalledWith("pipeline", [
+            { kind: "file", relativePath: "agents/new.md", item: manifestBundle.items[1] },
+        ]);
+        expect(mockSyncBundle).toHaveBeenCalledWith(
+            expect.objectContaining({
+                selected: new Set([testItem.target]),
+                declined: new Set(["agents/new.md"]),
+            }),
+        );
     });
 });

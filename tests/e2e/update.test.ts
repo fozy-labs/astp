@@ -5,7 +5,7 @@ import { vi } from "vitest";
 
 import { executeInstall } from "@/commands/install.js";
 import { executeUpdate } from "@/commands/update.js";
-import { compareVersions, downloadBundle, extractAstpMetadata, fetchManifest, scanInstalled } from "@/core/index.js";
+import { compareVersions, downloadBundle, fetchManifest, loadInstalled } from "@/core/index.js";
 import type { Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { confirmInstall, selectPlatform, selectTarget, warnModified } from "@/ui/prompts.js";
@@ -33,15 +33,20 @@ vi.mock("@/types/index.js", async (importOriginal) => {
 });
 
 vi.mock("@/ui/prompts.js", () => ({
+    isInteractive: vi.fn(() => false),
     selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     selectBundles: vi.fn(),
+    selectUnits: vi.fn(),
+    selectNewUnits: vi.fn(),
     confirmInstall: vi.fn(),
     showSuccess: vi.fn(),
     showInfo: vi.fn(),
     showCheckReport: vi.fn(),
     showUpdateReport: vi.fn(),
     warnModified: vi.fn(),
+    warnKeptRemoved: vi.fn(),
+    warnLegacyModified: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
 
@@ -119,25 +124,29 @@ describe("E2E: update", () => {
         const manifestV2 = await setupV2Mocks(manifestWithAgentFiles("1.1.0", targets));
         await executeUpdate({ platform: "claude-code", target: "project" });
 
-        const installed = await scanInstalled(path.join(projectDir, ".claude"));
-        expect(compareVersions(installed, manifestV2).updates).toHaveLength(0);
+        const installed = await loadInstalled(path.join(projectDir, ".claude"));
+        expect(compareVersions(installed.bundles, manifestV2).updates).toHaveLength(0);
     });
 
     // T35: Update to new version
     it("T35: updates files to v1.1.0", async () => {
         await installPipeline();
         const manifestV2 = await setupV2Mocks();
+        const templateDir = await setupTemplateDir(manifestV2, "pipeline");
+        templateDirs.push(templateDir);
+        const expectedFiles = await Promise.all(
+            manifestV2.bundles.pipeline.items.map(
+                async (item) => [item.target, await fs.readFile(path.join(templateDir, item.target))] as const,
+            ),
+        );
+        mockDownloadBundle.mockResolvedValue(templateDir);
 
         await executeUpdate({ platform: "claude-code", target: "project" });
 
         const claudeDir = path.join(projectDir, ".claude");
-        for (const item of manifestV2.bundles.pipeline.items) {
-            const filePath = path.join(claudeDir, item.target);
-            const content = await fs.readFile(filePath, "utf8");
-            const metadata = extractAstpMetadata(content);
-
-            expect(metadata).not.toBeNull();
-            expect(metadata!.version).toBe("1.1.0");
+        for (const [target, expected] of expectedFiles) {
+            const filePath = path.join(claudeDir, target);
+            expect(await fs.readFile(filePath)).toEqual(expected);
         }
     });
 
@@ -160,15 +169,11 @@ describe("E2E: update", () => {
         expect(warnedFiles.some((f: { targetPath: string }) => f.targetPath.includes("pipeline-approve"))).toBe(true);
 
         // Modified file retains v1.0.0
-        const content = await fs.readFile(modifiedFile, "utf8");
-        const metadata = extractAstpMetadata(content);
-        expect(metadata!.version).toBe("1.0.0");
+        const lock = JSON.parse(await fs.readFile(path.join(claudeDir, "astp.lock"), "utf8"));
+        expect(lock.bundles.pipeline.units["agents/pipeline-approve.agent.md"].version).toBe("1.0.0");
 
         // Unmodified files updated to v1.1.0
-        const otherFile = path.join(claudeDir, "agents", "pipeline-orchestrator.agent.md");
-        const otherContent = await fs.readFile(otherFile, "utf8");
-        const otherMeta = extractAstpMetadata(otherContent);
-        expect(otherMeta!.version).toBe("1.1.0");
+        expect(lock.bundles.pipeline.units["agents/pipeline-orchestrator.agent.md"].version).toBe("1.1.0");
     });
 
     // T37: Force update overwrites modified files
@@ -186,8 +191,8 @@ describe("E2E: update", () => {
 
         // Modified file overwritten with v1.1.0
         const content = await fs.readFile(modifiedFile, "utf8");
-        const metadata = extractAstpMetadata(content);
-        expect(metadata!.version).toBe("1.1.0");
+        const lock = JSON.parse(await fs.readFile(path.join(claudeDir, "astp.lock"), "utf8"));
+        expect(lock.bundles.pipeline.units["agents/pipeline-approve.agent.md"].version).toBe("1.1.0");
         expect(content).not.toContain("<!-- user edit -->");
     });
 

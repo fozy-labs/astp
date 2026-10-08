@@ -1,19 +1,18 @@
 import { vi } from "vitest";
 
-import { compareVersions, fetchManifest, scanInstalled } from "@/core/index.js";
+import { compareVersions, fetchManifest, loadInstalled } from "@/core/index.js";
 import type { InstalledBundle, InstallTarget, Manifest, UpdateReport } from "@/types/index.js";
+import { resolveTarget } from "@/types/index.js";
 import { selectPlatform, selectTarget, showCheckReport, showInfo } from "@/ui/prompts.js";
 
 import { executeCheck } from "../check.js";
 
-// Mock core modules
 vi.mock("@/core/index.js", () => ({
     fetchManifest: vi.fn(),
-    scanInstalled: vi.fn(),
+    loadInstalled: vi.fn(),
     compareVersions: vi.fn(),
 }));
 
-// Mock prompts
 vi.mock("@/ui/prompts.js", () => ({
     selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
@@ -22,13 +21,20 @@ vi.mock("@/ui/prompts.js", () => ({
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
 
+vi.mock("@/types/index.js", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/types/index.js")>()),
+    resolveTarget: vi.fn(),
+}));
+
 const mockFetchManifest = vi.mocked(fetchManifest);
-const mockScanInstalled = vi.mocked(scanInstalled);
+const mockLoadInstalled = vi.mocked(loadInstalled);
 const mockCompareVersions = vi.mocked(compareVersions);
 const mockSelectPlatform = vi.mocked(selectPlatform);
 const mockSelectTarget = vi.mocked(selectTarget);
 const mockShowCheckReport = vi.mocked(showCheckReport);
 const mockShowInfo = vi.mocked(showInfo);
+const mockResolveTarget = vi.mocked(resolveTarget);
+const emptyState = { lock: { schemaVersion: 1 as const, bundles: {} }, bundles: [] };
 
 const testTarget: InstallTarget = {
     platform: "claude-code",
@@ -42,16 +48,13 @@ const testInstalledBundle: InstalledBundle = {
     units: [
         {
             kind: "file",
-            filePath: "/project/.claude/agents/pipeline-approve.agent.md",
             relativePath: "agents/pipeline-approve.agent.md",
-            metadata: {
-                source: "fozy-labs/astp",
-                bundle: "pipeline",
-                version: "1.0.0",
-                hash: "abc123",
-            },
+            version: "1.0.0",
+            origin: "lock",
+            state: "unmodified",
         },
     ],
+    declined: [],
 };
 
 const testManifest: Manifest = {
@@ -91,21 +94,22 @@ const mixedReport: UpdateReport = {
 
 beforeEach(() => {
     vi.clearAllMocks();
+    mockLoadInstalled.mockResolvedValue(emptyState);
+    mockResolveTarget.mockReturnValue(testTarget);
 });
 
 describe("executeCheck", () => {
     it("shows info when no installed files found", async () => {
-        mockScanInstalled.mockResolvedValue([]);
-
         await executeCheck({ platform: "claude-code", target: "project" });
 
         expect(mockShowInfo).toHaveBeenCalledWith("No astp-managed files found.");
         expect(mockFetchManifest).not.toHaveBeenCalled();
         expect(mockShowCheckReport).not.toHaveBeenCalled();
+        expect(mockLoadInstalled).toHaveBeenCalledWith("/project/.claude");
     });
 
     it("fetches manifest and displays report when files are installed", async () => {
-        mockScanInstalled.mockResolvedValue([testInstalledBundle]);
+        mockLoadInstalled.mockResolvedValue({ ...emptyState, bundles: [testInstalledBundle] });
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(mixedReport);
 
@@ -121,6 +125,7 @@ describe("executeCheck", () => {
             bundleName: "core",
             version: "1.0.0",
             units: [],
+            declined: [],
         };
 
         const report: UpdateReport = {
@@ -137,7 +142,7 @@ describe("executeCheck", () => {
             legacySkills: [],
         };
 
-        mockScanInstalled.mockResolvedValue([testInstalledBundle, upToDateBundle]);
+        mockLoadInstalled.mockResolvedValue({ ...emptyState, bundles: [testInstalledBundle, upToDateBundle] });
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(report);
 
@@ -149,7 +154,6 @@ describe("executeCheck", () => {
     it("prompts for platform and target when not provided", async () => {
         mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockResolvedValue(testTarget);
-        mockScanInstalled.mockResolvedValue([]);
 
         await executeCheck({});
 

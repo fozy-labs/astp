@@ -30,15 +30,20 @@ vi.mock("@/types/index.js", async (importOriginal) => {
 });
 
 vi.mock("@/ui/prompts.js", () => ({
+    isInteractive: vi.fn(() => false),
     selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     selectBundles: vi.fn(),
+    selectUnits: vi.fn(),
+    selectNewUnits: vi.fn(),
     confirmInstall: vi.fn(),
     showSuccess: vi.fn(),
     showInfo: vi.fn(),
     showCheckReport: vi.fn(),
     showUpdateReport: vi.fn(),
     warnModified: vi.fn(),
+    warnLegacyModified: vi.fn(),
+    warnKeptRemoved: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
 

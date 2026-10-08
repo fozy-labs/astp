@@ -4,6 +4,20 @@ import path from "node:path";
 
 import type { InstallTarget, Manifest, TemplateItem } from "@/types/index.js";
 
+export async function readLockFixture(rootDir: string): Promise<{
+    schemaVersion: number;
+    bundles: Record<
+        string,
+        {
+            source: string;
+            declined: string[];
+            units: Record<string, { kind: "file" | "skill"; version: string; hash: string }>;
+        }
+    >;
+}> {
+    return JSON.parse(await fs.readFile(path.join(rootDir, "astp.lock"), "utf8"));
+}
+
 // ── Fixture Manifests ─────────────────────────────────────────────────
 
 export function createFixtureManifest(version = "1.0.0"): Manifest {
@@ -225,9 +239,9 @@ function generateTemplateContent(item: TemplateItem, version: string): string | 
 
     switch (item.category) {
         case "agent":
-            return `---\nname: ${name}\n---\n# ${name}\n\nAgent v${version} description.\n`;
+            return `---\nname: ${name}\ndescription: ${name} description\n---\n# ${name}\n\nAgent v${version} description.\n`;
         case "skill":
-            return `---\nname: ${name}\n---\n# ${name}\n\nSkill v${version} content.\n`;
+            return `---\nname: ${name}\ndescription: ${name} description\n---\n# ${name}\n\nSkill v${version} content.\n`;
         case "instruction":
             return `---\ndescription: ${name}\n---\n# ${name}\n\nInstruction v${version} content.\n`;
         default:

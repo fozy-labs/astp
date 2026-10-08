@@ -1,51 +1,55 @@
 import { vi } from "vitest";
 
-import { detectModified, removeBundle, scanInstalled } from "@/core/index.js";
+import { loadInstalled, writeLock } from "@/core/index.js";
 import type { InstalledBundle, InstallTarget } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import {
+    confirmDelete,
+    isInteractive,
     selectInstalledBundles,
     selectPlatform,
     selectTarget,
     showInfo,
     showSuccess,
-    warnModified,
+    warnKeptRemoved,
 } from "@/ui/prompts.js";
 
 import { executeDelete } from "../delete.js";
 
-vi.mock("@/core/index.js", () => ({
-    scanInstalled: vi.fn(),
-    detectModified: vi.fn(),
-    removeBundle: vi.fn(),
+vi.mock("@/core/index.js", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/core/index.js")>()),
+    loadInstalled: vi.fn(),
+    writeLock: vi.fn(),
 }));
-
-vi.mock("@/types/index.js", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("@/types/index.js")>();
-    return { ...actual, resolveTarget: vi.fn() };
-});
 
 vi.mock("@/ui/prompts.js", () => ({
     selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     selectInstalledBundles: vi.fn(),
     confirmDelete: vi.fn().mockResolvedValue(true),
+    isInteractive: vi.fn(),
     showInfo: vi.fn(),
     showSuccess: vi.fn(),
-    warnModified: vi.fn(),
+    warnKeptRemoved: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
 
-const mockScanInstalled = vi.mocked(scanInstalled);
-const mockDetectModified = vi.mocked(detectModified);
-const mockRemoveBundle = vi.mocked(removeBundle);
+vi.mock("@/types/index.js", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/types/index.js")>()),
+    resolveTarget: vi.fn(),
+}));
+
+const mockLoadInstalled = vi.mocked(loadInstalled);
+const mockWriteLock = vi.mocked(writeLock);
 const mockResolveTarget = vi.mocked(resolveTarget);
 const mockSelectPlatform = vi.mocked(selectPlatform);
 const mockSelectTarget = vi.mocked(selectTarget);
 const mockSelectInstalledBundles = vi.mocked(selectInstalledBundles);
+const mockConfirmDelete = vi.mocked(confirmDelete);
+const mockIsInteractive = vi.mocked(isInteractive);
 const mockShowInfo = vi.mocked(showInfo);
 const mockShowSuccess = vi.mocked(showSuccess);
-const mockWarnModified = vi.mocked(warnModified);
+const mockWarnKeptRemoved = vi.mocked(warnKeptRemoved);
 
 const testTarget: InstallTarget = {
     platform: "claude-code",
@@ -59,29 +63,47 @@ const testBundle: InstalledBundle = {
     units: [
         {
             kind: "file",
-            filePath: "/project/.claude/agents/pipeline-approve.agent.md",
             relativePath: "agents/pipeline-approve.agent.md",
-            metadata: {
-                source: "fozy-labs/astp",
-                bundle: "pipeline",
-                version: "1.0.0",
-                hash: "abc123",
-            },
+            version: "1.0.0",
+            origin: "lock",
+            state: "unmodified",
         },
     ],
+    declined: [],
 };
+
+function createInstalledState(bundle = testBundle) {
+    return {
+        bundles: [bundle],
+        lock: {
+            schemaVersion: 1 as const,
+            bundles: {
+                pipeline: {
+                    source: "fozy-labs/astp",
+                    declined: [],
+                    units: {
+                        "agents/pipeline-approve.agent.md": {
+                            kind: "file" as const,
+                            version: "1.0.0",
+                            hash: "abc123",
+                        },
+                    },
+                },
+            },
+        },
+    };
+}
 
 beforeEach(() => {
     vi.clearAllMocks();
     mockResolveTarget.mockReturnValue(testTarget);
     mockSelectPlatform.mockResolvedValue("claude-code");
     mockSelectTarget.mockResolvedValue(testTarget);
-    mockScanInstalled.mockResolvedValue([testBundle]);
+    mockLoadInstalled.mockResolvedValue(createInstalledState());
     mockSelectInstalledBundles.mockResolvedValue([testBundle]);
-    mockDetectModified.mockResolvedValue([
-        { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "unmodified" },
-    ]);
-    mockRemoveBundle.mockResolvedValue({ removed: ["agents/pipeline-approve.agent.md"], skipped: [] });
+    mockConfirmDelete.mockResolvedValue(true);
+    mockIsInteractive.mockReturnValue(false);
+    mockWriteLock.mockResolvedValue(undefined);
 });
 
 describe("executeDelete", () => {
@@ -89,43 +111,62 @@ describe("executeDelete", () => {
         await executeDelete({ bundle: "pipeline", platform: "claude-code", target: "project" });
 
         expect(mockSelectInstalledBundles).not.toHaveBeenCalled();
-        expect(mockRemoveBundle).toHaveBeenCalledWith(testBundle, "/project/.claude", false);
+        expect(mockConfirmDelete).not.toHaveBeenCalled();
+        expect(mockWriteLock).toHaveBeenCalledWith("/project/.claude", expect.any(Object));
         expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining("Deleted 1 file"));
     });
 
+    it("aborts when an interactive user declines confirmation", async () => {
+        mockIsInteractive.mockReturnValue(true);
+        mockConfirmDelete.mockResolvedValue(false);
+
+        await executeDelete({ bundle: "pipeline", platform: "claude-code", target: "project" });
+
+        expect(mockConfirmDelete).toHaveBeenCalledWith([testBundle], testTarget, false);
+        expect(mockWriteLock).not.toHaveBeenCalled();
+        expect(mockShowSuccess).not.toHaveBeenCalled();
+    });
+
     it("shows info when no managed files are installed", async () => {
-        mockScanInstalled.mockResolvedValue([]);
+        mockLoadInstalled.mockResolvedValue({
+            bundles: [],
+            lock: { schemaVersion: 1, bundles: {} },
+        });
 
         await executeDelete({ platform: "claude-code", target: "project" });
 
         expect(mockShowInfo).toHaveBeenCalledWith("No astp-managed files found.");
-        expect(mockRemoveBundle).not.toHaveBeenCalled();
+        expect(mockWriteLock).not.toHaveBeenCalled();
     });
 
     it("warns and skips modified files without force", async () => {
-        mockDetectModified.mockResolvedValue([
-            { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
-        ]);
-        mockRemoveBundle.mockResolvedValue({
-            removed: [],
-            skipped: [{ targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" }],
-        });
+        const modifiedBundle: InstalledBundle = {
+            ...testBundle,
+            units: testBundle.units.map((unit) => ({ ...unit, state: "modified" as const })),
+        };
+        mockLoadInstalled.mockResolvedValue(createInstalledState(modifiedBundle));
+        mockSelectInstalledBundles.mockResolvedValue([modifiedBundle]);
 
         await executeDelete({ bundle: "pipeline", platform: "claude-code", target: "project" });
 
-        expect(mockWarnModified).toHaveBeenCalled();
-        expect(mockShowInfo).toHaveBeenCalledWith("No files or skills deleted, skipped 1 file.");
+        expect(mockWarnKeptRemoved).toHaveBeenCalledWith([
+            { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
+        ]);
+        expect(mockShowInfo).toHaveBeenCalledWith("No files or skills deleted, kept 1 file.");
     });
 
     it("deletes modified files with force", async () => {
-        mockDetectModified.mockResolvedValue([
-            { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
-        ]);
+        const modifiedBundle: InstalledBundle = {
+            ...testBundle,
+            units: testBundle.units.map((unit) => ({ ...unit, state: "modified" as const })),
+        };
+        mockLoadInstalled.mockResolvedValue(createInstalledState(modifiedBundle));
+        mockSelectInstalledBundles.mockResolvedValue([modifiedBundle]);
 
         await executeDelete({ bundle: "pipeline", force: true, platform: "claude-code", target: "project" });
 
-        expect(mockWarnModified).not.toHaveBeenCalled();
-        expect(mockRemoveBundle).toHaveBeenCalledWith(testBundle, "/project/.claude", true);
+        expect(mockWarnKeptRemoved).not.toHaveBeenCalled();
+        expect(mockWriteLock).toHaveBeenCalledWith("/project/.claude", expect.any(Object));
     });
 
     it("throws when bundle is not installed", async () => {

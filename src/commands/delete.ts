@@ -1,96 +1,149 @@
-import { detectModified, removeBundle, scanInstalled } from "@/core/index.js";
-import type { InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
+import fs from "node:fs/promises";
+import path from "node:path";
+
+import {
+    assertInsideRoot,
+    extractAstpMetadata,
+    loadInstalled,
+    removeEmptyDirectories,
+    resolveUnitPaths,
+    writeLock,
+} from "@/core/index.js";
+import type {
+    FileStatus,
+    InstalledBundle,
+    InstalledUnit,
+    InstallTarget,
+    InstallTargetType,
+    Platform,
+} from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { describeUnitCounts } from "@/ui/format.js";
 import {
     confirmDelete,
+    isInteractive,
     selectInstalledBundles,
     selectPlatform,
     selectTarget,
     showInfo,
     showSuccess,
     spinner,
-    warnLegacySkills,
-    warnModified,
+    warnKeptRemoved,
 } from "@/ui/prompts.js";
 
 export interface DeleteOptions {
     bundle?: string;
+    skills?: string[];
     force?: boolean;
     platform?: Platform;
     target?: InstallTargetType;
 }
 
 export async function executeDelete(options: DeleteOptions): Promise<void> {
+    if (options.skills?.length && !options.bundle) throw new Error("--skill requires a bundle name");
     const platform: Platform = options.platform ?? (await selectPlatform());
     const target: InstallTarget = options.target
         ? resolveTarget(platform, options.target)
         : await selectTarget(platform);
-
-    const s = spinner();
-    s.start("Scanning installed files...");
-    const installed = await scanInstalled(target.rootDir);
-    s.stop("Scan complete.");
-
-    if (installed.length === 0) {
+    const installedState = await loadInstalled(target.rootDir);
+    if (installedState.bundles.length === 0) {
         showInfo("No astp-managed files found.");
         return;
     }
 
     const selectedBundles = options.bundle
-        ? [resolveInstalledBundle(installed, options.bundle)]
-        : await selectInstalledBundles(installed);
+        ? [resolveInstalledBundle(installedState.bundles, options.bundle)]
+        : await selectInstalledBundles(installedState.bundles);
+    const targets = selectedBundles.map((bundle) => {
+        if (!options.skills?.length) return bundle;
+        const paths = resolveUnitPaths(options.skills, bundle.units, bundle.bundleName);
+        return { ...bundle, units: bundle.units.filter((unit) => paths.has(unit.relativePath)) };
+    });
+    if (isInteractive() && !(await confirmDelete(targets, target, options.force ?? false))) return;
 
-    const confirmed = await confirmDelete(selectedBundles, target, options.force ?? false);
-    if (!confirmed) {
-        return;
-    }
-
-    let removedFiles = 0;
-    let removedSkills = 0;
-    let skippedFiles = 0;
-    let skippedSkills = 0;
-
-    for (const bundle of selectedBundles) {
-        const modifiedFiles = await detectModified(bundle, target.rootDir);
-        const modified = modifiedFiles.filter((file) => file.state === "modified");
-        const legacy = modifiedFiles
-            .filter((file) => file.state === "legacy")
-            .map((file) => ({ bundleName: bundle.bundleName, targetPath: file.targetPath }));
-
-        if (modified.length > 0 && !options.force) {
-            warnModified(modified);
-        }
-        if (legacy.length > 0 && !options.force) warnLegacySkills(legacy);
-
+    const removed: FileStatus[] = [];
+    const kept: FileStatus[] = [];
+    const s = spinner();
+    for (const bundle of targets) {
         s.start(`Deleting ${bundle.bundleName}...`);
-        const result = await removeBundle(bundle, target.rootDir, options.force ?? false);
+        const installedBundle = installedState.bundles.find((entry) => entry.bundleName === bundle.bundleName);
+        const removedPaths = new Set<string>();
+        let lockBundle = installedState.lock.bundles[bundle.bundleName];
+        if (!lockBundle) {
+            lockBundle = {
+                source: await readLegacySource(target.rootDir, bundle.units),
+                declined: [],
+                units: {},
+            };
+            installedState.lock.bundles[bundle.bundleName] = lockBundle;
+        }
+        for (const unit of bundle.units) {
+            if (unit.state === "modified" && !options.force) {
+                kept.push(toStatus(unit));
+                continue;
+            }
+            const unitPath = path.join(target.rootDir, unit.relativePath);
+            await assertInsideRoot(target.rootDir, unit.relativePath);
+            await fs.rm(unitPath, { recursive: true, force: true });
+            await removeEmptyDirectories(path.dirname(unitPath), target.rootDir);
+            delete lockBundle.units[unit.relativePath];
+            lockBundle.declined.push(unit.relativePath);
+            removedPaths.add(`${unit.kind}\0${unit.relativePath}`);
+            removed.push(toStatus(unit));
+        }
+        lockBundle.declined = [...new Set(lockBundle.declined)].sort();
+        const legacyRemaining = (installedBundle?.units ?? []).some(
+            (unit) => unit.origin === "legacy" && !removedPaths.has(`${unit.kind}\0${unit.relativePath}`),
+        );
+        if (Object.keys(lockBundle.units).length === 0 && !legacyRemaining) {
+            delete installedState.lock.bundles[bundle.bundleName];
+        }
+        await writeLock(target.rootDir, installedState.lock);
         s.stop(`Deleted ${bundle.bundleName}.`);
-
-        const unitKinds = new Map(bundle.units.map((unit) => [unit.relativePath, unit.kind]));
-        removedSkills += result.removed.filter((relativePath) => unitKinds.get(relativePath) === "skill").length;
-        removedFiles += result.removed.filter((relativePath) => unitKinds.get(relativePath) === "file").length;
-        skippedSkills += result.skipped.filter((status) => status.kind === "skill").length;
-        skippedFiles += result.skipped.filter((status) => status.kind === "file").length;
     }
-
-    if (removedFiles + removedSkills === 0 && skippedFiles + skippedSkills > 0) {
-        const skipped = describeUnitCounts(skippedFiles, skippedSkills);
-        showInfo(`No files or skills deleted, skipped ${skipped}.`);
+    if (kept.length > 0) warnKeptRemoved(kept);
+    if (removed.length === 0 && kept.length > 0) {
+        showInfo(`No files or skills deleted, kept ${countStatuses(kept)}.`);
         return;
     }
-
-    const removed = describeUnitCounts(removedFiles, removedSkills);
-    const skipped = describeUnitCounts(skippedFiles, skippedSkills);
-    showSuccess(`Deleted ${removed}${skippedFiles + skippedSkills > 0 ? `, skipped ${skipped}` : ""}`);
+    showSuccess(`Deleted ${countStatuses(removed)}${kept.length ? `, kept ${countStatuses(kept)}` : ""}`);
 }
 
-function resolveInstalledBundle(installed: Awaited<ReturnType<typeof scanInstalled>>, bundleName: string) {
+function resolveInstalledBundle(installed: InstalledBundle[], bundleName: string): InstalledBundle {
     const bundle = installed.find((entry) => entry.bundleName === bundleName);
     if (!bundle) {
-        const available = installed.map((entry) => entry.bundleName).join(", ");
-        throw new Error(`Installed bundle '${bundleName}' not found. Available: ${available}`);
+        throw new Error(
+            `Installed bundle '${bundleName}' not found. Available: ${installed.map((entry) => entry.bundleName).join(", ")}`,
+        );
     }
-
     return bundle;
+}
+
+async function readLegacySource(rootDir: string, units: InstalledUnit[]): Promise<string> {
+    const legacy = units.find((unit) => unit.origin === "legacy");
+    if (!legacy) return "";
+    const metadataPath =
+        legacy.kind === "skill"
+            ? path.join(rootDir, legacy.relativePath, "SKILL.md")
+            : path.join(rootDir, legacy.relativePath);
+    try {
+        return extractAstpMetadata(await fs.readFile(metadataPath, "utf8"))?.source ?? "";
+    } catch {
+        return "";
+    }
+}
+
+function toStatus(unit: InstalledUnit): FileStatus {
+    return {
+        targetPath: unit.relativePath,
+        kind: unit.kind,
+        state: unit.origin === "legacy" ? "legacy" : unit.state,
+    };
+}
+
+function countStatuses(statuses: FileStatus[]): string {
+    return describeUnitCounts(
+        statuses.filter((status) => status.kind === "file").length,
+        statuses.filter((status) => status.kind === "skill").length,
+    );
 }

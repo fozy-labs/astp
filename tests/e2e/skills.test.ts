@@ -11,12 +11,9 @@ import {
     compareVersions,
     computeHash,
     computeSkillTreeHash,
-    detectModified,
     downloadBundle,
-    extractAstpMetadata,
     fetchManifest,
-    injectAstpFields,
-    scanInstalled,
+    loadInstalled,
 } from "@/core/index.js";
 import type { Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
@@ -24,13 +21,19 @@ import {
     confirmDelete,
     confirmInstall,
     showCheckReport,
-    showInfo,
     warnKeptRemoved,
-    warnLegacySkills,
+    warnLegacyModified,
     warnModified,
 } from "@/ui/prompts.js";
 
-import { cleanupDir, createFixtureManifest, createTempProject, makeProjectTarget, setupTemplateDir } from "./helpers.js";
+import {
+    cleanupDir,
+    createFixtureManifest,
+    createTempProject,
+    makeProjectTarget,
+    readLockFixture,
+    setupTemplateDir,
+} from "./helpers.js";
 
 vi.mock("@/core/index.js", async (importOriginal) => {
     const actual = await importOriginal<typeof import("@/core/index.js")>();
@@ -43,10 +46,13 @@ vi.mock("@/types/index.js", async (importOriginal) => {
 });
 
 vi.mock("@/ui/prompts.js", () => ({
+    isInteractive: vi.fn(() => false),
     selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     selectBundles: vi.fn(),
     selectInstalledBundles: vi.fn(),
+    selectUnits: vi.fn(),
+    selectNewUnits: vi.fn(),
     confirmInstall: vi.fn(),
     confirmDelete: vi.fn().mockResolvedValue(true),
     showSuccess: vi.fn(),
@@ -55,7 +61,7 @@ vi.mock("@/ui/prompts.js", () => ({
     showUpdateReport: vi.fn(),
     warnModified: vi.fn(),
     warnKeptRemoved: vi.fn(),
-    warnLegacySkills: vi.fn(),
+    warnLegacyModified: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
 
@@ -65,9 +71,8 @@ const mockResolveTarget = vi.mocked(resolveTarget);
 const mockConfirmInstall = vi.mocked(confirmInstall);
 const mockConfirmDelete = vi.mocked(confirmDelete);
 const mockShowCheckReport = vi.mocked(showCheckReport);
-const mockShowInfo = vi.mocked(showInfo);
 const mockWarnKeptRemoved = vi.mocked(warnKeptRemoved);
-const mockWarnLegacySkills = vi.mocked(warnLegacySkills);
+const mockWarnLegacyModified = vi.mocked(warnLegacyModified);
 const mockWarnModified = vi.mocked(warnModified);
 
 describe("E2E: skill directory units", () => {
@@ -123,6 +128,20 @@ describe("E2E: skill directory units", () => {
         return path.join(projectDir, ".claude", "skills", "sample");
     }
 
+    function addLegacyFields(content: string, version: string, hash: string): string {
+        const fields = `astp-source: ${manifest.repository}\nastp-bundle: skillpack\nastp-version: ${version}\nastp-hash: ${hash}`;
+        const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
+        if (frontmatter) {
+            return `---\n${frontmatter[1]}\n${fields}\n---\n${content.slice(frontmatter[0].length)}`;
+        }
+        return `---\n${fields}\n---\n${content}`;
+    }
+
+    async function getInstalledSkillpack() {
+        const installed = await loadInstalled(path.join(projectDir, ".claude"));
+        return installed.bundles.find((bundle) => bundle.bundleName === "skillpack");
+    }
+
     function orphanManifest(version: string, includeOrphans: boolean): Manifest {
         const fixture = createFixtureManifest(version);
         fixture.bundles.skillpack.items = [
@@ -159,7 +178,7 @@ describe("E2E: skill directory units", () => {
         return fixture;
     }
 
-    it("writes metadata only to SKILL.md and copies every other file byte-for-byte", async () => {
+    it("installs nested skills and binary assets byte-for-byte", async () => {
         const templateDir = await setupBundle();
         await executeInstall({ bundle: "skillpack", platform: "claude-code", target: "project" });
 
@@ -181,16 +200,21 @@ describe("E2E: skill directory units", () => {
         const conflicts = await fs.readFile(path.join(root, "CONFLICTS.md"));
         const sourceConflicts = await fs.readFile(path.join(templateDir, conflictsPath));
 
-        expect(extractAstpMetadata(skillContent)).not.toBeNull();
-        expect(extractAstpMetadata(reference.toString("utf8"))).toBeNull();
-        expect(extractAstpMetadata(nestedSkill.toString("utf8"))).toBeNull();
+        expect(skillContent).toBe(await fs.readFile(path.join(templateDir, "skills/sample/SKILL.md"), "utf8"));
+        expect(skillContent).not.toContain("astp-source");
+        expect(reference.toString("utf8")).not.toContain("astp-source");
+        expect(nestedSkill.toString("utf8")).not.toContain("astp-source");
         expect(reference).toEqual(sourceReference);
         expect(binary).toEqual(sourceBinary);
         expect(nestedSkill).toEqual(sourceNestedSkill);
         expect(script).toEqual(sourceScript);
         expect(conflicts).toEqual(sourceConflicts);
         expect(binary.includes(0)).toBe(true);
-        expect(extractAstpMetadata(skillContent)?.hash).toBe(await computeSkillTreeHash(root));
+        const lock = await readLockFixture(path.join(projectDir, ".claude"));
+        expect(lock.bundles.skillpack.units["skills/sample"]).toMatchObject({
+            kind: "skill",
+            hash: await computeSkillTreeHash(root),
+        });
     });
 
     it("force reinstall removes files no longer present in the skill source", async () => {
@@ -209,37 +233,34 @@ describe("E2E: skill directory units", () => {
 
     it("detects tree edits, additions, and deletions as skill modifications", async () => {
         await installSkillpack();
-        const bundle = (await scanInstalled(path.join(projectDir, ".claude"))).find((entry) => entry.bundleName === "skillpack")!;
+        const getState = async () => (await getInstalledSkillpack())?.units[0]?.state;
 
-        await expect(detectModified(bundle, path.join(projectDir, ".claude"))).resolves.toMatchObject([
-            { targetPath: "skills/sample", kind: "skill", state: "unmodified" },
-        ]);
+        expect(await getState()).toBe("unmodified");
 
         const referencePath = path.join(skillRoot(), "references", "touch.md");
         const reference = await fs.readFile(referencePath, "utf8");
         await fs.writeFile(referencePath, `${reference}\nEdited`);
-        await expect(detectModified(bundle, path.join(projectDir, ".claude"))).resolves.toMatchObject([{ state: "modified" }]);
+        expect(await getState()).toBe("modified");
 
         const nestedSkillPath = path.join(skillRoot(), "examples", "sub", "SKILL.md");
         const nestedSkill = await fs.readFile(nestedSkillPath, "utf8");
         await fs.writeFile(nestedSkillPath, `${nestedSkill}\nEdited`);
-        await expect(detectModified(bundle, path.join(projectDir, ".claude"))).resolves.toMatchObject([{ state: "modified" }]);
+        expect(await getState()).toBe("modified");
 
         await fs.writeFile(path.join(skillRoot(), "added.md"), "Added");
-        await expect(detectModified(bundle, path.join(projectDir, ".claude"))).resolves.toMatchObject([{ state: "modified" }]);
+        expect(await getState()).toBe("modified");
 
         await fs.rm(path.join(skillRoot(), "added.md"));
         await fs.rm(referencePath);
-        await expect(detectModified(bundle, path.join(projectDir, ".claude"))).resolves.toMatchObject([{ state: "modified" }]);
+        expect(await getState()).toBe("modified");
 
         await fs.rm(skillRoot(), { recursive: true });
-        await expect(detectModified(bundle, path.join(projectDir, ".claude"))).resolves.toMatchObject([{ state: "modified" }]);
+        expect(await getState()).toBe("missing");
     });
 
     it("detects edits to scripts, conflicts, and deeply nested binary files", async () => {
         await installSkillpack();
         const installRoot = path.join(projectDir, ".claude");
-        const bundle = (await scanInstalled(installRoot)).find((entry) => entry.bundleName === "skillpack")!;
         const paths = [
             path.join(skillRoot(), "scripts", "push.sh"),
             path.join(skillRoot(), "CONFLICTS.md"),
@@ -249,9 +270,9 @@ describe("E2E: skill directory units", () => {
         for (const filePath of paths) {
             const original = await fs.readFile(filePath);
             await fs.writeFile(filePath, Buffer.concat([original, Buffer.from([0, 1])]));
-            await expect(detectModified(bundle, installRoot)).resolves.toMatchObject([{ state: "modified" }]);
+            expect((await getInstalledSkillpack())?.units[0]?.state).toBe("modified");
             await fs.writeFile(filePath, original);
-            await expect(detectModified(bundle, installRoot)).resolves.toMatchObject([{ state: "unmodified" }]);
+            expect((await getInstalledSkillpack())?.units[0]?.state).toBe("unmodified");
         }
     });
 
@@ -269,7 +290,10 @@ describe("E2E: skill directory units", () => {
 
         await executeUpdate({ platform: "claude-code", target: "project" });
 
-        expect(extractAstpMetadata(await fs.readFile(path.join(skillRoot(), "SKILL.md"), "utf8"))?.version).toBe("1.1.0");
+        const lock = await readLockFixture(path.join(projectDir, ".claude"));
+        expect(lock.bundles.skillpack.units["skills/sample"]).toMatchObject({
+            version: "1.1.0",
+        });
         await expect(fs.access(path.join(skillRoot(), "examples", "sub", "deeper", "data.bin"))).rejects.toThrow();
     });
 
@@ -284,7 +308,11 @@ describe("E2E: skill directory units", () => {
 
         const installRoot = path.join(projectDir, ".claude");
         const newSkill = await fs.readFile(path.join(installRoot, "skills", "a", "b", "SKILL.md"), "utf8");
-        expect(extractAstpMetadata(newSkill)).toMatchObject({ bundle: "skillpack", version: "1.1.0" });
+        expect(newSkill).not.toContain("astp-source");
+        expect((await readLockFixture(installRoot)).bundles.skillpack.units["skills/a/b"]).toMatchObject({
+            kind: "skill",
+            version: "1.1.0",
+        });
         await expect(fs.access(path.join(installRoot, "skills", "a", "SKILL.md"))).rejects.toThrow();
     });
 
@@ -299,7 +327,11 @@ describe("E2E: skill directory units", () => {
 
         const installRoot = path.join(projectDir, ".claude");
         const newSkill = await fs.readFile(path.join(installRoot, "skills", "a", "SKILL.md"), "utf8");
-        expect(extractAstpMetadata(newSkill)).toMatchObject({ bundle: "skillpack", version: "1.1.0" });
+        expect(newSkill).not.toContain("astp-source");
+        expect((await readLockFixture(installRoot)).bundles.skillpack.units["skills/a"]).toMatchObject({
+            kind: "skill",
+            version: "1.1.0",
+        });
         await expect(fs.access(path.join(installRoot, "skills", "a", "b", "SKILL.md"))).rejects.toThrow();
     });
 
@@ -317,11 +349,13 @@ describe("E2E: skill directory units", () => {
         await executeUpdate({ platform: "claude-code", target: "project" });
 
         expect(await fs.readFile(referencePath, "utf8")).toBe("User edit");
-        expect(extractAstpMetadata(await fs.readFile(path.join(skillRoot(), "SKILL.md"), "utf8"))?.version).toBe("1.0.0");
+        const initialLock = await readLockFixture(path.join(projectDir, ".claude"));
+        expect(initialLock.bundles.skillpack.units["skills/sample"].version).toBe("1.0.0");
 
         await executeUpdate({ force: true, platform: "claude-code", target: "project" });
         expect(await fs.readFile(referencePath, "utf8")).not.toBe("User edit");
-        expect(extractAstpMetadata(await fs.readFile(path.join(skillRoot(), "SKILL.md"), "utf8"))?.version).toBe("1.1.0");
+        const updatedLock = await readLockFixture(path.join(projectDir, ".claude"));
+        expect(updatedLock.bundles.skillpack.units["skills/sample"].version).toBe("1.1.0");
     });
 
     it("retries a restored old-version skill when another skill already reached the new version", async () => {
@@ -347,10 +381,10 @@ Skill A v1.1 content`,
         await executeUpdate({ platform: "claude-code", target: "project" });
 
         expect(await fs.readFile(skillAPath, "utf8")).toContain("USER EDIT");
-        expect(compareVersions(await scanInstalled(installRoot), manifest).updates).toHaveLength(0);
+        expect(compareVersions((await loadInstalled(installRoot)).bundles, manifest).updates).toHaveLength(0);
 
         await fs.writeFile(skillAPath, originalSkillA);
-        const restoredReport = compareVersions(await scanInstalled(installRoot), manifest);
+        const restoredReport = compareVersions((await loadInstalled(installRoot)).bundles, manifest);
         expect(restoredReport.updates).toHaveLength(1);
         expect(restoredReport.updates[0]).toMatchObject({
             installedVersion: "1.0.0",
@@ -360,8 +394,12 @@ Skill A v1.1 content`,
         await executeUpdate({ platform: "claude-code", target: "project" });
 
         const updatedSkillA = await fs.readFile(skillAPath, "utf8");
-        expect(extractAstpMetadata(updatedSkillA)).toMatchObject({ bundle: "skillpack", version: "1.1.0" });
         expect(updatedSkillA).toContain("Skill A v1.1 content");
+        expect(updatedSkillA).not.toContain("astp-source");
+        expect((await readLockFixture(installRoot)).bundles.skillpack.units["skills/a"]).toMatchObject({
+            kind: "skill",
+            version: "1.1.0",
+        });
     });
 
     it("retries a new skill after its unmanaged directory collision is removed", async () => {
@@ -393,7 +431,11 @@ Skill A v1.1 content`,
         await executeUpdate({ platform: "claude-code", target: "project" });
 
         const installedSkill = await fs.readFile(path.join(path.dirname(userFile), "SKILL.md"), "utf8");
-        expect(extractAstpMetadata(installedSkill)).toMatchObject({ bundle: "skillpack", version: "1.1.0" });
+        expect(installedSkill).not.toContain("astp-source");
+        const lock = await readLockFixture(path.join(projectDir, ".claude"));
+        expect(lock.bundles.skillpack.units["skills/new"]).toMatchObject({
+            version: "1.1.0",
+        });
     });
 
     it("removes unmodified skill and file units dropped upstream with empty parents", async () => {
@@ -409,6 +451,21 @@ Skill A v1.1 content`,
         await expect(fs.access(path.join(installRoot, "skills", "deprecated"))).rejects.toThrow();
         await expect(fs.access(path.join(installRoot, "agents", "old.agent.md"))).rejects.toThrow();
         await expect(fs.access(path.join(installRoot, "agents"))).rejects.toThrow();
+    });
+
+    it("verifies the updated bundle before pruning units dropped upstream", async () => {
+        manifest = orphanManifest("1.0.0", true);
+        await installSkillpack();
+
+        const orphan = path.join(projectDir, ".claude", "skills", "deprecated", "z", "SKILL.md");
+        manifest = orphanManifest("1.1.0", false);
+        mockFetchManifest.mockResolvedValue(manifest);
+        const templateDir = await setupBundle();
+        await fs.rm(path.join(templateDir, "skills", "a", "SKILL.md"));
+
+        await expect(executeUpdate({ platform: "claude-code", target: "project" })).rejects.toThrow(/missing/i);
+
+        await expect(fs.access(orphan)).resolves.toBeUndefined();
     });
 
     it("keeps modified orphan skills with a warning unless --force is passed", async () => {
@@ -475,52 +532,72 @@ Skill A v1.1 content`,
             }
             const content = await fs.readFile(sourcePath, "utf8");
             const oldHash = computeHash(content);
-            const metadata = { source: manifest.repository, bundle: "skillpack", version: manifest.bundles.skillpack.version };
-            await fs.writeFile(targetPath, injectAstpFields(content, metadata, oldHash));
+            await fs.writeFile(targetPath, addLegacyFields(content, manifest.bundles.skillpack.version, oldHash));
         }
     }
 
-    it("reports legacy skills and skips them on same-version update without force", async () => {
+    it("reports modified legacy skills and preserves them during an update until forced", async () => {
         await writeLegacyInstall();
-        const scanned = await scanInstalled(path.join(projectDir, ".claude"));
-        const bundle = scanned.find((entry) => entry.bundleName === "skillpack")!;
+        const bundle = (await getInstalledSkillpack())!;
         expect(bundle.units).toHaveLength(1);
-        expect(bundle.units[0]).toMatchObject({ kind: "skill", legacy: true, relativePath: "skills/sample" });
+        expect(bundle.units[0]).toMatchObject({
+            kind: "skill",
+            origin: "legacy",
+            state: "modified",
+            relativePath: "skills/sample",
+        });
 
         await executeCheck({ platform: "claude-code", target: "project" });
         expect(mockShowCheckReport).toHaveBeenCalled();
         expect(mockShowCheckReport.mock.calls[0][0].legacySkills).toContainEqual({
             bundleName: "skillpack",
             targetPath: "skills/sample",
+            kind: "skill",
+            clean: false,
             inManifest: true,
         });
 
+        manifest = createFixtureManifest("1.1.0");
+        mockFetchManifest.mockResolvedValue(manifest);
+        const templateDir = await setupBundle();
+        mockDownloadFrom(templateDir);
         await executeUpdate({ platform: "claude-code", target: "project" });
-        expect(mockWarnLegacySkills).toHaveBeenCalled();
-        expect(mockShowInfo).not.toHaveBeenCalledWith("All bundles up to date.");
-        expect(extractAstpMetadata(await fs.readFile(path.join(skillRoot(), "SKILL.md"), "utf8"))?.version).toBe("1.0.0");
+        expect(mockWarnLegacyModified).toHaveBeenCalled();
+        expect((await getInstalledSkillpack())?.units[0]).toMatchObject({ origin: "legacy", version: "1.0.0" });
 
         await executeUpdate({ force: true, platform: "claude-code", target: "project" });
         const skillContent = await fs.readFile(path.join(skillRoot(), "SKILL.md"), "utf8");
-        expect(extractAstpMetadata(skillContent)?.hash).toBe(await computeSkillTreeHash(skillRoot()));
-        expect(extractAstpMetadata(await fs.readFile(path.join(skillRoot(), "references", "touch.md"), "utf8"))).toBeNull();
-        expect(
-            extractAstpMetadata(await fs.readFile(path.join(skillRoot(), "examples", "sub", "SKILL.md"), "utf8")),
-        ).toBeNull();
-        const migratedBundle = (await scanInstalled(path.join(projectDir, ".claude"))).find(
-            (entry) => entry.bundleName === "skillpack",
-        )!;
-        expect(migratedBundle.units).toMatchObject([{ kind: "skill", legacy: false }]);
-        await expect(detectModified(migratedBundle, path.join(projectDir, ".claude"))).resolves.toMatchObject([
-            { targetPath: "skills/sample", kind: "skill", state: "unmodified" },
-        ]);
+        expect(skillContent).not.toContain("astp-source");
+        expect(await fs.readFile(path.join(skillRoot(), "references", "touch.md"), "utf8")).not.toContain(
+            "astp-source",
+        );
+        expect(await fs.readFile(path.join(skillRoot(), "examples", "sub", "SKILL.md"), "utf8")).not.toContain(
+            "astp-source",
+        );
+        expect((await getInstalledSkillpack())?.units[0]).toMatchObject({
+            kind: "skill",
+            origin: "lock",
+            state: "unmodified",
+            version: "1.1.0",
+        });
+        const lock = await readLockFixture(path.join(projectDir, ".claude"));
+        expect(lock.bundles.skillpack.units["skills/sample"].hash).toBe(await computeSkillTreeHash(skillRoot()));
     });
 
-    it("recognizes a single-file legacy skill using its old content hash", async () => {
+    it("recognizes and migrates a clean single-file legacy skill", async () => {
         await writeLegacyInstall(true);
-        const bundle = (await scanInstalled(path.join(projectDir, ".claude"))).find((entry) => entry.bundleName === "skillpack")!;
+        const bundle = (await getInstalledSkillpack())!;
         expect(bundle.units).toHaveLength(1);
-        expect(bundle.units[0]).toMatchObject({ kind: "skill", legacy: true });
+        expect(bundle.units[0]).toMatchObject({ kind: "skill", origin: "legacy", state: "unmodified" });
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect((await getInstalledSkillpack())?.units[0]).toMatchObject({
+            kind: "skill",
+            origin: "lock",
+            state: "unmodified",
+        });
+        expect(await fs.readFile(path.join(skillRoot(), "SKILL.md"), "utf8")).not.toContain("astp-source");
     });
 
     it("skips legacy skill deletion unless forced, then removes its whole directory", async () => {
@@ -528,7 +605,7 @@ Skill A v1.1 content`,
 
         await executeDelete({ bundle: "skillpack", platform: "claude-code", target: "project" });
         await expect(fs.access(path.join(skillRoot(), "SKILL.md"))).resolves.toBeUndefined();
-        expect(mockWarnLegacySkills).toHaveBeenCalled();
+        expect(mockWarnKeptRemoved).toHaveBeenCalled();
 
         await executeDelete({ bundle: "skillpack", force: true, platform: "claude-code", target: "project" });
         await expect(fs.access(skillRoot())).rejects.toThrow();

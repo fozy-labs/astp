@@ -64,12 +64,9 @@ export interface InstallTarget {
     rootDir: string;
 }
 
-// ── Installed File Metadata Types (§3.3) ─────────────────────────────
+// ── Installed State Types (§3.3) ─────────────────────────────────────
 
-/**
- * Metadata extracted from astp-* frontmatter fields of an installed file.
- * These fields are injected by the CLI during install/update.
- */
+/** Legacy metadata extracted from astp-* frontmatter fields. */
 export interface InstalledFileMetadata {
     /** Source repository ("fozy-labs/astp"). Maps to `astp-source` frontmatter field. */
     source: string;
@@ -81,40 +78,20 @@ export interface InstalledFileMetadata {
     hash: string;
 }
 
-/** An installed file item with its metadata and filesystem location. */
-export interface InstalledFileUnit {
-    kind: "file";
-    /** Absolute path to the installed file. */
-    filePath: string;
-    /** Path relative to install root (matches manifest item.target). */
+export interface InstalledUnit {
+    kind: "file" | "skill";
     relativePath: string;
-    /** Parsed astp-* metadata from frontmatter. */
-    metadata: InstalledFileMetadata;
+    version: string;
+    origin: "lock" | "legacy";
+    state: "unmodified" | "modified" | "missing";
 }
-
-/** An installed skill directory and its SKILL.md metadata. */
-export interface InstalledSkillUnit {
-    kind: "skill";
-    /** Absolute path to the installed skill directory. */
-    dirPath: string;
-    /** Absolute path to the skill's SKILL.md file. */
-    skillFilePath: string;
-    /** Skill directory path relative to install root. */
-    relativePath: string;
-    /** Parsed astp-* metadata from SKILL.md frontmatter. */
-    metadata: InstalledFileMetadata;
-    /** Whether this directory uses the old per-file skill metadata format. */
-    legacy: boolean;
-}
-
-export type InstalledUnit = InstalledFileUnit | InstalledSkillUnit;
 
 /** Files and skill directories grouped by bundle after scanning the install target. */
 export interface InstalledBundle {
     bundleName: string;
-    /** Oldest unmodified unit version, or newest installed-unit version if all are modified or legacy. */
     version: string;
     units: InstalledUnit[];
+    declined: string[];
 }
 
 // ── Version Comparison Types (§3.4) ──────────────────────────────────
@@ -127,8 +104,13 @@ export interface UpdateReport {
     upToDate: InstalledBundle[];
     /** Installed bundles not found in remote manifest (removed upstream). */
     notInManifest: InstalledBundle[];
-    /** Skill directories still using per-file metadata from older installs. */
-    legacySkills: Array<{ bundleName: string; targetPath: string; inManifest: boolean }>;
+    legacySkills: Array<{
+        bundleName: string;
+        targetPath: string;
+        kind: "file" | "skill";
+        clean: boolean;
+        inManifest: boolean;
+    }>;
 }
 
 /** Details about an available update for a single bundle. */
@@ -147,7 +129,7 @@ export interface FileStatus {
     state: FileState;
 }
 
-export type FileState = "unmodified" | "modified" | "legacy" | "new" | "removed";
+export type FileState = "unmodified" | "modified" | "missing" | "legacy" | "new" | "removed";
 
 // ── Re-exports ───────────────────────────────────────────────────────
 

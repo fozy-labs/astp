@@ -4,9 +4,26 @@ import path from "node:path";
 
 import { afterEach, vi } from "vitest";
 
-import { downloadBundle, fetchManifest, installFile, installSkill, resolveBundle } from "@/core/index.js";
+import {
+    assertBundleSources,
+    downloadBundle,
+    fetchManifest,
+    loadInstalled,
+    resolveBundle,
+    syncBundle,
+    writeLock,
+} from "@/core/index.js";
 import type { Bundle, InstallTarget, Manifest, Platform, TemplateItem } from "@/types/index.js";
-import { confirmInstall, selectBundles, selectPlatform, selectTarget, showSuccess } from "@/ui/prompts.js";
+import { resolveTarget } from "@/types/index.js";
+import {
+    confirmInstall,
+    isInteractive,
+    selectBundles,
+    selectPlatform,
+    selectTarget,
+    selectUnits,
+    showSuccess,
+} from "@/ui/prompts.js";
 
 import { executeInstall } from "../install.js";
 
@@ -18,31 +35,43 @@ vi.mock("@/core/index.js", async (importOriginal) => {
         fetchManifest: vi.fn(),
         resolveBundle: vi.fn(),
         downloadBundle: vi.fn(),
-        installFile: vi.fn(),
-        installSkill: vi.fn(),
+        loadInstalled: vi.fn(),
+        syncBundle: vi.fn(),
+        writeLock: vi.fn(),
+        assertBundleSources: vi.fn(),
     };
 });
 
-// Mock prompts
 vi.mock("@/ui/prompts.js", () => ({
     selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     selectBundles: vi.fn(),
     confirmInstall: vi.fn(),
+    isInteractive: vi.fn(),
+    selectUnits: vi.fn(),
     showSuccess: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
+}));
+
+vi.mock("@/types/index.js", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/types/index.js")>()),
+    resolveTarget: vi.fn(),
 }));
 
 const mockFetchManifest = vi.mocked(fetchManifest);
 const mockResolveBundle = vi.mocked(resolveBundle);
 const mockDownloadBundle = vi.mocked(downloadBundle);
-const mockInstallFile = vi.mocked(installFile);
-const mockInstallSkill = vi.mocked(installSkill);
+const mockLoadInstalled = vi.mocked(loadInstalled);
+const mockSyncBundle = vi.mocked(syncBundle);
+const mockWriteLock = vi.mocked(writeLock);
 const mockSelectPlatform = vi.mocked(selectPlatform);
 const mockSelectTarget = vi.mocked(selectTarget);
 const mockSelectBundles = vi.mocked(selectBundles);
 const mockConfirmInstall = vi.mocked(confirmInstall);
 const mockShowSuccess = vi.mocked(showSuccess);
+const mockIsInteractive = vi.mocked(isInteractive);
+const mockSelectUnits = vi.mocked(selectUnits);
+const mockResolveTarget = vi.mocked(resolveTarget);
 
 const temporaryRoots: string[] = [];
 let tempBundleDir: string;
@@ -99,14 +128,21 @@ beforeEach(async () => {
     temporaryRoots.push(tempBundleDir);
     mockFetchManifest.mockResolvedValue(testManifest);
     mockDownloadBundle.mockResolvedValue(tempBundleDir);
-    mockInstallFile.mockResolvedValue(undefined);
-    mockInstallSkill.mockResolvedValue(undefined);
+    mockLoadInstalled.mockResolvedValue({ lock: { schemaVersion: 1, bundles: {} }, bundles: [] });
+    mockSyncBundle.mockResolvedValue({
+        installed: [{ targetPath: "skills/orchestrate", kind: "skill", state: "unmodified" }],
+        removed: [],
+        skipped: [],
+        kept: [],
+    });
+    mockWriteLock.mockResolvedValue(undefined);
     mockConfirmInstall.mockResolvedValue(true);
+    mockIsInteractive.mockReturnValue(false);
+    mockResolveTarget.mockReturnValue(testTarget);
 });
 
 describe("executeInstall", () => {
-    // T40: CLI argument parsing — bundle, platform, and target provided
-    it("T40: uses provided bundle, platform, and target without prompts", async () => {
+    it("uses provided bundle, platform, and target without prompts", async () => {
         mockResolveBundle.mockReturnValue(testBundle);
 
         await executeInstall({ bundle: "core", platform: "claude-code", target: "project" });
@@ -114,18 +150,19 @@ describe("executeInstall", () => {
         expect(mockSelectPlatform).not.toHaveBeenCalled();
         expect(mockSelectTarget).not.toHaveBeenCalled();
         expect(mockSelectBundles).not.toHaveBeenCalled();
+        expect(mockConfirmInstall).not.toHaveBeenCalled();
         expect(mockResolveBundle).toHaveBeenCalledWith(testManifest, "core");
         expect(mockDownloadBundle).toHaveBeenCalledWith("fozy-labs/astp", "core");
-        expect(mockInstallSkill).toHaveBeenCalledTimes(1);
-        expect(mockInstallSkill).toHaveBeenCalledWith(
-            tempBundleDir,
-            {
-                kind: "skill",
-                relativePath: "skills/orchestrate",
-                items: [testItem],
-            },
-            expect.objectContaining({ type: "project", platform: "claude-code" }),
-            { source: "fozy-labs/astp", bundle: "core", version: "1.0.0" },
+        expect(mockSyncBundle).toHaveBeenCalledTimes(1);
+        expect(mockSyncBundle).toHaveBeenCalledWith(
+            expect.objectContaining({
+                target: testTarget,
+                manifest: testManifest,
+                bundle: testBundle,
+                selected: new Set(["skills/orchestrate"]),
+                declined: new Set(),
+                force: false,
+            }),
         );
     });
 
@@ -138,20 +175,23 @@ describe("executeInstall", () => {
     });
 
     it("prompts for platform, target, and bundles when no arguments provided", async () => {
+        mockIsInteractive.mockReturnValue(true);
         mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockResolvedValue(testTarget);
         mockSelectBundles.mockResolvedValue([testBundle]);
+        mockSelectUnits.mockResolvedValue(["skills/orchestrate"]);
 
         await executeInstall({});
 
         expect(mockSelectPlatform).toHaveBeenCalled();
         expect(mockSelectTarget).toHaveBeenCalledWith("claude-code");
         expect(mockSelectBundles).toHaveBeenCalledWith(testManifest, "claude-code");
-        expect(mockConfirmInstall).toHaveBeenCalledWith([testBundle], testTarget);
+        expect(mockConfirmInstall).toHaveBeenCalledWith([testBundle], testTarget, [
+            { kind: "skill", relativePath: "skills/orchestrate", items: [testItem] },
+        ]);
     });
 
     it("rejects bundle that does not support requested platform", async () => {
-        // A bundle authored for a platform the CLI no longer supports.
         const legacyBundle: Bundle = { ...testBundle, platforms: ["vscode" as Platform] };
         mockResolveBundle.mockReturnValue(legacyBundle);
 
@@ -166,15 +206,13 @@ describe("executeInstall", () => {
 
         await executeInstall({ bundle: "fozy-labs", platform: "claude-code", target: "project" });
 
-        expect(mockInstallSkill).toHaveBeenCalledWith(
-            expect.any(String),
-            expect.objectContaining({ kind: "skill", relativePath: "skills/fozy-labs-di" }),
-            expect.objectContaining({ type: "project", platform: "claude-code" }),
-            { source: "fozy-labs/astp", bundle: "fozy-labs", version: "1.0.0" },
+        expect(mockSyncBundle).toHaveBeenCalledWith(
+            expect.objectContaining({ bundle: fozyLabsBundle, selected: new Set(["skills/fozy-labs-di"]) }),
         );
     });
 
     it("aborts when user declines confirmation", async () => {
+        mockIsInteractive.mockReturnValue(true);
         mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockResolvedValue(testTarget);
         mockSelectBundles.mockResolvedValue([testBundle]);
@@ -182,9 +220,9 @@ describe("executeInstall", () => {
 
         await executeInstall({});
 
+        expect(mockConfirmInstall).toHaveBeenCalled();
         expect(mockDownloadBundle).not.toHaveBeenCalled();
-        expect(mockInstallFile).not.toHaveBeenCalled();
-        expect(mockInstallSkill).not.toHaveBeenCalled();
+        expect(mockSyncBundle).not.toHaveBeenCalled();
     });
 
     it("propagates error for unknown bundle", async () => {
@@ -205,5 +243,25 @@ describe("executeInstall", () => {
         await executeInstall({});
 
         expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining("1 skill"));
+    });
+
+    it("prompts for unit selection in an interactive install", async () => {
+        mockSelectPlatform.mockResolvedValue("claude-code");
+        mockSelectTarget.mockResolvedValue(testTarget);
+        mockSelectBundles.mockResolvedValue([testBundle]);
+        mockIsInteractive.mockReturnValue(true);
+        mockSelectUnits.mockResolvedValue([]);
+
+        await executeInstall({});
+
+        expect(mockSelectUnits).toHaveBeenCalledWith(
+            testBundle,
+            [{ kind: "skill", relativePath: "skills/orchestrate", items: [testItem] }],
+            ["skills/orchestrate"],
+        );
+        expect(mockConfirmInstall).toHaveBeenCalledWith([testBundle], testTarget, []);
+        expect(mockSyncBundle).toHaveBeenCalledWith(
+            expect.objectContaining({ selected: new Set(), declined: new Set(["skills/orchestrate"]) }),
+        );
     });
 });

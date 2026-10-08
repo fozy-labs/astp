@@ -1,6 +1,7 @@
 import * as p from "@clack/prompts";
 
 import { groupTemplateItems } from "@/core/index.js";
+import type { TemplateUnit } from "@/core/units.js";
 import type {
     Bundle,
     FileStatus,
@@ -19,6 +20,10 @@ import { describeUnitCounts } from "./format.js";
 export const intro = p.intro;
 export const outro = p.outro;
 export const spinner = p.spinner;
+
+export function isInteractive(): boolean {
+    return Boolean(process.stdin.isTTY && process.stdout.isTTY);
+}
 
 export async function selectAction(): Promise<"install" | "update" | "check" | "delete"> {
     const action = await p.select({
@@ -116,8 +121,12 @@ export async function selectBundles(manifest: Manifest, platform: Platform): Pro
     return (selected as string[]).map((name) => manifest.bundles[name]);
 }
 
-export async function confirmInstall(bundles: Bundle[], target: InstallTarget): Promise<boolean> {
-    const units = bundles.flatMap((bundle) => groupTemplateItems(bundle.items));
+export async function confirmInstall(
+    bundles: Bundle[],
+    target: InstallTarget,
+    selectedUnits?: TemplateUnit[],
+): Promise<boolean> {
+    const units = selectedUnits ?? bundles.flatMap((bundle) => groupTemplateItems(bundle.items));
     const fileCount = units.filter((unit) => unit.kind === "file").length;
     const skillCount = units.filter((unit) => unit.kind === "skill").length;
     const targetLabel = describeTarget(target);
@@ -132,6 +141,46 @@ export async function confirmInstall(bundles: Bundle[], target: InstallTarget): 
     }
 
     return confirmed;
+}
+
+export async function selectUnits(bundle: Bundle, units: TemplateUnit[], initial: string[]): Promise<string[]> {
+    const selected = await p.multiselect({
+        message: `Select units from ${bundle.name}:\n(Space = toggle, Enter = confirm)`,
+        options: units.map((unit) => ({
+            value: unit.relativePath,
+            label: pathLabel(unit.relativePath),
+            hint: unit.relativePath,
+        })),
+        initialValues: initial,
+        required: true,
+    });
+    if (p.isCancel(selected)) {
+        p.cancel("Cancelled.");
+        process.exit(0);
+    }
+    return selected as string[];
+}
+
+export async function selectNewUnits(bundleName: string, units: TemplateUnit[]): Promise<string[]> {
+    const selected = await p.multiselect({
+        message: `Select new units from ${bundleName}:\n(Space = toggle, Enter = confirm)`,
+        options: units.map((unit) => ({
+            value: unit.relativePath,
+            label: pathLabel(unit.relativePath),
+            hint: unit.relativePath,
+        })),
+        initialValues: units.map((unit) => unit.relativePath),
+        required: false,
+    });
+    if (p.isCancel(selected)) {
+        p.cancel("Cancelled.");
+        process.exit(0);
+    }
+    return selected as string[];
+}
+
+function pathLabel(relativePath: string): string {
+    return relativePath.split("/").at(-1) ?? relativePath;
 }
 
 export async function selectInstalledBundles(installed: InstalledBundle[]): Promise<InstalledBundle[]> {
@@ -206,11 +255,13 @@ export function showCheckReport(report: UpdateReport): void {
 
     if (report.legacySkills.length > 0) {
         lines.push("");
-        for (const skill of report.legacySkills) {
-            const guidance = skill.inManifest
-                ? "run `astp update --force` to migrate."
-                : "not in the current manifest, left in place.";
-            lines.push(`${skill.bundleName}: legacy skill ${skill.targetPath} — ${guidance}`);
+        for (const unit of report.legacySkills) {
+            const guidance = !unit.inManifest
+                ? "not in the current manifest, left in place."
+                : unit.clean
+                  ? "run `astp update` to migrate."
+                  : "modified locally — `astp update --force` replaces it.";
+            lines.push(`${unit.bundleName}: legacy ${unit.kind} ${unit.targetPath} — ${guidance}`);
         }
     }
 
@@ -231,7 +282,11 @@ export function showUpdateReport(report: UpdateReport): void {
         );
     }
 
-    p.log.info(lines.join("\n"));
+    for (const bundle of report.notInManifest) {
+        lines.push(`${bundle.bundleName}: not in the current manifest, left in place.`);
+    }
+
+    if (lines.length > 0) p.log.info(lines.join("\n"));
 }
 
 export function warnModified(files: FileStatus[]): void {
@@ -239,7 +294,7 @@ export function warnModified(files: FileStatus[]): void {
     const skillCount = files.filter((file) => file.kind === "skill").length;
     const fileCount = files.filter((file) => file.kind === "file").length;
     p.log.warn(
-        `${describeUnitCounts(fileCount, skillCount)} modified locally — skipped:\n${paths}\nUse --force to overwrite.`,
+        `${describeUnitCounts(fileCount, skillCount)} modified locally — skipped:\n${paths}\nRun \`astp update --force\` to overwrite them.`,
     );
 }
 
@@ -248,16 +303,13 @@ export function warnKeptRemoved(units: FileStatus[]): void {
     const skillCount = units.filter((unit) => unit.kind === "skill").length;
     const fileCount = units.filter((unit) => unit.kind === "file").length;
     p.log.warn(
-        `${describeUnitCounts(fileCount, skillCount)} removed from the bundle upstream but modified locally or legacy — kept:\n${paths}\nUse --force to delete them.`,
+        `${describeUnitCounts(fileCount, skillCount)} not selected or removed upstream but modified locally — kept:\n${paths}\nUse --force to delete them.`,
     );
 }
 
-export function warnLegacySkills(skills: Array<{ bundleName: string; targetPath: string }>, canMigrate = true): void {
-    const paths = skills.map((skill) => `  • ${skill.bundleName}: ${skill.targetPath}`).join("\n");
-    const guidance = canMigrate
-        ? "Run `astp update --force` to migrate."
-        : "These skills are not in the current manifest and were left in place.";
-    p.log.warn(`Legacy skills skipped:\n${paths}\n${guidance}`);
+export function warnLegacyModified(files: FileStatus[]): void {
+    const paths = files.map((file) => `  • ${file.targetPath}`).join("\n");
+    p.log.warn(`Legacy units modified locally — skipped:\n${paths}\nRun \`astp update --force\` to replace them.`);
 }
 
 export function showSuccess(message: string): void {

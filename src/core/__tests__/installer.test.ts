@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { describeTarget, resolveTarget } from "../../types/index.js";
+import { computeHash } from "../frontmatter.js";
 import { installFile, installSkill, validateTargetPath } from "../installer.js";
 
 async function snapshotDirectory(root: string): Promise<Record<string, string>> {
@@ -127,8 +128,7 @@ describe("installFile", () => {
         await fs.rm(targetRoot, { recursive: true, force: true });
     });
 
-    // T23: Install file with injected astp fields
-    it("T23: installs file with injected astp fields and preserved content", async () => {
+    it("installs file byte-identically and returns its hash", async () => {
         const sourceContent = `---
 name: test-agent
 ---
@@ -137,7 +137,7 @@ Agent body`;
         await fs.mkdir(path.join(tempDir, "agents"), { recursive: true });
         await fs.writeFile(path.join(tempDir, "agents", "test.agent.md"), sourceContent);
 
-        await installFile(
+        const hash = await installFile(
             tempDir,
             {
                 source: "test-bundle/agents/test.agent.md",
@@ -145,16 +145,12 @@ Agent body`;
                 category: "agent",
             },
             { platform: "claude-code", type: "project", rootDir: targetRoot },
-            { source: "fozy-labs/astp", bundle: "test-bundle", version: "1.0.0" },
         );
 
         const installed = await fs.readFile(path.join(targetRoot, "agents", "test.agent.md"), "utf8");
         expect(installed).toContain("name: test-agent");
-        expect(installed).toContain("astp-source: fozy-labs/astp");
-        expect(installed).toContain("astp-bundle: test-bundle");
-        expect(installed).toContain("astp-version: 1.0.0");
-        expect(installed).toContain("astp-hash:");
-        expect(installed).toContain("Agent body");
+        expect(installed).toBe(sourceContent);
+        expect(hash).toBe(computeHash(sourceContent));
     });
 
     // T24: Creates nested directories
@@ -177,7 +173,6 @@ Agent body`;
                 ],
             },
             { platform: "claude-code", type: "project", rootDir: targetRoot },
-            { source: "fozy-labs/astp", bundle: "test-bundle", version: "1.0.0" },
         );
 
         const stat = await fs.stat(path.join(targetRoot, "skills", "pipeline-01-research"));
@@ -187,8 +182,7 @@ Agent body`;
             path.join(targetRoot, "skills", "pipeline-01-research", "SKILL.md"),
             "utf8",
         );
-        expect(installed).toContain("# Stage content");
-        expect(installed).toContain("astp-source:");
+        expect(installed).toBe(sourceContent);
     });
 });
 
@@ -240,11 +234,41 @@ describe("installSkill failure safety", () => {
                     ],
                 },
                 { platform: "claude-code", type: "project", rootDir: targetRoot },
-                { source: "fozy-labs/astp", bundle: "test-bundle", version: "1.0.0" },
             ),
         ).rejects.toThrow();
 
         expect(await snapshotDirectory(skillDir)).toEqual(existingTree);
         expect((await fs.readdir(path.dirname(skillDir))).filter((entry) => entry.includes(".astp-tmp-"))).toEqual([]);
+    });
+
+    it("rejects a symlinked parent before writing outside the install root", async () => {
+        const outside = path.join(tempDir, "outside");
+        await fs.mkdir(outside);
+        await fs.writeFile(path.join(outside, "marker.txt"), "keep");
+        const sourceFile = path.join(tempDir, "skills/sample/SKILL.md");
+        await fs.mkdir(path.dirname(sourceFile), { recursive: true });
+        await fs.writeFile(sourceFile, "New skill");
+        await fs.symlink(outside, path.join(targetRoot, "skills"), "dir");
+
+        await expect(
+            installSkill(
+                tempDir,
+                {
+                    kind: "skill",
+                    relativePath: "skills/sample",
+                    items: [
+                        {
+                            source: "bundle/skills/sample/SKILL.md",
+                            target: "skills/sample/SKILL.md",
+                            category: "skill",
+                        },
+                    ],
+                },
+                { platform: "claude-code", type: "project", rootDir: targetRoot },
+            ),
+        ).rejects.toThrow(/escape|outside/i);
+
+        expect(await fs.readdir(outside)).toEqual(["marker.txt"]);
+        expect(await fs.readFile(path.join(outside, "marker.txt"), "utf8")).toBe("keep");
     });
 });

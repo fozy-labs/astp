@@ -3,7 +3,14 @@ import * as p from "@clack/prompts";
 import type { Bundle, InstallTarget, UpdateReport } from "@/types/index.js";
 import { ALL_PLATFORMS } from "@/types/index.js";
 
-import { confirmInstall, selectPlatform, showCheckReport, showUpdateReport, warnLegacySkills } from "../prompts.js";
+import {
+    confirmInstall,
+    selectPlatform,
+    showCheckReport,
+    showUpdateReport,
+    warnLegacyModified,
+    warnModified,
+} from "../prompts.js";
 
 vi.mock("@clack/prompts", () => ({
     intro: vi.fn(),
@@ -28,10 +35,22 @@ describe("selectPlatform", () => {
     });
 });
 
-describe("legacy skill prompts", () => {
-    it("shows different check guidance for legacy skills with and without manifest entries", () => {
-        const currentSkill = { bundleName: "core", targetPath: "skills/current", inManifest: true };
-        const removedSkill = { bundleName: "core", targetPath: "skills/removed", inManifest: false };
+describe("legacy migration prompts", () => {
+    it("shows different check guidance for legacy units with and without manifest entries", () => {
+        const currentSkill = {
+            bundleName: "core",
+            targetPath: "skills/current",
+            kind: "skill" as const,
+            clean: true,
+            inManifest: true,
+        };
+        const removedSkill = {
+            bundleName: "core",
+            targetPath: "skills/removed",
+            kind: "skill" as const,
+            clean: true,
+            inManifest: false,
+        };
         const report: UpdateReport = {
             updates: [],
             upToDate: [],
@@ -43,25 +62,24 @@ describe("legacy skill prompts", () => {
         showCheckReport(report);
 
         const reportText = String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0]);
-        expect(reportText).toContain("core: legacy skill skills/current — run `astp update --force` to migrate.");
-        expect(reportText).toContain("core: legacy skill skills/removed — not in the current manifest, left in place.");
+        expect(reportText).toContain("core: legacy skill skills/current");
+        expect(reportText).toContain("skills/removed — not in the current manifest, left in place.");
         expect(reportText).not.toContain("skills/removed — run `astp update --force` to migrate.");
     });
 
-    it("shows the force-migration hint when legacy skills are skipped", () => {
-        warnLegacySkills([{ bundleName: "core", targetPath: "skills/example" }]);
+    it("shows the force-migration hint when modified legacy units are skipped", () => {
+        warnLegacyModified([{ targetPath: "skills/example", kind: "skill", state: "legacy" }]);
 
-        expect(p.log.warn).toHaveBeenCalledWith(expect.stringContaining("Run `astp update --force` to migrate."));
+        expect(p.log.warn).toHaveBeenCalledWith(expect.stringContaining("Run `astp update --force` to replace them."));
     });
 
-    it("does not suggest migration when a legacy skill is absent from the manifest", () => {
+    it("shows the force-update command when modified units are skipped", () => {
         vi.mocked(p.log.warn).mockClear();
-        warnLegacySkills([{ bundleName: "core", targetPath: "skills/example" }], false);
+        warnModified([{ targetPath: "agents/example.md", kind: "file", state: "modified" }]);
 
         expect(p.log.warn).toHaveBeenCalledWith(
-            expect.stringContaining("These skills are not in the current manifest and were left in place."),
+            expect.stringContaining("Run `astp update --force` to overwrite them."),
         );
-        expect(p.log.warn).not.toHaveBeenCalledWith(expect.stringContaining("Run `astp update --force` to migrate."));
     });
 });
 
@@ -88,6 +106,22 @@ describe("out-of-sync update prompts", () => {
         vi.mocked(p.log.info).mockClear();
         showUpdateReport(report);
         expect(String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0])).toContain("core: 1.0.0 out of sync (1 file)");
+    });
+
+    it("reports bundles that are no longer in the current manifest", () => {
+        const report: UpdateReport = {
+            updates: [],
+            upToDate: [],
+            notInManifest: [{ bundleName: "removed", version: "1.0.0", units: [], declined: [] }],
+            legacySkills: [],
+        };
+
+        vi.mocked(p.log.info).mockClear();
+        showUpdateReport(report);
+
+        expect(String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0])).toContain(
+            "removed: not in the current manifest, left in place.",
+        );
     });
 });
 

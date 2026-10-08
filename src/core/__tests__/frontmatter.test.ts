@@ -1,4 +1,4 @@
-import { computeHash, extractAstpMetadata, injectAstpFields, stripAstpFields } from "../frontmatter.js";
+import { computeHash, extractAstpMetadata, readDescription, stripAstpFields } from "../frontmatter.js";
 
 describe("extractAstpMetadata", () => {
     // T01: Parse frontmatter with existing fields + astp fields
@@ -35,70 +35,6 @@ description: bar
 ---
 Body`;
         expect(extractAstpMetadata(content)).toBeNull();
-    });
-});
-
-describe("injectAstpFields", () => {
-    const meta = { source: "fozy-labs/astp", bundle: "pipeline", version: "1.0.0" };
-    const hash = "hashvalue";
-
-    // T03: Inject into existing frontmatter
-    it("T03: appends astp fields to existing frontmatter, preserving existing fields", () => {
-        const content = `---
-name: pipeline-approve
----
-Content`;
-
-        const result = injectAstpFields(content, meta, hash);
-
-        expect(result).toBe(`---
-name: pipeline-approve
-astp-source: fozy-labs/astp
-astp-bundle: pipeline
-astp-version: 1.0.0
-astp-hash: hashvalue
----
-Content`);
-    });
-
-    // T04: Inject into file without frontmatter
-    it("T04: prepends frontmatter block to file without one", () => {
-        const content = `# Stage: 01-Research
-content`;
-
-        const result = injectAstpFields(content, meta, hash);
-
-        expect(result).toBe(`---
-astp-source: fozy-labs/astp
-astp-bundle: pipeline
-astp-version: 1.0.0
-astp-hash: hashvalue
----
-# Stage: 01-Research
-content`);
-    });
-
-    // T42: Preserve existing frontmatter field order on injection
-    it("T42: preserves existing frontmatter field order on injection", () => {
-        const content = `---
-name: pipeline-approve
-description: "desc"
-tools: [search, read]
----
-Body`;
-
-        const result = injectAstpFields(content, meta, hash);
-
-        // Existing fields in original order, astp-* appended at end
-        const lines = result.split("\n");
-        const nameIdx = lines.indexOf("name: pipeline-approve");
-        const descIdx = lines.indexOf('description: "desc"');
-        const toolsIdx = lines.indexOf("tools: [search, read]");
-        const astpIdx = lines.indexOf("astp-source: fozy-labs/astp");
-
-        expect(nameIdx).toBeLessThan(descIdx);
-        expect(descIdx).toBeLessThan(toolsIdx);
-        expect(toolsIdx).toBeLessThan(astpIdx);
     });
 });
 
@@ -159,31 +95,18 @@ describe("computeHash", () => {
     });
 });
 
-describe("inject → strip round-trip", () => {
-    const meta = { source: "fozy-labs/astp", bundle: "test", version: "1.0.0" };
-
-    // T25: Round-trip preserves original content (with frontmatter)
-    it("T25: inject then strip returns original content (file with frontmatter)", () => {
-        const original = `---
-name: foo
-description: "bar"
----
-Body content`;
-
-        const injected = injectAstpFields(original, meta, "somehash");
-        const stripped = stripAstpFields(injected);
-
-        expect(stripped).toBe(original);
+describe("readDescription", () => {
+    it.each([
+        ["description: plain value", "plain value"],
+        ['description: "quoted value"', "quoted value"],
+        ["description: 'single quoted'", "single quoted"],
+        ["description: >-\n  first line\n  second line\nname: test", "first line second line"],
+        ["description: |\n  first line\n  second line\nname: test", "first line second line"],
+    ])("reads %s", (field, expected) => {
+        expect(readDescription(`---\n${field}\n---\n`)).toBe(expected);
     });
 
-    // T25: Round-trip preserves original content (without frontmatter)
-    it("T25: inject then strip returns original content (file without frontmatter)", () => {
-        const original = `# Stage
-Content here`;
-
-        const injected = injectAstpFields(original, meta, "somehash");
-        const stripped = stripAstpFields(injected);
-
-        expect(stripped).toBe(original);
+    it("returns null when description is absent", () => {
+        expect(readDescription("---\nname: test\n---\n")).toBeNull();
     });
 });

@@ -5,7 +5,7 @@ import { vi } from "vitest";
 
 import { executeDelete } from "@/commands/delete.js";
 import { executeInstall } from "@/commands/install.js";
-import { downloadBundle, extractAstpMetadata, fetchManifest } from "@/core/index.js";
+import { downloadBundle, fetchManifest } from "@/core/index.js";
 import type { Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { confirmInstall } from "@/ui/prompts.js";
@@ -15,6 +15,7 @@ import {
     createFixtureManifest,
     createTempProject,
     makeProjectTarget,
+    readLockFixture,
     setupTemplateDir,
 } from "./helpers.js";
 
@@ -33,10 +34,13 @@ vi.mock("@/types/index.js", async (importOriginal) => {
 });
 
 vi.mock("@/ui/prompts.js", () => ({
+    isInteractive: vi.fn(() => false),
     selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     selectBundles: vi.fn(),
     selectInstalledBundles: vi.fn(),
+    selectUnits: vi.fn(),
+    selectNewUnits: vi.fn(),
     confirmInstall: vi.fn(),
     confirmDelete: vi.fn().mockResolvedValue(true),
     showSuccess: vi.fn(),
@@ -44,6 +48,8 @@ vi.mock("@/ui/prompts.js", () => ({
     showCheckReport: vi.fn(),
     showUpdateReport: vi.fn(),
     warnModified: vi.fn(),
+    warnLegacyModified: vi.fn(),
+    warnKeptRemoved: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
 
@@ -107,9 +113,10 @@ describe("E2E: delete", () => {
         await executeDelete({ bundle: "pipeline", platform: "claude-code", target: "project" });
 
         const content = await fs.readFile(modifiedFile, "utf8");
-        const metadata = extractAstpMetadata(content);
         expect(content).toContain("<!-- user edit -->");
-        expect(metadata).not.toBeNull();
+        expect(content).not.toContain("astp-source");
+        const lock = await readLockFixture(path.join(projectDir, ".claude"));
+        expect(lock.bundles.pipeline.units["agents/pipeline-approve.agent.md"]).toBeDefined();
     });
 
     it("removes modified files with force", async () => {
@@ -122,5 +129,6 @@ describe("E2E: delete", () => {
         await executeDelete({ bundle: "pipeline", force: true, platform: "claude-code", target: "project" });
 
         await expect(fs.access(modifiedFile)).rejects.toThrow();
+        await expect(fs.access(path.join(projectDir, ".claude", "astp.lock"))).rejects.toThrow();
     });
 });
