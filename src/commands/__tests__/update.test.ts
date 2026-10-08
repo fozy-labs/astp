@@ -2,11 +2,12 @@ import { vi } from "vitest";
 
 import {
     compareVersions,
-    detectModified,
     downloadBundle,
     fetchManifest,
+    findBlockedUnits,
     installFile,
     installSkill,
+    removeUnits,
     scanInstalled,
 } from "@/core/index.js";
 import type { Bundle, InstalledBundle, InstallTarget, Manifest, TemplateItem, UpdateReport } from "@/types/index.js";
@@ -22,10 +23,11 @@ vi.mock("@/core/index.js", async (importOriginal) => {
         fetchManifest: vi.fn(),
         scanInstalled: vi.fn(),
         compareVersions: vi.fn(),
-        detectModified: vi.fn(),
+        findBlockedUnits: vi.fn(),
         downloadBundle: vi.fn(),
         installFile: vi.fn(),
         installSkill: vi.fn(),
+        removeUnits: vi.fn(),
     };
 });
 
@@ -44,10 +46,11 @@ vi.mock("@/ui/prompts.js", () => ({
 const mockFetchManifest = vi.mocked(fetchManifest);
 const mockScanInstalled = vi.mocked(scanInstalled);
 const mockCompareVersions = vi.mocked(compareVersions);
-const mockDetectModified = vi.mocked(detectModified);
+const mockFindBlockedUnits = vi.mocked(findBlockedUnits);
 const mockDownloadBundle = vi.mocked(downloadBundle);
 const mockInstallFile = vi.mocked(installFile);
 const mockInstallSkill = vi.mocked(installSkill);
+const mockRemoveUnits = vi.mocked(removeUnits);
 const mockSelectPlatform = vi.mocked(selectPlatform);
 const mockSelectTarget = vi.mocked(selectTarget);
 const mockShowInfo = vi.mocked(showInfo);
@@ -190,7 +193,7 @@ describe("executeUpdate", () => {
         mockScanInstalled.mockResolvedValue([testInstalledBundle]);
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(updatesReport);
-        mockDetectModified.mockResolvedValue([
+        mockFindBlockedUnits.mockResolvedValue([
             { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
         ]);
         mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
@@ -224,6 +227,51 @@ describe("executeUpdate", () => {
         expect(mockDownloadBundle).not.toHaveBeenCalled();
     });
 
+    it("removes orphans without downloading when the manifest has no units", async () => {
+        const emptyManifest: Manifest = {
+            ...testManifest,
+            bundles: { pipeline: { ...testBundle, items: [] } },
+        };
+        mockScanInstalled.mockResolvedValue([testInstalledBundle]);
+        mockFetchManifest.mockResolvedValue(emptyManifest);
+        mockCompareVersions.mockReturnValue(updatesReport);
+        mockFindBlockedUnits.mockResolvedValue([]);
+        mockRemoveUnits.mockResolvedValue({ removed: [], skipped: [] });
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(mockRemoveUnits).toHaveBeenCalledWith(testInstalledBundle.units, expect.any(String), undefined);
+        expect(mockDownloadBundle).not.toHaveBeenCalled();
+    });
+
+    it("removes orphans without downloading when every manifest unit is blocked", async () => {
+        const orphanUnit: InstalledBundle["units"][number] = {
+            kind: "file",
+            filePath: "/project/.claude/agents/old.agent.md",
+            relativePath: "agents/old.agent.md",
+            metadata: {
+                source: "fozy-labs/astp",
+                bundle: "pipeline",
+                version: "1.0.0",
+                hash: "abc123",
+            },
+        };
+        const installedBundle: InstalledBundle = {
+            ...testInstalledBundle,
+            units: [...testInstalledBundle.units, orphanUnit],
+        };
+        mockScanInstalled.mockResolvedValue([installedBundle]);
+        mockFetchManifest.mockResolvedValue(testManifest);
+        mockCompareVersions.mockReturnValue(updatesReport);
+        mockFindBlockedUnits.mockResolvedValue([{ targetPath: testItem.target, kind: "file", state: "modified" }]);
+        mockRemoveUnits.mockResolvedValue({ removed: [], skipped: [] });
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(mockRemoveUnits).toHaveBeenCalledWith([orphanUnit], expect.any(String), undefined);
+        expect(mockDownloadBundle).not.toHaveBeenCalled();
+    });
+
     it("migrates only legacy skills when the bundle version is current", async () => {
         mockScanInstalled.mockResolvedValue([legacyBundle]);
         mockFetchManifest.mockResolvedValue(legacyManifest);
@@ -233,10 +281,6 @@ describe("executeUpdate", () => {
             notInManifest: [],
             legacySkills: [{ bundleName: "pipeline", targetPath: "skills/sample", inManifest: true }],
         });
-        mockDetectModified.mockResolvedValue([
-            { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "unmodified" },
-            { targetPath: "skills/sample", kind: "skill", state: "legacy" },
-        ]);
         mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
         mockInstallFile.mockResolvedValue(undefined);
         mockInstallSkill.mockResolvedValue(undefined);
@@ -277,7 +321,7 @@ describe("executeUpdate", () => {
         mockScanInstalled.mockResolvedValue([testInstalledBundle]);
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(updatesReport);
-        mockDetectModified.mockResolvedValue([
+        mockFindBlockedUnits.mockResolvedValue([
             { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
         ]);
         mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
@@ -292,7 +336,7 @@ describe("executeUpdate", () => {
         mockScanInstalled.mockResolvedValue([testInstalledBundle]);
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(updatesReport);
-        mockDetectModified.mockResolvedValue([
+        mockFindBlockedUnits.mockResolvedValue([
             { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
         ]);
         mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");

@@ -29,9 +29,9 @@ astp install fozy-labs --target project
 | Command | Description |
 |---------|-------------|
 | `astp` | Launch interactive wizard |
-| `astp install [bundle]` | Install a bundle to the selected target |
+| `astp install [bundle] [--force]` | Install a bundle to the selected target |
 | `astp update [--force]` | Update installed files to latest versions |
-| `astp check` | Check for available updates |
+| `astp check` | Check for updates and bundles out of sync with the manifest |
 | `astp delete [bundle] [--force]` | Remove an installed bundle |
 
 All commands accept `--platform <claude-code>` and `--target <project|user>` to skip interactive prompts. Resolved roots:
@@ -43,10 +43,10 @@ All commands accept `--platform <claude-code>` and `--target <project|user>` to 
 ### install
 
 ```bash
-astp install [bundle] [--platform <claude-code>] [--target <project|user>]
+astp install [bundle] [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Install template bundles. Without arguments, prompts for target directory and bundle selection (the platform prompt is skipped while only one platform is supported). With `--platform` and `--target`, runs non-interactively. Bundles that don't support the requested platform are rejected with a clear error.
+Install template bundles. Locally modified or unmanaged files and skills are skipped by default; use `--force` to overwrite them. Without arguments, prompts for target directory and bundle selection (the platform prompt is skipped while only one platform is supported). With `--platform` and `--target`, runs non-interactively. Bundles that don't support the requested platform are rejected with a clear error.
 
 ### update
 
@@ -54,7 +54,7 @@ Install template bundles. Without arguments, prompts for target directory and bu
 astp update [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Update installed files to the latest version from the manifest. Modified files are skipped by default — use `--force` to overwrite them.
+Update installed units to the latest version from the manifest. Units dropped upstream are removed; modified or legacy units are kept unless `--force` is passed.
 
 ### check
 
@@ -62,7 +62,7 @@ Update installed files to the latest version from the manifest. Modified files a
 astp check [--platform <claude-code>] [--target <project|user>]
 ```
 
-Compare installed file versions against the remote manifest and display a status report.
+Compare installed versions and unit state against the remote manifest. Out-of-sync bundles are reported and brought back in sync by `astp update`.
 
 ### delete
 

@@ -15,7 +15,9 @@ import type {
 } from "@/types/index.js";
 
 import { computeHash, extractAstpMetadata, stripAstpFields } from "./frontmatter.js";
+import { validateTargetPath } from "./installer.js";
 import { computeSkillTreeHash } from "./skill-tree.js";
+import type { TemplateUnit } from "./units.js";
 import { groupTemplateItems } from "./units.js";
 
 interface TaggedMarkdown {
@@ -92,11 +94,28 @@ export async function scanInstalled(installRoot: string): Promise<InstalledBundl
         if (units.length > 0) bundleUnits.set(file.metadata.bundle, units);
     }
 
-    return Array.from(bundleUnits.entries()).map(([bundleName, units]) => ({
-        bundleName,
-        version: units[0]?.metadata.version ?? "",
-        units,
-    }));
+    return Promise.all(
+        Array.from(bundleUnits.entries()).map(async ([bundleName, units]) => {
+            const statuses = await detectModifiedUnits(units);
+            const unmodifiedUnits = units.filter((_, index) => statuses[index]?.state === "unmodified");
+            return {
+                bundleName,
+                version:
+                    unmodifiedUnits.length > 0
+                        ? unmodifiedUnits.reduce(
+                              (oldest, unit) =>
+                                  compareSemver(unit.metadata.version, oldest) < 0 ? unit.metadata.version : oldest,
+                              unmodifiedUnits[0]?.metadata.version ?? "",
+                          )
+                        : units.reduce(
+                              (newest, unit) =>
+                                  compareSemver(unit.metadata.version, newest) > 0 ? unit.metadata.version : newest,
+                              units[0]?.metadata.version ?? "",
+                          ),
+                units,
+            };
+        }),
+    );
 }
 
 function findOwningSkill(
@@ -166,12 +185,14 @@ export function compareVersions(installed: InstalledBundle[], manifest: Manifest
         }
 
         const cmp = compareSemver(bundle.version, manifestBundle.version);
-        if (cmp < 0) {
+        const units = classifyUnits(bundle, manifestBundle);
+        const diverged = units.some((unit) => unit.state === "new" || unit.state === "removed");
+        if (cmp < 0 || (cmp === 0 && diverged)) {
             updates.push({
                 bundleName: bundle.bundleName,
                 installedVersion: bundle.version,
                 availableVersion: manifestBundle.version,
-                units: classifyUnits(bundle, manifestBundle),
+                units,
             });
         } else {
             upToDate.push(bundle);
@@ -227,9 +248,13 @@ function compareSemver(a: string, b: string): number {
 }
 
 export async function detectModified(bundle: InstalledBundle, _installRoot: string): Promise<FileStatus[]> {
+    return detectModifiedUnits(bundle.units);
+}
+
+async function detectModifiedUnits(units: InstalledUnit[]): Promise<FileStatus[]> {
     const results: FileStatus[] = [];
 
-    for (const unit of bundle.units) {
+    for (const unit of units) {
         if (unit.kind === "skill") {
             if (unit.legacy) {
                 results.push({ targetPath: unit.relativePath, kind: "skill", state: "legacy" });
@@ -259,18 +284,97 @@ export async function detectModified(bundle: InstalledBundle, _installRoot: stri
     return results;
 }
 
-export async function removeBundle(
-    bundle: InstalledBundle,
+export async function findBlockedUnits(
+    installRoot: string,
+    bundleName: string,
+    units: TemplateUnit[],
+): Promise<FileStatus[]> {
+    for (const unit of units) {
+        validateTargetPath(installRoot, unit.relativePath);
+        if (unit.kind === "skill") {
+            for (const item of unit.items) validateTargetPath(installRoot, item.target);
+        }
+    }
+
+    const blocked: FileStatus[] = [];
+    for (const unit of units) {
+        const unitPath = path.join(installRoot, unit.relativePath);
+        let unitStat;
+        try {
+            unitStat = await fs.lstat(unitPath);
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+            throw error;
+        }
+
+        if (unit.kind === "file") {
+            if (!unitStat.isFile()) {
+                blocked.push({ targetPath: unit.relativePath, kind: "file", state: "modified" });
+                continue;
+            }
+            const content = await fs.readFile(unitPath, "utf8");
+            const metadata = extractAstpMetadata(content);
+            if (
+                !metadata ||
+                metadata.bundle !== bundleName ||
+                !metadata.hash ||
+                computeHash(stripAstpFields(content)) !== metadata.hash
+            ) {
+                blocked.push({ targetPath: unit.relativePath, kind: "file", state: "modified" });
+            }
+            continue;
+        }
+
+        if (!unitStat.isDirectory()) {
+            blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "modified" });
+            continue;
+        }
+        const skillFilePath = path.join(unitPath, "SKILL.md");
+        let skillFileStat;
+        try {
+            skillFileStat = await fs.lstat(skillFilePath);
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+                blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "modified" });
+                continue;
+            }
+            throw error;
+        }
+        if (!skillFileStat.isFile()) {
+            blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "modified" });
+            continue;
+        }
+        const content = await fs.readFile(skillFilePath, "utf8");
+        const metadata = extractAstpMetadata(content);
+        if (!metadata || metadata.bundle !== bundleName) {
+            blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "modified" });
+            continue;
+        }
+        const contentHash = computeHash(stripAstpFields(content));
+        if (metadata.hash === contentHash) {
+            blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "legacy" });
+            continue;
+        }
+        if (!metadata.hash || (await computeSkillTreeHash(unitPath)) !== metadata.hash) {
+            blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "modified" });
+        }
+    }
+
+    return blocked;
+}
+
+export async function removeUnits(
+    units: InstalledUnit[],
     installRoot: string,
     force = false,
-): Promise<{ removed: string[]; skipped: FileStatus[] }> {
-    const statuses = await detectModified(bundle, installRoot);
-    const statusesByPath = new Map(statuses.map((status) => [status.targetPath, status]));
+): Promise<{ removed: FileStatus[]; skipped: FileStatus[] }> {
+    const statuses = await detectModifiedUnits(units);
+    const statusesByPath = new Map(statuses.map((status) => [`${status.kind}\0${status.targetPath}`, status]));
     const skipped = statuses.filter((status) => status.state === "modified" || status.state === "legacy");
-    const removed: string[] = [];
+    const removed: FileStatus[] = [];
 
-    for (const unit of bundle.units) {
-        const status = statusesByPath.get(unit.relativePath);
+    for (const unit of units) {
+        const status = statusesByPath.get(`${unit.kind}\0${unit.relativePath}`);
         if ((status?.state === "modified" || status?.state === "legacy") && !force) continue;
 
         const unitPath = unit.kind === "skill" ? unit.dirPath : unit.filePath;
@@ -279,13 +383,19 @@ export async function removeBundle(
             unit.kind === "skill" ? path.dirname(unit.dirPath) : path.dirname(unit.filePath),
             installRoot,
         );
-        removed.push(unit.relativePath);
+        if (status) removed.push(status);
     }
 
-    return {
-        removed,
-        skipped: force ? [] : skipped,
-    };
+    return { removed, skipped: force ? [] : skipped };
+}
+
+export async function removeBundle(
+    bundle: InstalledBundle,
+    installRoot: string,
+    force = false,
+): Promise<{ removed: string[]; skipped: FileStatus[] }> {
+    const result = await removeUnits(bundle.units, installRoot, force);
+    return { removed: result.removed.map((status) => status.targetPath), skipped: result.skipped };
 }
 
 async function removeEmptyDirectories(startDir: string, installRoot: string): Promise<void> {

@@ -5,7 +5,7 @@ import { vi } from "vitest";
 
 import { executeInstall } from "@/commands/install.js";
 import { executeUpdate } from "@/commands/update.js";
-import { downloadBundle, extractAstpMetadata, fetchManifest } from "@/core/index.js";
+import { compareVersions, downloadBundle, extractAstpMetadata, fetchManifest, scanInstalled } from "@/core/index.js";
 import type { Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { confirmInstall, selectPlatform, selectTarget, warnModified } from "@/ui/prompts.js";
@@ -78,16 +78,15 @@ describe("E2E: update", () => {
         }
     });
 
-    async function installPipeline(): Promise<void> {
-        mockFetchManifest.mockResolvedValue(manifestV1);
-        const tplDir = await setupTemplateDir(manifestV1, "pipeline");
+    async function installPipeline(manifestToInstall = manifestV1): Promise<void> {
+        mockFetchManifest.mockResolvedValue(manifestToInstall);
+        const tplDir = await setupTemplateDir(manifestToInstall, "pipeline");
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);
         await executeInstall({ bundle: "pipeline", platform: "claude-code", target: "project" });
     }
 
-    async function setupV2Mocks(): Promise<Manifest> {
-        const manifestV2 = createFixtureManifest("1.1.0");
+    async function setupV2Mocks(manifestV2 = createFixtureManifest("1.1.0")): Promise<Manifest> {
         const tplDir2 = await setupTemplateDir(manifestV2, "pipeline");
         templateDirs.push(tplDir2);
 
@@ -98,6 +97,31 @@ describe("E2E: update", () => {
 
         return manifestV2;
     }
+
+    function manifestWithAgentFiles(version: string, targets: string[]): Manifest {
+        const manifest = createFixtureManifest(version);
+        manifest.bundles.pipeline.items = targets.map((target) => ({
+            source: `pipeline/${target}`,
+            target,
+            category: "agent",
+        }));
+        return manifest;
+    }
+
+    it("does not report an update after updating around a modified file unit", async () => {
+        const targets = ["agents/0.md", "agents/a.md", "agents/m.md", "agents/q.md", "agents/z.md"];
+        await installPipeline(manifestWithAgentFiles("1.0.0", targets));
+
+        const modifiedFile = path.join(projectDir, ".claude", targets[0]);
+        const original = await fs.readFile(modifiedFile, "utf8");
+        await fs.writeFile(modifiedFile, `${original}\nUSER EDIT`, "utf8");
+
+        const manifestV2 = await setupV2Mocks(manifestWithAgentFiles("1.1.0", targets));
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        const installed = await scanInstalled(path.join(projectDir, ".claude"));
+        expect(compareVersions(installed, manifestV2).updates).toHaveLength(0);
+    });
 
     // T35: Update to new version
     it("T35: updates files to v1.1.0", async () => {
