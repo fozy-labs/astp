@@ -12,5 +12,6 @@ export {
     validateUnitTargets,
 } from "./installer.js";
 export { removeEmptyDirectories, syncBundle } from "./sync.js";
+export { assertInsideRoot } from "./path-safety.js";
 export { compareVersions, loadInstalled } from "./version.js";
 export { groupTemplateItems, resolveUnitPaths } from "./units.js";

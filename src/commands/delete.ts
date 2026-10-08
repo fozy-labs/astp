@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import {
+    assertInsideRoot,
     extractAstpMetadata,
     loadInstalled,
     removeEmptyDirectories,
@@ -82,6 +83,7 @@ export async function executeDelete(options: DeleteOptions): Promise<void> {
                 continue;
             }
             const unitPath = path.join(target.rootDir, unit.relativePath);
+            await assertInsideRoot(target.rootDir, unit.relativePath);
             await fs.rm(unitPath, { recursive: true, force: true });
             await removeEmptyDirectories(path.dirname(unitPath), target.rootDir);
             delete lockBundle.units[unit.relativePath];

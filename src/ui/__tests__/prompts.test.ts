@@ -3,7 +3,14 @@ import * as p from "@clack/prompts";
 import type { Bundle, InstallTarget, UpdateReport } from "@/types/index.js";
 import { ALL_PLATFORMS } from "@/types/index.js";
 
-import { confirmInstall, selectPlatform, showCheckReport, showUpdateReport, warnLegacyModified } from "../prompts.js";
+import {
+    confirmInstall,
+    selectPlatform,
+    showCheckReport,
+    showUpdateReport,
+    warnLegacyModified,
+    warnModified,
+} from "../prompts.js";
 
 vi.mock("@clack/prompts", () => ({
     intro: vi.fn(),
@@ -64,6 +71,15 @@ describe("legacy migration prompts", () => {
         warnLegacyModified([{ targetPath: "skills/example", kind: "skill", state: "legacy" }]);
 
         expect(p.log.warn).toHaveBeenCalledWith(expect.stringContaining("Run `astp update --force` to replace them."));
+    });
+
+    it("shows the force-update command when modified units are skipped", () => {
+        vi.mocked(p.log.warn).mockClear();
+        warnModified([{ targetPath: "agents/example.md", kind: "file", state: "modified" }]);
+
+        expect(p.log.warn).toHaveBeenCalledWith(
+            expect.stringContaining("Run `astp update --force` to overwrite them."),
+        );
     });
 });
 

@@ -240,4 +240,35 @@ describe("installSkill failure safety", () => {
         expect(await snapshotDirectory(skillDir)).toEqual(existingTree);
         expect((await fs.readdir(path.dirname(skillDir))).filter((entry) => entry.includes(".astp-tmp-"))).toEqual([]);
     });
+
+    it("rejects a symlinked parent before writing outside the install root", async () => {
+        const outside = path.join(tempDir, "outside");
+        await fs.mkdir(outside);
+        await fs.writeFile(path.join(outside, "marker.txt"), "keep");
+        const sourceFile = path.join(tempDir, "skills/sample/SKILL.md");
+        await fs.mkdir(path.dirname(sourceFile), { recursive: true });
+        await fs.writeFile(sourceFile, "New skill");
+        await fs.symlink(outside, path.join(targetRoot, "skills"), "dir");
+
+        await expect(
+            installSkill(
+                tempDir,
+                {
+                    kind: "skill",
+                    relativePath: "skills/sample",
+                    items: [
+                        {
+                            source: "bundle/skills/sample/SKILL.md",
+                            target: "skills/sample/SKILL.md",
+                            category: "skill",
+                        },
+                    ],
+                },
+                { platform: "claude-code", type: "project", rootDir: targetRoot },
+            ),
+        ).rejects.toThrow(/escape|outside/i);
+
+        expect(await fs.readdir(outside)).toEqual(["marker.txt"]);
+        expect(await fs.readFile(path.join(outside, "marker.txt"), "utf8")).toBe("keep");
+    });
 });

@@ -17,6 +17,8 @@ import {
     isInteractive,
     selectBundles,
     selectNewUnits,
+    selectPlatform,
+    selectTarget,
     selectUnits,
     showCheckReport,
     warnLegacyModified,
@@ -320,6 +322,123 @@ describe("lock-file command flows", () => {
             ]),
         );
         write.mockRestore();
+    });
+
+    it("requires a target for JSON list output before prompting", async () => {
+        await expect(executeList({ json: true })).rejects.toThrow("--json requires --target");
+        expect(vi.mocked(selectPlatform)).not.toHaveBeenCalled();
+        expect(vi.mocked(selectTarget)).not.toHaveBeenCalled();
+    });
+
+    it("lists installed bundles missing from the manifest without downloading them", async () => {
+        await install();
+        const guidePath = path.join(rootDir, "agents/guide.md");
+        const guideContent = await fs.readFile(guidePath, "utf8");
+        const legacyContent = guideContent.replace(
+            /^---\n/,
+            `---\nastp-source: fixture/repo\nastp-bundle: core\nastp-version: 1.0.0\nastp-hash: ${computeHash(guideContent)}\n`,
+        );
+        await fs.writeFile(guidePath, legacyContent);
+        const lockPath = path.join(rootDir, "astp.lock");
+        const lock = JSON.parse(await fs.readFile(lockPath, "utf8"));
+        delete lock.bundles.core.units["agents/guide.md"];
+        await fs.writeFile(lockPath, JSON.stringify(lock));
+        manifest = { ...manifest, bundles: {} };
+        mockDownloadBundle.mockClear();
+
+        const jsonWrite = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+        await executeList({ bundle: "core", json: true, platform: "claude-code", target: "project" });
+        const json = JSON.parse(String(jsonWrite.mock.calls[0]?.[0]));
+        expect(json).toMatchObject({ bundle: "core", version: null, installedVersion: "1.0.0" });
+        expect(json.units).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    path: "skills/alpha",
+                    status: "removed",
+                    description: null,
+                }),
+                expect.objectContaining({
+                    path: "agents/guide.md",
+                    status: "legacy",
+                    description: null,
+                }),
+            ]),
+        );
+        jsonWrite.mockRestore();
+
+        const textWrite = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+        await executeList({ bundle: "core", platform: "claude-code", target: "project" });
+        const text = String(textWrite.mock.calls[0]?.[0]);
+        expect(text).toContain("alpha");
+        expect(text).toContain("removed");
+        expect(text).toContain("guide.md");
+        expect(text).toContain("legacy");
+        expect(text).not.toContain("guide description");
+        expect(mockDownloadBundle).not.toHaveBeenCalled();
+        textWrite.mockRestore();
+    });
+
+    it("rejects install through a symlinked parent without touching outside files", async () => {
+        manifest = createManifest("1.0.0", ["agents/guide.md"]);
+        const outside = path.join(projectDir, "outside");
+        await fs.mkdir(outside, { recursive: true });
+        await fs.writeFile(path.join(outside, "marker.txt"), "keep");
+        await fs.mkdir(rootDir, { recursive: true });
+        await fs.symlink(outside, path.join(rootDir, "agents"), "dir");
+
+        await expect(install()).rejects.toThrow(/escape|outside/i);
+        expect(await fs.readdir(outside)).toEqual(["marker.txt"]);
+        expect(await fs.readFile(path.join(outside, "marker.txt"), "utf8")).toBe("keep");
+    });
+
+    it("rejects update through a symlinked parent without touching outside files", async () => {
+        manifest = createManifest("1.0.0", ["agents/guide.md"]);
+        await install();
+        const outside = path.join(projectDir, "outside");
+        await fs.mkdir(outside, { recursive: true });
+        const installedContent = await fs.readFile(path.join(rootDir, "agents/guide.md"));
+        await fs.rm(path.join(rootDir, "agents"), { recursive: true });
+        await fs.writeFile(path.join(outside, "guide.md"), installedContent);
+        await fs.writeFile(path.join(outside, "marker.txt"), "keep");
+        await fs.symlink(outside, path.join(rootDir, "agents"), "dir");
+        manifest = createManifest("1.1.0", ["agents/guide.md"]);
+
+        await expect(executeUpdate({ platform: "claude-code", target: "project" })).rejects.toThrow(/escape|outside/i);
+        expect(await fs.readFile(path.join(outside, "guide.md"))).toEqual(installedContent);
+        expect(await fs.readFile(path.join(outside, "marker.txt"), "utf8")).toBe("keep");
+    });
+
+    it("rejects delete through a symlinked parent without touching outside files", async () => {
+        manifest = createManifest("1.0.0", ["agents/guide.md"]);
+        await install();
+        const outside = path.join(projectDir, "outside");
+        await fs.mkdir(outside, { recursive: true });
+        const installedContent = await fs.readFile(path.join(rootDir, "agents/guide.md"));
+        await fs.rm(path.join(rootDir, "agents"), { recursive: true });
+        await fs.writeFile(path.join(outside, "guide.md"), installedContent);
+        await fs.writeFile(path.join(outside, "marker.txt"), "keep");
+        await fs.symlink(outside, path.join(rootDir, "agents"), "dir");
+
+        await expect(executeDelete({ bundle: "core", platform: "claude-code", target: "project" })).rejects.toThrow(
+            /escape|outside/i,
+        );
+        expect(await fs.readFile(path.join(outside, "guide.md"))).toEqual(installedContent);
+        expect(await fs.readFile(path.join(outside, "marker.txt"), "utf8")).toBe("keep");
+    });
+
+    it("removes a unit symlink without following its outside target", async () => {
+        manifest = createManifest("1.0.0", ["agents/guide.md"]);
+        await install();
+        const outsideFile = path.join(projectDir, "outside.md");
+        await fs.writeFile(outsideFile, "keep");
+        const unitPath = path.join(rootDir, "agents/guide.md");
+        await fs.rm(unitPath);
+        await fs.symlink(outsideFile, unitPath, "file");
+
+        await executeDelete({ bundle: "core", force: true, platform: "claude-code", target: "project" });
+
+        expect(await fs.readFile(outsideFile, "utf8")).toBe("keep");
+        await expect(fs.lstat(unitPath)).rejects.toMatchObject({ code: "ENOENT" });
     });
 
     it("distinguishes units when a manifest changes their kind at the same path", async () => {

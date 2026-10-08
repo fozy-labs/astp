@@ -201,6 +201,30 @@ describe("executeUpdate", () => {
         expect(mockDownloadBundle).not.toHaveBeenCalled();
     });
 
+    it("warns about modified lock and legacy units when versions match", async () => {
+        const lockUnit = createInstalledUnit("modified");
+        const legacyUnit = createInstalledUnit("modified", "skills/old", "legacy", "skill");
+        const installed = createInstalledBundle([lockUnit, legacyUnit], "1.1.0");
+        mockLoadInstalled.mockResolvedValue(createState([installed]));
+        mockCompareVersions.mockReturnValue({
+            updates: [],
+            upToDate: [installed],
+            notInManifest: [],
+            legacySkills: [],
+        });
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(mockWarnModified).toHaveBeenCalledWith([
+            { targetPath: testItem.target, kind: "file", state: "modified" },
+        ]);
+        expect(mockWarnLegacyModified).toHaveBeenCalledWith([
+            { targetPath: "skills/old", kind: "skill", state: "legacy" },
+        ]);
+        expect(mockShowInfo).toHaveBeenCalledWith("All bundles up to date.");
+        expect(mockDownloadBundle).not.toHaveBeenCalled();
+    });
+
     it("downloads and verifies an empty manifest bundle before removing its orphans", async () => {
         const emptyBundle = { ...testBundle, items: [] };
         mockFetchManifest.mockResolvedValue({ ...testManifest, bundles: { pipeline: emptyBundle } });

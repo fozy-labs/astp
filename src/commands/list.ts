@@ -23,6 +23,8 @@ export interface ListOptions {
 }
 
 export async function executeList(options: ListOptions): Promise<void> {
+    if (options.json && !options.target) throw new Error("--json requires --target");
+
     const platform: Platform = options.platform ?? (await selectPlatform());
     const target = options.target ? resolveTarget(platform, options.target) : await selectTarget(platform);
     const installedState = await loadInstalled(target.rootDir);
@@ -67,10 +69,38 @@ export async function executeList(options: ListOptions): Promise<void> {
         return;
     }
 
-    const bundle = resolveBundle(manifest, options.bundle);
+    const installed = installedState.bundles.find((entry) => entry.bundleName === options.bundle);
+    const manifestBundle = manifest.bundles[options.bundle];
+    if (!manifestBundle) {
+        if (!installed) resolveBundle(manifest, options.bundle);
+        const listed = installed!.units.map((unit) => ({
+            name: path.posix.basename(unit.relativePath),
+            path: unit.relativePath,
+            kind: unit.kind,
+            status: unit.origin === "legacy" ? "legacy" : "removed",
+            description: null,
+        }));
+        const output = {
+            bundle: options.bundle,
+            version: null,
+            installedVersion: installed!.version || null,
+            units: listed,
+        };
+        if (options.json) {
+            process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+        } else {
+            const lines = ["Name                    Status       Description"];
+            for (const unit of listed) {
+                lines.push(`${unit.name.padEnd(24)}${unit.status.padEnd(13)}`.slice(0, 80));
+            }
+            process.stdout.write(`${lines.join("\n")}\n`);
+        }
+        return;
+    }
+
+    const bundle = manifestBundle;
     const units = groupTemplateItems(bundle.items);
     validateUnitTargets(target.rootDir, units);
-    const installed = installedState.bundles.find((entry) => entry.bundleName === bundle.name);
     if (!options.json) s.start(`Downloading ${bundle.name}...`);
     const tempDir = await downloadBundle(manifest.repository, bundle.name);
     try {

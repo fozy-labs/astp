@@ -294,7 +294,7 @@ export function warnModified(files: FileStatus[]): void {
     const skillCount = files.filter((file) => file.kind === "skill").length;
     const fileCount = files.filter((file) => file.kind === "file").length;
     p.log.warn(
-        `${describeUnitCounts(fileCount, skillCount)} modified locally — skipped:\n${paths}\nUse --force to overwrite.`,
+        `${describeUnitCounts(fileCount, skillCount)} modified locally — skipped:\n${paths}\nRun \`astp update --force\` to overwrite them.`,
     );
 }
 

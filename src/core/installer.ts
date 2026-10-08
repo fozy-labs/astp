@@ -5,6 +5,7 @@ import path from "node:path";
 import type { InstallTarget, TemplateItem } from "@/types/index.js";
 
 import { computeHash } from "./frontmatter.js";
+import { assertInsideRoot } from "./path-safety.js";
 import { computeSkillTreeHash } from "./skill-tree.js";
 import type { SkillTemplateUnit, TemplateUnit } from "./units.js";
 
@@ -13,6 +14,7 @@ export async function installFile(tempDir: string, item: TemplateItem, target: I
     // mirror item.target (source path without the bundle prefix)
     const sourceFile = path.join(tempDir, item.target);
     validateTargetPath(target.rootDir, item.target);
+    await assertInsideRoot(target.rootDir, item.target);
 
     const content = await fs.readFile(sourceFile);
     const targetFile = path.join(target.rootDir, item.target);
@@ -25,6 +27,7 @@ export async function installFile(tempDir: string, item: TemplateItem, target: I
 export async function installSkill(tempDir: string, unit: SkillTemplateUnit, target: InstallTarget): Promise<string> {
     const skillDir = path.join(target.rootDir, unit.relativePath);
     validateTargetPath(target.rootDir, unit.relativePath);
+    await assertInsideRoot(target.rootDir, unit.relativePath);
     for (const item of unit.items) validateTargetPath(target.rootDir, item.target);
 
     if (!unit.items.some((item) => item.target === path.posix.join(unit.relativePath, "SKILL.md"))) {
@@ -47,6 +50,7 @@ export async function installSkill(tempDir: string, unit: SkillTemplateUnit, tar
         }
 
         const hash = await computeSkillTreeHash(stagingDir);
+        await assertInsideRoot(target.rootDir, unit.relativePath);
         await fs.rm(skillDir, { recursive: true, force: true });
         await fs.rename(stagingDir, skillDir);
         stagingCreated = false;

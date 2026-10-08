@@ -61,6 +61,23 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
     if (report.updates.length > 0 || report.notInManifest.length > 0) showUpdateReport(report);
     if (bundleNames.size === 0) {
         if (report.notInManifest.length === 0) showInfo("All bundles up to date.");
+        if (!options.force) {
+            const modifiedLockUnits: FileStatus[] = [];
+            const modifiedLegacyUnits: FileStatus[] = [];
+            for (const bundle of installedState.bundles) {
+                for (const unit of bundle.units) {
+                    if (unit.state !== "modified") continue;
+                    const status: FileStatus = {
+                        targetPath: unit.relativePath,
+                        kind: unit.kind,
+                        state: unit.origin === "legacy" ? "legacy" : unit.state,
+                    };
+                    (unit.origin === "legacy" ? modifiedLegacyUnits : modifiedLockUnits).push(status);
+                }
+            }
+            if (modifiedLockUnits.length > 0) warnModified(modifiedLockUnits);
+            if (modifiedLegacyUnits.length > 0) warnLegacyModified(modifiedLegacyUnits);
+        }
         return;
     }
 

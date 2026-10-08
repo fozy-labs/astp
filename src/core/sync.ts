@@ -6,6 +6,7 @@ import type { Bundle, FileStatus, InstalledBundle, InstalledUnit, InstallTarget,
 import { computeHash } from "./frontmatter.js";
 import { installFile, installSkill } from "./installer.js";
 import type { Lock, LockBundle, LockUnit } from "./lock.js";
+import { assertInsideRoot } from "./path-safety.js";
 import { computeSkillTreeHash, computeTemplateUnitHash } from "./skill-tree.js";
 import { groupTemplateItems } from "./units.js";
 
@@ -148,6 +149,7 @@ async function compareUntracked(
 
 async function removePath(rootDir: string, relativePath: string): Promise<void> {
     const unitPath = path.join(rootDir, relativePath);
+    await assertInsideRoot(rootDir, relativePath);
     await fs.rm(unitPath, { recursive: true, force: true });
     await removeEmptyDirectories(path.dirname(unitPath), rootDir);
 }
