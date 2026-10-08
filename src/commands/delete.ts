@@ -20,6 +20,7 @@ import { resolveTarget } from "@/types/index.js";
 import { describeUnitCounts } from "@/ui/format.js";
 import {
     confirmDelete,
+    isInteractive,
     selectInstalledBundles,
     selectPlatform,
     selectTarget,
@@ -57,7 +58,7 @@ export async function executeDelete(options: DeleteOptions): Promise<void> {
         const paths = resolveUnitPaths(options.skills, bundle.units, bundle.bundleName);
         return { ...bundle, units: bundle.units.filter((unit) => paths.has(unit.relativePath)) };
     });
-    if (!(await confirmDelete(targets, target, options.force ?? false))) return;
+    if (isInteractive() && !(await confirmDelete(targets, target, options.force ?? false))) return;
 
     const removed: FileStatus[] = [];
     const kept: FileStatus[] = [];

@@ -150,6 +150,7 @@ describe("executeInstall", () => {
         expect(mockSelectPlatform).not.toHaveBeenCalled();
         expect(mockSelectTarget).not.toHaveBeenCalled();
         expect(mockSelectBundles).not.toHaveBeenCalled();
+        expect(mockConfirmInstall).not.toHaveBeenCalled();
         expect(mockResolveBundle).toHaveBeenCalledWith(testManifest, "core");
         expect(mockDownloadBundle).toHaveBeenCalledWith("fozy-labs/astp", "core");
         expect(mockSyncBundle).toHaveBeenCalledTimes(1);
@@ -174,9 +175,11 @@ describe("executeInstall", () => {
     });
 
     it("prompts for platform, target, and bundles when no arguments provided", async () => {
+        mockIsInteractive.mockReturnValue(true);
         mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockResolvedValue(testTarget);
         mockSelectBundles.mockResolvedValue([testBundle]);
+        mockSelectUnits.mockResolvedValue(["skills/orchestrate"]);
 
         await executeInstall({});
 
@@ -209,6 +212,7 @@ describe("executeInstall", () => {
     });
 
     it("aborts when user declines confirmation", async () => {
+        mockIsInteractive.mockReturnValue(true);
         mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockResolvedValue(testTarget);
         mockSelectBundles.mockResolvedValue([testBundle]);
@@ -216,6 +220,7 @@ describe("executeInstall", () => {
 
         await executeInstall({});
 
+        expect(mockConfirmInstall).toHaveBeenCalled();
         expect(mockDownloadBundle).not.toHaveBeenCalled();
         expect(mockSyncBundle).not.toHaveBeenCalled();
     });

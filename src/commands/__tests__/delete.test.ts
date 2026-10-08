@@ -5,6 +5,7 @@ import type { InstalledBundle, InstallTarget } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import {
     confirmDelete,
+    isInteractive,
     selectInstalledBundles,
     selectPlatform,
     selectTarget,
@@ -26,6 +27,7 @@ vi.mock("@/ui/prompts.js", () => ({
     selectTarget: vi.fn(),
     selectInstalledBundles: vi.fn(),
     confirmDelete: vi.fn().mockResolvedValue(true),
+    isInteractive: vi.fn(),
     showInfo: vi.fn(),
     showSuccess: vi.fn(),
     warnKeptRemoved: vi.fn(),
@@ -44,6 +46,7 @@ const mockSelectPlatform = vi.mocked(selectPlatform);
 const mockSelectTarget = vi.mocked(selectTarget);
 const mockSelectInstalledBundles = vi.mocked(selectInstalledBundles);
 const mockConfirmDelete = vi.mocked(confirmDelete);
+const mockIsInteractive = vi.mocked(isInteractive);
 const mockShowInfo = vi.mocked(showInfo);
 const mockShowSuccess = vi.mocked(showSuccess);
 const mockWarnKeptRemoved = vi.mocked(warnKeptRemoved);
@@ -99,6 +102,7 @@ beforeEach(() => {
     mockLoadInstalled.mockResolvedValue(createInstalledState());
     mockSelectInstalledBundles.mockResolvedValue([testBundle]);
     mockConfirmDelete.mockResolvedValue(true);
+    mockIsInteractive.mockReturnValue(false);
     mockWriteLock.mockResolvedValue(undefined);
 });
 
@@ -107,8 +111,20 @@ describe("executeDelete", () => {
         await executeDelete({ bundle: "pipeline", platform: "claude-code", target: "project" });
 
         expect(mockSelectInstalledBundles).not.toHaveBeenCalled();
+        expect(mockConfirmDelete).not.toHaveBeenCalled();
         expect(mockWriteLock).toHaveBeenCalledWith("/project/.claude", expect.any(Object));
         expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining("Deleted 1 file"));
+    });
+
+    it("aborts when an interactive user declines confirmation", async () => {
+        mockIsInteractive.mockReturnValue(true);
+        mockConfirmDelete.mockResolvedValue(false);
+
+        await executeDelete({ bundle: "pipeline", platform: "claude-code", target: "project" });
+
+        expect(mockConfirmDelete).toHaveBeenCalledWith([testBundle], testTarget, false);
+        expect(mockWriteLock).not.toHaveBeenCalled();
+        expect(mockShowSuccess).not.toHaveBeenCalled();
     });
 
     it("shows info when no managed files are installed", async () => {

@@ -102,7 +102,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
     const selectedUnits = plans.flatMap((plan) =>
         groupTemplateItems(plan.bundle.items).filter((unit) => plan.selected.has(unit.relativePath)),
     );
-    if (!(await confirmInstall(selectedBundles, target, selectedUnits))) return;
+    if (isInteractive() && !(await confirmInstall(selectedBundles, target, selectedUnits))) return;
 
     const totals = { installed: [] as FileStatus[], skipped: [] as FileStatus[], kept: [] as FileStatus[] };
     for (const plan of plans) {
