@@ -14,5 +14,6 @@ export {
     showSuccess,
     showUpdateReport,
     spinner,
+    warnKeptRemoved,
     warnModified,
 } from "./prompts.js";

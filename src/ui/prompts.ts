@@ -239,6 +239,15 @@ export function warnModified(files: FileStatus[]): void {
     );
 }
 
+export function warnKeptRemoved(units: FileStatus[]): void {
+    const paths = units.map((unit) => `  • ${unit.targetPath}`).join("\n");
+    const skillCount = units.filter((unit) => unit.kind === "skill").length;
+    const fileCount = units.filter((unit) => unit.kind === "file").length;
+    p.log.warn(
+        `${describeUnitCounts(fileCount, skillCount)} removed from the bundle upstream but modified locally or legacy — kept:\n${paths}\nUse --force to delete them.`,
+    );
+}
+
 export function warnLegacySkills(skills: Array<{ bundleName: string; targetPath: string }>, canMigrate = true): void {
     const paths = skills.map((skill) => `  • ${skill.bundleName}: ${skill.targetPath}`).join("\n");
     const guidance = canMigrate

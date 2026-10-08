@@ -24,6 +24,7 @@ import {
     confirmInstall,
     showCheckReport,
     showInfo,
+    warnKeptRemoved,
     warnLegacySkills,
     warnModified,
 } from "@/ui/prompts.js";
@@ -52,6 +53,7 @@ vi.mock("@/ui/prompts.js", () => ({
     showCheckReport: vi.fn(),
     showUpdateReport: vi.fn(),
     warnModified: vi.fn(),
+    warnKeptRemoved: vi.fn(),
     warnLegacySkills: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
@@ -63,6 +65,7 @@ const mockConfirmInstall = vi.mocked(confirmInstall);
 const mockConfirmDelete = vi.mocked(confirmDelete);
 const mockShowCheckReport = vi.mocked(showCheckReport);
 const mockShowInfo = vi.mocked(showInfo);
+const mockWarnKeptRemoved = vi.mocked(warnKeptRemoved);
 const mockWarnLegacySkills = vi.mocked(warnLegacySkills);
 const mockWarnModified = vi.mocked(warnModified);
 
@@ -99,12 +102,39 @@ describe("E2E: skill directory units", () => {
     }
 
     async function installSkillpack(): Promise<void> {
+        mockFetchManifest.mockResolvedValue(manifest);
         await setupBundle();
         await executeInstall({ bundle: "skillpack", platform: "claude-code", target: "project" });
     }
 
     function skillRoot(): string {
         return path.join(projectDir, ".claude", "skills", "sample");
+    }
+
+    function orphanManifest(version: string, includeOrphans: boolean): Manifest {
+        const fixture = createFixtureManifest(version);
+        fixture.bundles.skillpack.items = [
+            {
+                source: "skillpack/skills/a/SKILL.md",
+                target: "skills/a/SKILL.md",
+                category: "skill",
+            },
+            ...(includeOrphans
+                ? [
+                      {
+                          source: "skillpack/skills/deprecated/z/SKILL.md",
+                          target: "skills/deprecated/z/SKILL.md",
+                          category: "skill" as const,
+                      },
+                      {
+                          source: "skillpack/agents/old.agent.md",
+                          target: "agents/old.agent.md",
+                          category: "agent" as const,
+                      },
+                  ]
+                : []),
+        ];
+        return fixture;
     }
 
     it("writes metadata only to SKILL.md and copies every other file byte-for-byte", async () => {
@@ -266,6 +296,47 @@ describe("E2E: skill directory units", () => {
             expect.arrayContaining([expect.objectContaining({ targetPath: "skills/new", kind: "skill" })]),
         );
         await expect(fs.access(path.join(path.dirname(userFile), "SKILL.md"))).rejects.toThrow();
+    });
+
+    it("removes unmodified skill and file units dropped upstream with empty parents", async () => {
+        manifest = orphanManifest("1.0.0", true);
+        await installSkillpack();
+
+        manifest = orphanManifest("1.1.0", false);
+        mockFetchManifest.mockResolvedValue(manifest);
+        await setupBundle();
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        const installRoot = path.join(projectDir, ".claude");
+        await expect(fs.access(path.join(installRoot, "skills", "deprecated"))).rejects.toThrow();
+        await expect(fs.access(path.join(installRoot, "agents", "old.agent.md"))).rejects.toThrow();
+        await expect(fs.access(path.join(installRoot, "agents"))).rejects.toThrow();
+    });
+
+    it("keeps modified orphan skills with a warning unless --force is passed", async () => {
+        manifest = orphanManifest("1.0.0", true);
+        await installSkillpack();
+
+        const installRoot = path.join(projectDir, ".claude");
+        const skillA = path.join(installRoot, "skills", "a", "SKILL.md");
+        const orphanSkill = path.join(installRoot, "skills", "deprecated", "z", "SKILL.md");
+        await fs.appendFile(skillA, "\nUSER EDIT");
+        await fs.appendFile(orphanSkill, "\nUSER EDIT");
+
+        manifest = orphanManifest("1.1.0", false);
+        mockFetchManifest.mockResolvedValue(manifest);
+        await setupBundle();
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(await fs.readFile(orphanSkill, "utf8")).toContain("USER EDIT");
+        expect(mockWarnKeptRemoved).toHaveBeenCalledWith(
+            expect.arrayContaining([
+                expect.objectContaining({ targetPath: "skills/deprecated/z", kind: "skill", state: "modified" }),
+            ]),
+        );
+
+        await executeUpdate({ force: true, platform: "claude-code", target: "project" });
+        await expect(fs.access(path.dirname(orphanSkill))).rejects.toThrow();
     });
 
     async function writeLegacyInstall(singleFile = false): Promise<void> {

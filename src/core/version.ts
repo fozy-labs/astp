@@ -233,9 +233,13 @@ function compareSemver(a: string, b: string): number {
 }
 
 export async function detectModified(bundle: InstalledBundle, _installRoot: string): Promise<FileStatus[]> {
+    return detectModifiedUnits(bundle.units);
+}
+
+async function detectModifiedUnits(units: InstalledUnit[]): Promise<FileStatus[]> {
     const results: FileStatus[] = [];
 
-    for (const unit of bundle.units) {
+    for (const unit of units) {
         if (unit.kind === "skill") {
             if (unit.legacy) {
                 results.push({ targetPath: unit.relativePath, kind: "skill", state: "legacy" });
@@ -344,18 +348,18 @@ export async function findBlockedUnits(
     return blocked;
 }
 
-export async function removeBundle(
-    bundle: InstalledBundle,
+export async function removeUnits(
+    units: InstalledUnit[],
     installRoot: string,
     force = false,
-): Promise<{ removed: string[]; skipped: FileStatus[] }> {
-    const statuses = await detectModified(bundle, installRoot);
-    const statusesByPath = new Map(statuses.map((status) => [status.targetPath, status]));
+): Promise<{ removed: FileStatus[]; skipped: FileStatus[] }> {
+    const statuses = await detectModifiedUnits(units);
+    const statusesByPath = new Map(statuses.map((status) => [`${status.kind}\0${status.targetPath}`, status]));
     const skipped = statuses.filter((status) => status.state === "modified" || status.state === "legacy");
-    const removed: string[] = [];
+    const removed: FileStatus[] = [];
 
-    for (const unit of bundle.units) {
-        const status = statusesByPath.get(unit.relativePath);
+    for (const unit of units) {
+        const status = statusesByPath.get(`${unit.kind}\0${unit.relativePath}`);
         if ((status?.state === "modified" || status?.state === "legacy") && !force) continue;
 
         const unitPath = unit.kind === "skill" ? unit.dirPath : unit.filePath;
@@ -364,13 +368,19 @@ export async function removeBundle(
             unit.kind === "skill" ? path.dirname(unit.dirPath) : path.dirname(unit.filePath),
             installRoot,
         );
-        removed.push(unit.relativePath);
+        if (status) removed.push(status);
     }
 
-    return {
-        removed,
-        skipped: force ? [] : skipped,
-    };
+    return { removed, skipped: force ? [] : skipped };
+}
+
+export async function removeBundle(
+    bundle: InstalledBundle,
+    installRoot: string,
+    force = false,
+): Promise<{ removed: string[]; skipped: FileStatus[] }> {
+    const result = await removeUnits(bundle.units, installRoot, force);
+    return { removed: result.removed.map((status) => status.targetPath), skipped: result.skipped };
 }
 
 async function removeEmptyDirectories(startDir: string, installRoot: string): Promise<void> {

@@ -6,10 +6,11 @@ import {
     groupTemplateItems,
     installFile,
     installSkill,
+    removeUnits,
     scanInstalled,
 } from "@/core/index.js";
 import type { TemplateUnit } from "@/core/units.js";
-import type { InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
+import type { InstallTarget, InstallTargetType, InstalledUnit, Platform } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { describeUnitCounts } from "@/ui/format.js";
 import {
@@ -19,6 +20,7 @@ import {
     showSuccess,
     showUpdateReport,
     spinner,
+    warnKeptRemoved,
     warnLegacySkills,
     warnModified,
 } from "@/ui/prompts.js";
@@ -79,9 +81,10 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
         migratablePathsByBundle.set(skill.bundleName, paths);
     }
 
-    const plan: Array<{ bundleName: string; units: TemplateUnit[] }> = [];
+    const plan: Array<{ bundleName: string; units: TemplateUnit[]; orphans: InstalledUnit[] }> = [];
     for (const update of report.updates) {
         const bundleName = update.bundleName;
+        const installedBundle = installed.find((bundle) => bundle.bundleName === bundleName);
         const manifestBundle = manifest.bundles[bundleName];
         if (!manifestBundle) continue;
 
@@ -106,7 +109,10 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
         const installUnits = units.filter(
             (unit) => options.force || !skippedPaths.has(unit.relativePath),
         );
-        plan.push({ bundleName, units: installUnits });
+        const manifestPaths = new Set(units.map((unit) => `${unit.kind}\0${unit.relativePath}`));
+        const orphans =
+            installedBundle?.units.filter((unit) => !manifestPaths.has(`${unit.kind}\0${unit.relativePath}`)) ?? [];
+        plan.push({ bundleName, units: installUnits, orphans });
     }
 
     if (options.force) {
@@ -118,7 +124,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             const units = groupTemplateItems(bundle.items).filter(
                 (unit) => unit.kind === "skill" && legacyPaths.has(unit.relativePath),
             );
-            if (units.length > 0) plan.push({ bundleName, units });
+            if (units.length > 0) plan.push({ bundleName, units, orphans: [] });
         }
     }
 
@@ -126,6 +132,8 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
 
     let updatedFiles = 0;
     let updatedSkills = 0;
+    let removedFiles = 0;
+    let removedSkills = 0;
     for (const plannedBundle of plan) {
         const bundleName = plannedBundle.bundleName;
         const manifestBundle = manifest.bundles[bundleName];
@@ -145,10 +153,23 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                 updatedFiles++;
             }
         }
+        if (plannedBundle.orphans.length > 0) {
+            const result = await removeUnits(plannedBundle.orphans, target.rootDir, options.force);
+            if (result.skipped.length > 0) warnKeptRemoved(result.skipped);
+            removedFiles += result.removed.filter((status) => status.kind === "file").length;
+            removedSkills += result.removed.filter((status) => status.kind === "skill").length;
+            skippedFiles += result.skipped.filter((status) => status.kind === "file").length;
+            skippedSkills += result.skipped.filter((status) => status.kind === "skill").length;
+        }
         s.stop(`Installed ${bundleName}.`);
     }
 
     const updatedCounts = describeUnitCounts(updatedFiles, updatedSkills);
     const skippedCounts = describeUnitCounts(skippedFiles, skippedSkills);
-    showSuccess(`Updated ${updatedCounts}${skippedFiles + skippedSkills > 0 ? `, skipped ${skippedCounts}` : ""}`);
+    const removedCounts = describeUnitCounts(removedFiles, removedSkills);
+    showSuccess(
+        `Updated ${updatedCounts}${skippedFiles + skippedSkills > 0 ? `, skipped ${skippedCounts}` : ""}${
+            removedFiles + removedSkills > 0 ? `, removed ${removedCounts}` : ""
+        }`,
+    );
 }
