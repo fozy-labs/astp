@@ -13,6 +13,8 @@ import { launchWizard } from "@/ui/wizard.js";
 
 const VALID_TARGETS: ReadonlySet<InstallTargetType> = new Set(["project", "user"]);
 
+const PLATFORM_HELP = `Coding agent platform: ${ALL_PLATFORMS.join(", ")}`;
+
 function parsePlatform(value: string | undefined): Platform | undefined {
     if (value === undefined) return undefined;
     if (!ALL_PLATFORMS.includes(value as Platform)) {
@@ -46,7 +48,7 @@ program
 program
     .command("install")
     .argument("[bundle]", "Bundle name to install")
-    .option("--platform <name>", "Coding agent platform: vscode or claude-code")
+    .option("--platform <name>", PLATFORM_HELP)
     .option("--target <type>", "Install target: project or user")
     .action(async (bundle: string | undefined, options: { platform?: string; target?: string }) => {
         await executeInstall({
@@ -59,7 +61,7 @@ program
 program
     .command("update")
     .option("--force", "Overwrite locally modified files")
-    .option("--platform <name>", "Coding agent platform: vscode or claude-code")
+    .option("--platform <name>", PLATFORM_HELP)
     .option("--target <type>", "Install target: project or user")
     .action(async (options: { force?: boolean; platform?: string; target?: string }) => {
         await executeUpdate({
@@ -71,7 +73,7 @@ program
 
 program
     .command("check")
-    .option("--platform <name>", "Coding agent platform: vscode or claude-code")
+    .option("--platform <name>", PLATFORM_HELP)
     .option("--target <type>", "Install target: project or user")
     .action(async (options: { platform?: string; target?: string }) => {
         await executeCheck({
@@ -84,7 +86,7 @@ program
     .command("delete")
     .argument("[bundle]", "Installed bundle name to delete")
     .option("--force", "Delete locally modified files")
-    .option("--platform <name>", "Coding agent platform: vscode or claude-code")
+    .option("--platform <name>", PLATFORM_HELP)
     .option("--target <type>", "Install target: project or user")
     .action(async (bundle: string | undefined, options: { force?: boolean; platform?: string; target?: string }) => {
         await executeDelete({

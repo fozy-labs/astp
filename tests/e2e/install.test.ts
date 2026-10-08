@@ -76,52 +76,52 @@ describe("E2E: install", () => {
         }
     });
 
-    // T31: astp install rdpi --target project
-    it("T31: installs rdpi bundle — 22 files with astp frontmatter", async () => {
-        const tplDir = await setupTemplateDir(manifest, "rdpi");
+    // T31: astp install pipeline --target project
+    it("T31: installs pipeline bundle — 22 files with astp frontmatter", async () => {
+        const tplDir = await setupTemplateDir(manifest, "pipeline");
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);
 
-        await executeInstall({ bundle: "rdpi", platform: "vscode", target: "project" });
+        await executeInstall({ bundle: "pipeline", platform: "claude-code", target: "project" });
 
-        const githubDir = path.join(projectDir, ".github");
-        const rdpiBundle = manifest.bundles.rdpi;
-        expect(rdpiBundle.items).toHaveLength(22);
+        const githubDir = path.join(projectDir, ".claude");
+        const pipelineBundle = manifest.bundles.pipeline;
+        expect(pipelineBundle.items).toHaveLength(22);
 
-        for (const item of rdpiBundle.items) {
+        for (const item of pipelineBundle.items) {
             const filePath = path.join(githubDir, item.target);
             const content = await fs.readFile(filePath, "utf8");
             const metadata = extractAstpMetadata(content);
 
             expect(metadata).not.toBeNull();
             expect(metadata!.source).toBe("fozy-labs/astp");
-            expect(metadata!.bundle).toBe("rdpi");
+            expect(metadata!.bundle).toBe("pipeline");
             expect(metadata!.version).toBe("1.0.0");
             expect(metadata!.hash).toBeTruthy();
         }
     });
 
-    // T32: astp install base --target project
-    it("T32: installs base bundle — 1 file at skills/orchestrate/SKILL.md", async () => {
-        const tplDir = await setupTemplateDir(manifest, "base");
+    // T32: astp install core --target project
+    it("T32: installs core bundle — 1 file at skills/orchestrate/SKILL.md", async () => {
+        const tplDir = await setupTemplateDir(manifest, "core");
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);
 
-        await executeInstall({ bundle: "base", platform: "vscode", target: "project" });
+        await executeInstall({ bundle: "core", platform: "claude-code", target: "project" });
 
-        const skillPath = path.join(projectDir, ".github", "skills", "orchestrate", "SKILL.md");
+        const skillPath = path.join(projectDir, ".claude", "skills", "orchestrate", "SKILL.md");
         const content = await fs.readFile(skillPath, "utf8");
         const metadata = extractAstpMetadata(content);
 
         expect(metadata).not.toBeNull();
         expect(metadata!.source).toBe("fozy-labs/astp");
-        expect(metadata!.bundle).toBe("base");
+        expect(metadata!.bundle).toBe("core");
         expect(metadata!.version).toBe("1.0.0");
     });
 
     // T38: astp install nonexistent --target project
     it("T38: rejects nonexistent bundle with error", async () => {
-        await expect(executeInstall({ bundle: "nonexistent", platform: "vscode", target: "project" })).rejects.toThrow(
+        await expect(executeInstall({ bundle: "nonexistent", platform: "claude-code", target: "project" })).rejects.toThrow(
             /not found/i,
         );
     });

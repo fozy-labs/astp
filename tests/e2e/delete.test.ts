@@ -78,33 +78,33 @@ describe("E2E: delete", () => {
         }
     });
 
-    async function installRdpi(): Promise<void> {
-        const tplDir = await setupTemplateDir(manifest, "rdpi");
+    async function installPipeline(): Promise<void> {
+        const tplDir = await setupTemplateDir(manifest, "pipeline");
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);
-        await executeInstall({ bundle: "rdpi", platform: "vscode", target: "project" });
+        await executeInstall({ bundle: "pipeline", platform: "claude-code", target: "project" });
     }
 
     it("deletes installed bundle files and prunes empty directories", async () => {
-        await installRdpi();
+        await installPipeline();
 
-        await executeDelete({ bundle: "rdpi", platform: "vscode", target: "project" });
+        await executeDelete({ bundle: "pipeline", platform: "claude-code", target: "project" });
 
-        const deletedPath = path.join(projectDir, ".github", "agents", "rdpi-approve.agent.md");
+        const deletedPath = path.join(projectDir, ".claude", "agents", "pipeline-approve.agent.md");
         await expect(fs.access(deletedPath)).rejects.toThrow();
 
-        const skillPath = path.join(projectDir, ".github", "skills", "rdpi-01-research", "SKILL.md");
+        const skillPath = path.join(projectDir, ".claude", "skills", "pipeline-01-research", "SKILL.md");
         await expect(fs.access(skillPath)).rejects.toThrow();
     });
 
     it("keeps modified files without force", async () => {
-        await installRdpi();
+        await installPipeline();
 
-        const modifiedFile = path.join(projectDir, ".github", "agents", "rdpi-approve.agent.md");
+        const modifiedFile = path.join(projectDir, ".claude", "agents", "pipeline-approve.agent.md");
         const original = await fs.readFile(modifiedFile, "utf8");
         await fs.writeFile(modifiedFile, `${original}\n<!-- user edit -->`, "utf8");
 
-        await executeDelete({ bundle: "rdpi", platform: "vscode", target: "project" });
+        await executeDelete({ bundle: "pipeline", platform: "claude-code", target: "project" });
 
         const content = await fs.readFile(modifiedFile, "utf8");
         const metadata = extractAstpMetadata(content);
@@ -113,13 +113,13 @@ describe("E2E: delete", () => {
     });
 
     it("removes modified files with force", async () => {
-        await installRdpi();
+        await installPipeline();
 
-        const modifiedFile = path.join(projectDir, ".github", "agents", "rdpi-approve.agent.md");
+        const modifiedFile = path.join(projectDir, ".claude", "agents", "pipeline-approve.agent.md");
         const original = await fs.readFile(modifiedFile, "utf8");
         await fs.writeFile(modifiedFile, `${original}\n<!-- user edit -->`, "utf8");
 
-        await executeDelete({ bundle: "rdpi", force: true, platform: "vscode", target: "project" });
+        await executeDelete({ bundle: "pipeline", force: true, platform: "claude-code", target: "project" });
 
         await expect(fs.access(modifiedFile)).rejects.toThrow();
     });

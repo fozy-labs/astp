@@ -10,7 +10,7 @@ import type {
     Platform,
     UpdateReport,
 } from "@/types/index.js";
-import { describeTarget, filterBundlesByPlatform, resolveTarget } from "@/types/index.js";
+import { ALL_PLATFORMS, describeTarget, filterBundlesByPlatform, resolveTarget } from "@/types/index.js";
 
 // Re-export intro/outro for wizard usage
 export const intro = p.intro;
@@ -36,13 +36,18 @@ export async function selectAction(): Promise<"install" | "update" | "check" | "
     return action;
 }
 
+const PLATFORM_LABELS: Record<Platform, string> = {
+    "claude-code": "Claude Code (.claude/, ~/.claude/)",
+};
+
 export async function selectPlatform(): Promise<Platform> {
+    // With a single supported platform there is nothing to choose — skip the prompt.
+    const [only] = ALL_PLATFORMS;
+    if (ALL_PLATFORMS.length === 1 && only) return only;
+
     const platform = await p.select({
         message: "Which coding agent?",
-        options: [
-            { value: "vscode" as const, label: "VS Code Copilot (.github/, ~/.copilot/)" },
-            { value: "claude-code" as const, label: "Claude Code (.claude/, ~/.claude/)" },
-        ],
+        options: ALL_PLATFORMS.map((value) => ({ value, label: PLATFORM_LABELS[value] })),
     });
 
     if (p.isCancel(platform)) {

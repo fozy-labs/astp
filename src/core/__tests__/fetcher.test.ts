@@ -17,12 +17,12 @@ describe("downloadBundle", () => {
     it("composes correct giget source string with default ref", async () => {
         mockedDownloadTemplate.mockResolvedValue({ source: "", dir: "/tmp/download" } as never);
 
-        await downloadBundle("fozy-labs/astp", "rdpi");
+        await downloadBundle("fozy-labs/astp", "docs");
 
         expect(mockedDownloadTemplate).toHaveBeenCalledWith(
-            "gh:fozy-labs/astp/templates/rdpi#main",
+            "gh:fozy-labs/astp/templates/docs#main",
             expect.objectContaining({
-                dir: expect.stringMatching(/astp-rdpi-/),
+                dir: expect.stringMatching(/astp-docs-/),
             }),
         );
     });
@@ -30,12 +30,12 @@ describe("downloadBundle", () => {
     it("uses custom ref when provided", async () => {
         mockedDownloadTemplate.mockResolvedValue({ source: "", dir: "/tmp/download" } as never);
 
-        await downloadBundle("fozy-labs/astp", "base", "v1.0.0");
+        await downloadBundle("fozy-labs/astp", "fozy-labs", "v1.0.0");
 
         expect(mockedDownloadTemplate).toHaveBeenCalledWith(
-            "gh:fozy-labs/astp/templates/base#v1.0.0",
+            "gh:fozy-labs/astp/templates/fozy-labs#v1.0.0",
             expect.objectContaining({
-                dir: expect.stringMatching(/astp-base-/),
+                dir: expect.stringMatching(/astp-fozy-labs-/),
             }),
         );
     });
@@ -43,21 +43,21 @@ describe("downloadBundle", () => {
     it("uses a unique destination directory for each download", async () => {
         mockedDownloadTemplate.mockResolvedValue({ source: "", dir: "/tmp/download" } as never);
 
-        await downloadBundle("fozy-labs/astp", "base");
-        await downloadBundle("fozy-labs/astp", "rdpi");
+        await downloadBundle("fozy-labs/astp", "fozy-labs");
+        await downloadBundle("fozy-labs/astp", "docs");
 
         expect(mockedDownloadTemplate).toHaveBeenNthCalledWith(
             1,
-            "gh:fozy-labs/astp/templates/base#main",
+            "gh:fozy-labs/astp/templates/fozy-labs#main",
             expect.objectContaining({
-                dir: expect.stringMatching(/astp-base-/),
+                dir: expect.stringMatching(/astp-fozy-labs-/),
             }),
         );
         expect(mockedDownloadTemplate).toHaveBeenNthCalledWith(
             2,
-            "gh:fozy-labs/astp/templates/rdpi#main",
+            "gh:fozy-labs/astp/templates/docs#main",
             expect.objectContaining({
-                dir: expect.stringMatching(/astp-rdpi-/),
+                dir: expect.stringMatching(/astp-docs-/),
             }),
         );
 
@@ -73,15 +73,15 @@ describe("downloadBundle", () => {
             dir: "/tmp/my-download",
         } as never);
 
-        const result = await downloadBundle("fozy-labs/astp", "rdpi");
+        const result = await downloadBundle("fozy-labs/astp", "docs");
         expect(result).toBe("/tmp/my-download");
     });
 
     it("throws user-friendly error on giget failure", async () => {
         mockedDownloadTemplate.mockRejectedValue(new Error("network timeout"));
 
-        await expect(downloadBundle("fozy-labs/astp", "rdpi")).rejects.toThrow(
-            "Failed to download bundle 'rdpi': network timeout",
+        await expect(downloadBundle("fozy-labs/astp", "docs")).rejects.toThrow(
+            "Failed to download bundle 'docs': network timeout",
         );
     });
 });

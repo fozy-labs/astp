@@ -76,30 +76,30 @@ describe("E2E: check", () => {
     });
 
     // T33: Check after install — reports up to date
-    it("T33: reports 'Up to date' after installing rdpi", async () => {
-        // Install rdpi first
-        const tplDir = await setupTemplateDir(manifest, "rdpi");
+    it("T33: reports 'Up to date' after installing pipeline", async () => {
+        // Install pipeline first
+        const tplDir = await setupTemplateDir(manifest, "pipeline");
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);
-        await executeInstall({ bundle: "rdpi", platform: "vscode", target: "project" });
+        await executeInstall({ bundle: "pipeline", platform: "claude-code", target: "project" });
 
         // Reset mocks for the check call
         vi.clearAllMocks();
         mockFetchManifest.mockResolvedValue(manifest);
         mockResolveTarget.mockReturnValue(makeProjectTarget(projectDir));
 
-        await executeCheck({ platform: "vscode", target: "project" });
+        await executeCheck({ platform: "claude-code", target: "project" });
 
         expect(mockShowCheckReport).toHaveBeenCalledTimes(1);
         const report: UpdateReport = mockShowCheckReport.mock.calls[0][0];
         expect(report.upToDate).toHaveLength(1);
-        expect(report.upToDate[0].bundleName).toBe("rdpi");
+        expect(report.upToDate[0].bundleName).toBe("pipeline");
         expect(report.updates).toHaveLength(0);
     });
 
     // T34: Check with no installed files
     it("T34: reports 'No astp-managed files found' for empty project", async () => {
-        await executeCheck({ platform: "vscode", target: "project" });
+        await executeCheck({ platform: "claude-code", target: "project" });
 
         expect(mockShowInfo).toHaveBeenCalledWith("No astp-managed files found.");
         expect(mockShowCheckReport).not.toHaveBeenCalled();

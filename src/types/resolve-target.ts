@@ -15,7 +15,6 @@ interface PlatformRoots {
  * user paths are absolute (resolved against the home directory at runtime).
  */
 const PLATFORM_ROOTS: Record<Platform, PlatformRoots> = {
-    vscode: { project: ".github", user: ".copilot" },
     "claude-code": { project: ".claude", user: ".claude", userEnv: "CLAUDE_CONFIG_DIR" },
 };
 
@@ -32,7 +31,7 @@ function resolveUserRoot(roots: PlatformRoots): string {
 }
 
 /**
- * Display label for a platform/target combination (e.g. `~/.claude/`, `.github/`).
+ * Display label for a platform/target combination (e.g. `~/.claude/`, `.claude/`).
  * Used in confirmation prompts so the user can see where files will be written.
  * A user root outside the home directory is shown as an absolute path.
  */

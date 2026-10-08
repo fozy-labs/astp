@@ -1,14 +1,13 @@
 import type { Bundle, Manifest, Platform } from "./index.js";
-
-const DEFAULT_PLATFORMS: readonly Platform[] = ["vscode"] as const;
+import { ALL_PLATFORMS } from "./index.js";
 
 /**
- * Returns the platforms a bundle supports. Bundles authored before platform support
- * omit the field; treat those as VS Code–only to preserve legacy behavior.
+ * Returns the platforms a bundle supports. A bundle without the field
+ * supports every platform.
  */
 export function getBundlePlatforms(bundle: Bundle): Platform[] {
     if (!bundle.platforms || bundle.platforms.length === 0) {
-        return [...DEFAULT_PLATFORMS];
+        return [...ALL_PLATFORMS];
     }
     return [...bundle.platforms];
 }
