@@ -347,4 +347,26 @@ Content`;
         expect(units.find((unit) => unit.targetPath === "agents/a.md")?.state).toBe("unmodified");
         expect(units.find((unit) => unit.targetPath === "agents/new.md")?.state).toBe("new");
     });
+
+    it("uses the newest version across installed file units", async () => {
+        const original = `---
+name: agent
+---
+Body`;
+        await fs.mkdir(path.join(tempDir, "agents"), { recursive: true });
+        for (let index = 0; index < 5; index++) {
+            const version = index === 4 ? "1.1.0" : "1.0.0";
+            const content = injectAstpFields(
+                original,
+                { source: "fozy-labs/astp", bundle: "pipeline", version },
+                computeHash(original),
+            );
+            await fs.writeFile(path.join(tempDir, "agents", `${index}.md`), content);
+        }
+
+        const installed = await scanInstalled(tempDir);
+        expect(installed[0].units).toHaveLength(5);
+        expect(installed[0].units[0].metadata.version).toBe("1.0.0");
+        expect(installed[0].version).toBe("1.1.0");
+    });
 });
