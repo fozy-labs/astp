@@ -245,28 +245,30 @@ describe("executeUpdate", () => {
     });
 
     it("removes orphans without downloading when every manifest unit is blocked", async () => {
+        const orphanUnit: InstalledBundle["units"][number] = {
+            kind: "file",
+            filePath: "/project/.claude/agents/old.agent.md",
+            relativePath: "agents/old.agent.md",
+            metadata: {
+                source: "fozy-labs/astp",
+                bundle: "pipeline",
+                version: "1.0.0",
+                hash: "abc123",
+            },
+        };
         const installedBundle: InstalledBundle = {
             ...testInstalledBundle,
-            units: [
-                ...testInstalledBundle.units,
-                {
-                    ...testInstalledBundle.units[0],
-                    filePath: "/project/.claude/agents/old.agent.md",
-                    relativePath: "agents/old.agent.md",
-                },
-            ],
+            units: [...testInstalledBundle.units, orphanUnit],
         };
         mockScanInstalled.mockResolvedValue([installedBundle]);
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(updatesReport);
-        mockFindBlockedUnits.mockResolvedValue([
-            { targetPath: testItem.target, kind: "file", state: "modified" },
-        ]);
+        mockFindBlockedUnits.mockResolvedValue([{ targetPath: testItem.target, kind: "file", state: "modified" }]);
         mockRemoveUnits.mockResolvedValue({ removed: [], skipped: [] });
 
         await executeUpdate({ platform: "claude-code", target: "project" });
 
-        expect(mockRemoveUnits).toHaveBeenCalledWith([installedBundle.units[1]], expect.any(String), undefined);
+        expect(mockRemoveUnits).toHaveBeenCalledWith([orphanUnit], expect.any(String), undefined);
         expect(mockDownloadBundle).not.toHaveBeenCalled();
     });
 
