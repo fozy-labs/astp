@@ -5,17 +5,10 @@ import { vi } from "vitest";
 
 import { executeInstall } from "@/commands/install.js";
 import { executeUpdate } from "@/commands/update.js";
-import { compareVersions, downloadBundle, extractAstpMetadata, fetchManifest, scanInstalled } from "@/core/index.js";
+import { downloadBundle, extractAstpMetadata, fetchManifest } from "@/core/index.js";
 import type { Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
-import {
-    confirmInstall,
-    selectPlatform,
-    selectTarget,
-    showSuccess,
-    warnKeptRemoved,
-    warnModified,
-} from "@/ui/prompts.js";
+import { confirmInstall, selectPlatform, selectTarget, warnModified } from "@/ui/prompts.js";
 
 import {
     cleanupDir,
@@ -48,7 +41,6 @@ vi.mock("@/ui/prompts.js", () => ({
     showInfo: vi.fn(),
     showCheckReport: vi.fn(),
     showUpdateReport: vi.fn(),
-    warnKeptRemoved: vi.fn(),
     warnModified: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
@@ -57,8 +49,6 @@ const mockFetchManifest = vi.mocked(fetchManifest);
 const mockDownloadBundle = vi.mocked(downloadBundle);
 const mockResolveTarget = vi.mocked(resolveTarget);
 const mockConfirmInstall = vi.mocked(confirmInstall);
-const mockShowSuccess = vi.mocked(showSuccess);
-const mockWarnKeptRemoved = vi.mocked(warnKeptRemoved);
 const mockWarnModified = vi.mocked(warnModified);
 const mockSelectTarget = vi.mocked(selectTarget);
 const mockSelectPlatform = vi.mocked(selectPlatform);
@@ -89,18 +79,15 @@ describe("E2E: update", () => {
     });
 
     async function installPipeline(): Promise<void> {
-        await installManifest(manifestV1);
-    }
-
-    async function installManifest(manifestToInstall: Manifest): Promise<void> {
-        mockFetchManifest.mockResolvedValue(manifestToInstall);
-        const tplDir = await setupTemplateDir(manifestToInstall, "pipeline");
+        mockFetchManifest.mockResolvedValue(manifestV1);
+        const tplDir = await setupTemplateDir(manifestV1, "pipeline");
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);
         await executeInstall({ bundle: "pipeline", platform: "claude-code", target: "project" });
     }
 
-    async function setupV2Mocks(manifestV2 = createFixtureManifest("1.1.0")): Promise<Manifest> {
+    async function setupV2Mocks(): Promise<Manifest> {
+        const manifestV2 = createFixtureManifest("1.1.0");
         const tplDir2 = await setupTemplateDir(manifestV2, "pipeline");
         templateDirs.push(tplDir2);
 
@@ -111,142 +98,6 @@ describe("E2E: update", () => {
 
         return manifestV2;
     }
-
-    function manifestWithTargets(version: string, targets: string[]): Manifest {
-        const manifest = createFixtureManifest(version);
-        manifest.bundles.pipeline.items = targets.map((target) => ({
-            source: `pipeline/${target}`,
-            target,
-            category: "skill",
-        }));
-        return manifest;
-    }
-
-    it("does not report an update after updating around a locally modified file", async () => {
-        const targets = ["skills/0/SKILL.md", "skills/a/SKILL.md", "skills/m/SKILL.md", "skills/q/SKILL.md", "skills/z/SKILL.md"];
-        await installManifest(manifestWithTargets("1.0.0", targets));
-
-        const modifiedFile = path.join(projectDir, ".claude", targets[0]);
-        const original = await fs.readFile(modifiedFile, "utf8");
-        await fs.writeFile(modifiedFile, original + "\n<!-- user edit -->", "utf8");
-
-        const manifestV2 = await setupV2Mocks(manifestWithTargets("1.1.0", targets));
-        await executeUpdate({ platform: "claude-code", target: "project" });
-
-        const installed = await scanInstalled(path.join(projectDir, ".claude"));
-        expect(compareVersions(installed, manifestV2).updates).toHaveLength(0);
-    });
-
-    it("keeps an unmanaged file at a newly added target during update", async () => {
-        const existingTarget = "skills/a/SKILL.md";
-        await installManifest(manifestWithTargets("1.0.0", [existingTarget]));
-
-        const newTarget = "skills/new/SKILL.md";
-        const unmanagedFile = path.join(projectDir, ".claude", newTarget);
-        await fs.mkdir(path.dirname(unmanagedFile), { recursive: true });
-        await fs.writeFile(unmanagedFile, "UNMANAGED CONTENT\n", "utf8");
-
-        const manifestV2 = await setupV2Mocks(manifestWithTargets("1.1.0", [existingTarget, newTarget]));
-        await executeUpdate({ platform: "claude-code", target: "project" });
-
-        expect(await fs.readFile(unmanagedFile, "utf8")).toBe("UNMANAGED CONTENT\n");
-        expect(mockWarnModified).toHaveBeenCalledWith([{ targetPath: newTarget, state: "modified" }]);
-        expect(manifestV2.bundles.pipeline.items).toHaveLength(2);
-    });
-
-    it("installs a previously blocked target once its conflict is removed", async () => {
-        const existingTarget = "skills/a/SKILL.md";
-        await installManifest(manifestWithTargets("1.0.0", [existingTarget]));
-
-        const newTarget = "skills/b/SKILL.md";
-        const unmanagedFile = path.join(projectDir, ".claude", newTarget);
-        await fs.mkdir(path.dirname(unmanagedFile), { recursive: true });
-        await fs.writeFile(unmanagedFile, "MY OWN FILE\n", "utf8");
-
-        await setupV2Mocks(manifestWithTargets("1.1.0", [existingTarget, newTarget]));
-        await executeUpdate({ platform: "claude-code", target: "project" });
-
-        await fs.rm(unmanagedFile);
-        await executeUpdate({ platform: "claude-code", target: "project" });
-
-        const exists = await fs.access(unmanagedFile).then(
-            () => true,
-            () => false,
-        );
-        expect(exists).toBe(true);
-        const metadata = extractAstpMetadata(await fs.readFile(unmanagedFile, "utf8"));
-        expect(metadata?.bundle).toBe("pipeline");
-        expect(metadata?.version).toBe("1.1.0");
-    });
-
-    it("removes a modified orphan after its original content is restored", async () => {
-        const retained = "skills/a/SKILL.md";
-        const orphan = "skills/z/SKILL.md";
-        await installManifest(manifestWithTargets("1.0.0", [retained, orphan]));
-
-        const orphanFile = path.join(projectDir, ".claude", orphan);
-        const original = await fs.readFile(orphanFile, "utf8");
-        await fs.appendFile(orphanFile, "\nUSER EDIT\n", "utf8");
-        await setupV2Mocks(manifestWithTargets("1.1.0", [retained]));
-        await executeUpdate({ platform: "claude-code", target: "project" });
-
-        expect(await fs.readFile(orphanFile, "utf8")).toContain("USER EDIT");
-        await fs.writeFile(orphanFile, original, "utf8");
-        await executeUpdate({ platform: "claude-code", target: "project" });
-
-        const exists = await fs.access(orphanFile).then(
-            () => true,
-            () => false,
-        );
-        expect(exists).toBe(false);
-        await expect(fs.access(path.join(projectDir, ".claude", "skills", "z"))).rejects.toThrow();
-    });
-
-    it("removes unmodified files dropped from the bundle and empty directories", async () => {
-        const retained = "skills/a/SKILL.md";
-        const orphanSkill = "skills/z/SKILL.md";
-        const orphanReference = "skills/z/references/details.md";
-        const orphans = [orphanSkill, orphanReference];
-        await installManifest(manifestWithTargets("1.0.0", [retained, ...orphans]));
-
-        const manifestV2 = manifestWithTargets("1.1.0", [retained]);
-        await setupV2Mocks(manifestV2);
-        await executeUpdate({ platform: "claude-code", target: "project" });
-
-        for (const orphan of orphans) {
-            await expect(fs.access(path.join(projectDir, ".claude", orphan))).rejects.toThrow();
-        }
-        await expect(fs.access(path.join(projectDir, ".claude", "skills", "z"))).rejects.toThrow();
-        expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining(", removed 2"));
-    });
-
-    it("keeps and warns about modified files dropped from the bundle", async () => {
-        const retained = "skills/a/SKILL.md";
-        const orphan = "skills/z/SKILL.md";
-        await installManifest(manifestWithTargets("1.0.0", [retained, orphan]));
-
-        const orphanFile = path.join(projectDir, ".claude", orphan);
-        await fs.appendFile(orphanFile, "\nUSER EDIT\n", "utf8");
-        await setupV2Mocks(manifestWithTargets("1.1.0", [retained]));
-        await executeUpdate({ platform: "claude-code", target: "project" });
-
-        expect(await fs.readFile(orphanFile, "utf8")).toContain("USER EDIT");
-        expect(mockWarnKeptRemoved).toHaveBeenCalledWith([{ targetPath: orphan, state: "modified" }]);
-    });
-
-    it("deletes modified files dropped from the bundle with --force", async () => {
-        const retained = "skills/a/SKILL.md";
-        const orphan = "skills/z/SKILL.md";
-        await installManifest(manifestWithTargets("1.0.0", [retained, orphan]));
-
-        const orphanFile = path.join(projectDir, ".claude", orphan);
-        await fs.appendFile(orphanFile, "\nUSER EDIT\n", "utf8");
-        await setupV2Mocks(manifestWithTargets("1.1.0", [retained]));
-        await executeUpdate({ force: true, platform: "claude-code", target: "project" });
-
-        await expect(fs.access(orphanFile)).rejects.toThrow();
-        expect(mockWarnKeptRemoved).not.toHaveBeenCalled();
-    });
 
     // T35: Update to new version
     it("T35: updates files to v1.1.0", async () => {

@@ -56,8 +56,9 @@ const testTarget: InstallTarget = {
 const testBundle: InstalledBundle = {
     bundleName: "pipeline",
     version: "1.0.0",
-    files: [
+    units: [
         {
+            kind: "file",
             filePath: "/project/.claude/agents/pipeline-approve.agent.md",
             relativePath: "agents/pipeline-approve.agent.md",
             metadata: {
@@ -77,7 +78,9 @@ beforeEach(() => {
     mockSelectTarget.mockResolvedValue(testTarget);
     mockScanInstalled.mockResolvedValue([testBundle]);
     mockSelectInstalledBundles.mockResolvedValue([testBundle]);
-    mockDetectModified.mockResolvedValue([{ targetPath: "agents/pipeline-approve.agent.md", state: "unmodified" }]);
+    mockDetectModified.mockResolvedValue([
+        { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "unmodified" },
+    ]);
     mockRemoveBundle.mockResolvedValue({ removed: ["agents/pipeline-approve.agent.md"], skipped: [] });
 });
 
@@ -100,20 +103,24 @@ describe("executeDelete", () => {
     });
 
     it("warns and skips modified files without force", async () => {
-        mockDetectModified.mockResolvedValue([{ targetPath: "agents/pipeline-approve.agent.md", state: "modified" }]);
+        mockDetectModified.mockResolvedValue([
+            { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
+        ]);
         mockRemoveBundle.mockResolvedValue({
             removed: [],
-            skipped: [{ targetPath: "agents/pipeline-approve.agent.md", state: "modified" }],
+            skipped: [{ targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" }],
         });
 
         await executeDelete({ bundle: "pipeline", platform: "claude-code", target: "project" });
 
         expect(mockWarnModified).toHaveBeenCalled();
-        expect(mockShowInfo).toHaveBeenCalledWith("No files deleted, skipped 1 modified file.");
+        expect(mockShowInfo).toHaveBeenCalledWith("No files or skills deleted, skipped 1 file.");
     });
 
     it("deletes modified files with force", async () => {
-        mockDetectModified.mockResolvedValue([{ targetPath: "agents/pipeline-approve.agent.md", state: "modified" }]);
+        mockDetectModified.mockResolvedValue([
+            { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
+        ]);
 
         await executeDelete({ bundle: "pipeline", force: true, platform: "claude-code", target: "project" });
 

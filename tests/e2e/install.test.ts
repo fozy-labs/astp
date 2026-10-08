@@ -7,7 +7,7 @@ import { executeInstall } from "@/commands/install.js";
 import { downloadBundle, extractAstpMetadata, fetchManifest } from "@/core/index.js";
 import type { Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
-import { confirmInstall, warnModified } from "@/ui/prompts.js";
+import { confirmInstall } from "@/ui/prompts.js";
 
 import {
     cleanupDir,
@@ -49,7 +49,6 @@ const mockFetchManifest = vi.mocked(fetchManifest);
 const mockDownloadBundle = vi.mocked(downloadBundle);
 const mockResolveTarget = vi.mocked(resolveTarget);
 const mockConfirmInstall = vi.mocked(confirmInstall);
-const mockWarnModified = vi.mocked(warnModified);
 
 describe("E2E: install", () => {
     let projectDir: string;
@@ -78,7 +77,7 @@ describe("E2E: install", () => {
     });
 
     // T31: astp install pipeline --target project
-    it("T31: installs pipeline bundle — 22 files with astp frontmatter", async () => {
+    it("T31: installs 22 pipeline files and skills with astp metadata", async () => {
         const tplDir = await setupTemplateDir(manifest, "pipeline");
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);
@@ -103,7 +102,7 @@ describe("E2E: install", () => {
     });
 
     // T32: astp install core --target project
-    it("T32: installs core bundle — 1 file at skills/orchestrate/SKILL.md", async () => {
+    it("T32: installs core bundle — 1 skill at skills/orchestrate/", async () => {
         const tplDir = await setupTemplateDir(manifest, "core");
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);
@@ -125,50 +124,5 @@ describe("E2E: install", () => {
         await expect(executeInstall({ bundle: "nonexistent", platform: "claude-code", target: "project" })).rejects.toThrow(
             /not found/i,
         );
-    });
-
-    it("keeps a locally modified file on reinstall unless forced", async () => {
-        const tplDir = await setupTemplateDir(manifest, "core");
-        templateDirs.push(tplDir);
-        mockDownloadBundle.mockResolvedValue(tplDir);
-        const item = manifest.bundles.core.items[0];
-
-        await executeInstall({ bundle: "core", platform: "claude-code", target: "project" });
-
-        const filePath = path.join(projectDir, ".claude", item.target);
-        await fs.appendFile(filePath, "\nUSER EDIT\n", "utf8");
-        mockWarnModified.mockClear();
-
-        await executeInstall({ bundle: "core", platform: "claude-code", target: "project" });
-
-        expect(await fs.readFile(filePath, "utf8")).toContain("USER EDIT");
-        expect(mockWarnModified).toHaveBeenCalledWith([{ targetPath: item.target, state: "modified" }]);
-
-        mockWarnModified.mockClear();
-        await executeInstall({ bundle: "core", force: true, platform: "claude-code", target: "project" });
-
-        expect(await fs.readFile(filePath, "utf8")).not.toContain("USER EDIT");
-        expect(mockWarnModified).not.toHaveBeenCalled();
-    });
-
-    it("keeps and warns about an unmanaged target unless forced", async () => {
-        const tplDir = await setupTemplateDir(manifest, "core");
-        templateDirs.push(tplDir);
-        mockDownloadBundle.mockResolvedValue(tplDir);
-        const item = manifest.bundles.core.items[0];
-        const filePath = path.join(projectDir, ".claude", item.target);
-        await fs.mkdir(path.dirname(filePath), { recursive: true });
-        await fs.writeFile(filePath, "UNMANAGED CONTENT\n", "utf8");
-
-        await executeInstall({ bundle: "core", platform: "claude-code", target: "project" });
-
-        expect(await fs.readFile(filePath, "utf8")).toBe("UNMANAGED CONTENT\n");
-        expect(mockWarnModified).toHaveBeenCalledWith([{ targetPath: item.target, state: "modified" }]);
-
-        mockWarnModified.mockClear();
-        await executeInstall({ bundle: "core", force: true, platform: "claude-code", target: "project" });
-
-        expect(extractAstpMetadata(await fs.readFile(filePath, "utf8"))?.bundle).toBe("core");
-        expect(mockWarnModified).not.toHaveBeenCalled();
     });
 });

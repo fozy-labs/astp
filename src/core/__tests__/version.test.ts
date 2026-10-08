@@ -8,7 +8,7 @@ import { computeHash, injectAstpFields } from "../frontmatter.js";
 import { compareVersions, detectModified, scanInstalled } from "../version.js";
 
 describe("compareVersions", () => {
-    const createManifest = (bundleVersion: string, targets = ["agents/a.md"]): Manifest => ({
+    const createManifest = (bundleVersion: string): Manifest => ({
         schemaVersion: 1,
         repository: "fozy-labs/astp",
         bundles: {
@@ -17,25 +17,28 @@ describe("compareVersions", () => {
                 version: bundleVersion,
                 description: "Pipeline",
                 default: false,
-                items: targets.map((target) => ({ source: `pipeline/${target}`, target, category: "agent" })),
+                items: [{ source: "pipeline/agents/a.md", target: "agents/a.md", category: "agent" }],
             },
         },
     });
 
-    const createInstalled = (version: string, relativePaths = ["agents/a.md"]): InstalledBundle[] => [
+    const createInstalled = (version: string): InstalledBundle[] => [
         {
             bundleName: "pipeline",
             version,
-            files: relativePaths.map((relativePath) => ({
-                filePath: `/root/${relativePath}`,
-                relativePath,
-                metadata: {
-                    source: "fozy-labs/astp",
-                    bundle: "pipeline",
-                    version,
-                    hash: "abc",
+            units: [
+                {
+                    kind: "file",
+                    filePath: "/root/agents/a.md",
+                    relativePath: "agents/a.md",
+                    metadata: {
+                        source: "fozy-labs/astp",
+                        bundle: "pipeline",
+                        version,
+                        hash: "abc",
+                    },
                 },
-            })),
+            ],
         },
     ];
 
@@ -56,30 +59,9 @@ describe("compareVersions", () => {
 
     // T10: Installed newer (no downgrade)
     it("T10: reports up to date when installed is newer (no downgrade)", () => {
-        const report = compareVersions(
-            createInstalled("2.0.0"),
-            createManifest("1.0.0", ["agents/a.md", "agents/b.md"]),
-        );
+        const report = compareVersions(createInstalled("2.0.0"), createManifest("1.0.0"));
         expect(report.upToDate).toHaveLength(1);
         expect(report.updates).toHaveLength(0);
-    });
-
-    it("detects a missing manifest item when versions match", () => {
-        const report = compareVersions(
-            createInstalled("1.0.0"),
-            createManifest("1.0.0", ["agents/a.md", "agents/b.md"]),
-        );
-        expect(report.updates).toHaveLength(1);
-        expect(report.updates[0].files).toContainEqual({ targetPath: "agents/b.md", state: "new" });
-    });
-
-    it("detects an orphaned installed file when versions match", () => {
-        const report = compareVersions(
-            createInstalled("1.0.0", ["agents/a.md", "skills/z/SKILL.md"]),
-            createManifest("1.0.0"),
-        );
-        expect(report.updates).toHaveLength(1);
-        expect(report.updates[0].files).toContainEqual({ targetPath: "skills/z/SKILL.md", state: "removed" });
     });
 
     // T11: Invalid semver
@@ -106,6 +88,46 @@ describe("compareVersions", () => {
         const report = compareVersions(createInstalled("1.0.0"), manifest);
         expect(report.notInManifest).toHaveLength(1);
         expect(report.notInManifest[0].bundleName).toBe("pipeline");
+    });
+
+    it("marks legacy skills according to their presence in the manifest", () => {
+        const manifest = createManifest("1.0.0");
+        manifest.bundles.pipeline.items.push({
+            source: "pipeline/skills/sample/SKILL.md",
+            target: "skills/sample/SKILL.md",
+            category: "skill",
+        });
+        const createLegacyBundle = (bundleName: string, relativePaths: string[]): InstalledBundle => ({
+            bundleName,
+            version: "1.0.0",
+            units: relativePaths.map((relativePath) => ({
+                kind: "skill",
+                dirPath: `/root/${relativePath}`,
+                skillFilePath: `/root/${relativePath}/SKILL.md`,
+                relativePath,
+                metadata: {
+                    source: "fozy-labs/astp",
+                    bundle: bundleName,
+                    version: "1.0.0",
+                    hash: "legacy",
+                },
+                legacy: true,
+            })),
+        });
+
+        const report = compareVersions(
+            [
+                createLegacyBundle("pipeline", ["skills/sample", "skills/removed"]),
+                createLegacyBundle("retired", ["skills/retired"]),
+            ],
+            manifest,
+        );
+
+        expect(report.legacySkills).toEqual([
+            { bundleName: "pipeline", targetPath: "skills/sample", inManifest: true },
+            { bundleName: "pipeline", targetPath: "skills/removed", inManifest: false },
+            { bundleName: "retired", targetPath: "skills/retired", inManifest: false },
+        ]);
     });
 });
 
@@ -139,8 +161,9 @@ Body`;
         const bundle: InstalledBundle = {
             bundleName: "test",
             version: "1.0.0",
-            files: [
+            units: [
                 {
+                    kind: "file",
                     filePath,
                     relativePath: "agent.md",
                     metadata: {
@@ -173,8 +196,9 @@ Body`;
         const bundle: InstalledBundle = {
             bundleName: "test",
             version: "1.0.0",
-            files: [
+            units: [
                 {
+                    kind: "file",
                     filePath,
                     relativePath: "agent.md",
                     metadata: {
@@ -209,8 +233,9 @@ Body`;
         const bundle: InstalledBundle = {
             bundleName: "test",
             version: "1.0.0",
-            files: [
+            units: [
                 {
+                    kind: "file",
                     filePath,
                     relativePath: "agent.md",
                     metadata: {
@@ -271,28 +296,7 @@ My custom content`;
         const result = await scanInstalled(tempDir);
         expect(result).toHaveLength(1);
         expect(result[0].bundleName).toBe("pipeline");
-        expect(result[0].files).toHaveLength(2);
-    });
-
-    it("uses the maximum installed version across files in a bundle", async () => {
-        const files = [
-            ["a-old.md", "1.0.0"],
-            ["b-old.md", "1.0.0"],
-            ["c-old.md", "1.0.0"],
-            ["d-old.md", "1.0.0"],
-            ["z-new.md", "1.1.0"],
-        ];
-
-        for (const [name, version] of files) {
-            await fs.writeFile(
-                path.join(tempDir, name),
-                `---\nastp-source: fozy-labs/astp\nastp-bundle: pipeline\nastp-version: ${version}\nastp-hash: hash\n---\nContent`,
-            );
-        }
-
-        const result = await scanInstalled(tempDir);
-
-        expect(result[0].version).toBe("1.1.0");
+        expect(result[0].units).toHaveLength(2);
     });
 
     // T27: Update detection with mixed file states
@@ -339,8 +343,8 @@ Content`;
         expect(report.updates).toHaveLength(1);
         expect(report.updates[0].availableVersion).toBe("2.0.0");
 
-        const files = report.updates[0].files;
-        expect(files.find((f) => f.targetPath === "agents/a.md")?.state).toBe("unmodified");
-        expect(files.find((f) => f.targetPath === "agents/new.md")?.state).toBe("new");
+        const units = report.updates[0].units;
+        expect(units.find((unit) => unit.targetPath === "agents/a.md")?.state).toBe("unmodified");
+        expect(units.find((unit) => unit.targetPath === "agents/new.md")?.state).toBe("new");
     });
 });

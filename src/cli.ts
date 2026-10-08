@@ -48,13 +48,11 @@ program
 program
     .command("install")
     .argument("[bundle]", "Bundle name to install")
-    .option("--force", "Overwrite locally modified or unmanaged files")
     .option("--platform <name>", PLATFORM_HELP)
     .option("--target <type>", "Install target: project or user")
-    .action(async (bundle: string | undefined, options: { force?: boolean; platform?: string; target?: string }) => {
+    .action(async (bundle: string | undefined, options: { platform?: string; target?: string }) => {
         await executeInstall({
             bundle,
-            force: options.force,
             platform: parsePlatform(options.platform),
             target: parseTarget(options.target),
         });

@@ -1,19 +1,23 @@
 import { vi } from "vitest";
 
-import { downloadBundle, fetchManifest, findBlockedTargets, installFile, resolveBundle } from "@/core/index.js";
+import { downloadBundle, fetchManifest, installFile, installSkill, resolveBundle } from "@/core/index.js";
 import type { Bundle, InstallTarget, Manifest, Platform, TemplateItem } from "@/types/index.js";
 import { confirmInstall, selectBundles, selectPlatform, selectTarget, showSuccess } from "@/ui/prompts.js";
 
 import { executeInstall } from "../install.js";
 
 // Mock core modules
-vi.mock("@/core/index.js", () => ({
-    fetchManifest: vi.fn(),
-    resolveBundle: vi.fn(),
-    downloadBundle: vi.fn(),
-    findBlockedTargets: vi.fn(),
-    installFile: vi.fn(),
-}));
+vi.mock("@/core/index.js", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("@/core/index.js")>();
+    return {
+        ...actual,
+        fetchManifest: vi.fn(),
+        resolveBundle: vi.fn(),
+        downloadBundle: vi.fn(),
+        installFile: vi.fn(),
+        installSkill: vi.fn(),
+    };
+});
 
 // Mock prompts
 vi.mock("@/ui/prompts.js", () => ({
@@ -22,15 +26,14 @@ vi.mock("@/ui/prompts.js", () => ({
     selectBundles: vi.fn(),
     confirmInstall: vi.fn(),
     showSuccess: vi.fn(),
-    warnModified: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
 
 const mockFetchManifest = vi.mocked(fetchManifest);
 const mockResolveBundle = vi.mocked(resolveBundle);
 const mockDownloadBundle = vi.mocked(downloadBundle);
-const mockFindBlockedTargets = vi.mocked(findBlockedTargets);
 const mockInstallFile = vi.mocked(installFile);
+const mockInstallSkill = vi.mocked(installSkill);
 const mockSelectPlatform = vi.mocked(selectPlatform);
 const mockSelectTarget = vi.mocked(selectTarget);
 const mockSelectBundles = vi.mocked(selectBundles);
@@ -83,8 +86,8 @@ beforeEach(() => {
     vi.clearAllMocks();
     mockFetchManifest.mockResolvedValue(testManifest);
     mockDownloadBundle.mockResolvedValue("/tmp/astp-base");
-    mockFindBlockedTargets.mockResolvedValue([]);
     mockInstallFile.mockResolvedValue(undefined);
+    mockInstallSkill.mockResolvedValue(undefined);
     mockConfirmInstall.mockResolvedValue(true);
 });
 
@@ -100,10 +103,14 @@ describe("executeInstall", () => {
         expect(mockSelectBundles).not.toHaveBeenCalled();
         expect(mockResolveBundle).toHaveBeenCalledWith(testManifest, "core");
         expect(mockDownloadBundle).toHaveBeenCalledWith("fozy-labs/astp", "core");
-        expect(mockInstallFile).toHaveBeenCalledTimes(1);
-        expect(mockInstallFile).toHaveBeenCalledWith(
+        expect(mockInstallSkill).toHaveBeenCalledTimes(1);
+        expect(mockInstallSkill).toHaveBeenCalledWith(
             "/tmp/astp-base",
-            testItem,
+            {
+                kind: "skill",
+                relativePath: "skills/orchestrate",
+                items: [testItem],
+            },
             expect.objectContaining({ type: "project", platform: "claude-code" }),
             { source: "fozy-labs/astp", bundle: "core", version: "1.0.0" },
         );
@@ -138,9 +145,9 @@ describe("executeInstall", () => {
 
         await executeInstall({ bundle: "fozy-labs", platform: "claude-code", target: "project" });
 
-        expect(mockInstallFile).toHaveBeenCalledWith(
+        expect(mockInstallSkill).toHaveBeenCalledWith(
             expect.any(String),
-            fozyLabsBundle.items[0],
+            expect.objectContaining({ kind: "skill", relativePath: "skills/fozy-labs-di" }),
             expect.objectContaining({ type: "project", platform: "claude-code" }),
             { source: "fozy-labs/astp", bundle: "fozy-labs", version: "1.0.0" },
         );
@@ -156,6 +163,7 @@ describe("executeInstall", () => {
 
         expect(mockDownloadBundle).not.toHaveBeenCalled();
         expect(mockInstallFile).not.toHaveBeenCalled();
+        expect(mockInstallSkill).not.toHaveBeenCalled();
     });
 
     it("propagates error for unknown bundle", async () => {
@@ -175,6 +183,6 @@ describe("executeInstall", () => {
 
         await executeInstall({});
 
-        expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining("1 file"));
+        expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining("1 skill"));
     });
 });

@@ -29,9 +29,9 @@ astp install fozy-labs --target project
 | Command | Description |
 |---------|-------------|
 | `astp` | Launch interactive wizard |
-| `astp install [bundle] [--force]` | Install a bundle to the selected target |
+| `astp install [bundle]` | Install a bundle to the selected target |
 | `astp update [--force]` | Update installed files to latest versions |
-| `astp check` | Check for available updates and out-of-sync files |
+| `astp check` | Check for available updates |
 | `astp delete [bundle] [--force]` | Remove an installed bundle |
 
 All commands accept `--platform <claude-code>` and `--target <project|user>` to skip interactive prompts. Resolved roots:
@@ -43,10 +43,10 @@ All commands accept `--platform <claude-code>` and `--target <project|user>` to 
 ### install
 
 ```bash
-astp install [bundle] [--force] [--platform <claude-code>] [--target <project|user>]
+astp install [bundle] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Install template bundles. Existing locally modified or unmanaged files are skipped by default; use `--force` to overwrite them. Without arguments, prompts for target directory and bundle selection (the platform prompt is skipped while only one platform is supported). With `--platform` and `--target`, runs non-interactively. Bundles that don't support the requested platform are rejected with a clear error.
+Install template bundles. Without arguments, prompts for target directory and bundle selection (the platform prompt is skipped while only one platform is supported). With `--platform` and `--target`, runs non-interactively. Bundles that don't support the requested platform are rejected with a clear error.
 
 ### update
 
@@ -54,7 +54,7 @@ Install template bundles. Existing locally modified or unmanaged files are skipp
 astp update [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Update installed files to the latest version from the manifest. Files removed from a bundle are deleted; modified files are kept unless `--force` is used.
+Update installed files to the latest version from the manifest. Modified files are skipped by default — use `--force` to overwrite them.
 
 ### check
 
@@ -62,7 +62,7 @@ Update installed files to the latest version from the manifest. Files removed fr
 astp check [--platform <claude-code>] [--target <project|user>]
 ```
 
-Compare installed files with the remote manifest; `update` brings bundles back in sync.
+Compare installed file versions against the remote manifest and display a status report.
 
 ### delete
 
@@ -125,7 +125,7 @@ astp install fozy-labs --platform claude-code --target project
 
 `astp` fetches template files from the [`fozy-labs/astp`](https://github.com/fozy-labs/astp) GitHub repository using [giget](https://github.com/unjs/giget). A `manifest.json` file in the repository defines available bundles, their versions, and file mappings.
 
-When files are installed, `astp` injects `astp-*` frontmatter fields into each file:
+Agent and instruction files receive `astp-*` frontmatter. Skills store it only in the root `SKILL.md`, whose `astp-hash` covers every regular file in the skill directory. Legacy installs are reported by `astp check`; run `astp update --force` to migrate them.
 
 ```yaml
 ---
