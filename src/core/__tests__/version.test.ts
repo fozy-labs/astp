@@ -57,9 +57,55 @@ describe("compareVersions", () => {
         expect(report.updates).toHaveLength(0);
     });
 
+    it("reports a same-version bundle as an update when a manifest unit is missing", () => {
+        const manifest = createManifest("1.0.0");
+        manifest.bundles.pipeline.items.push({
+            source: "pipeline/agents/b.md",
+            target: "agents/b.md",
+            category: "agent",
+        });
+
+        const report = compareVersions(createInstalled("1.0.0"), manifest);
+
+        expect(report.updates).toHaveLength(1);
+        expect(report.updates[0].units).toContainEqual({
+            targetPath: "agents/b.md",
+            kind: "file",
+            state: "new",
+        });
+    });
+
+    it("reports a same-version bundle as an update when an installed unit is orphaned", () => {
+        const manifest = createManifest("1.0.0");
+        manifest.bundles.pipeline.items = [];
+
+        const report = compareVersions(createInstalled("1.0.0"), manifest);
+
+        expect(report.updates).toHaveLength(1);
+        expect(report.updates[0].units).toContainEqual({
+            targetPath: "agents/a.md",
+            kind: "file",
+            state: "removed",
+        });
+    });
+
     // T10: Installed newer (no downgrade)
     it("T10: reports up to date when installed is newer (no downgrade)", () => {
         const report = compareVersions(createInstalled("2.0.0"), createManifest("1.0.0"));
+        expect(report.upToDate).toHaveLength(1);
+        expect(report.updates).toHaveLength(0);
+    });
+
+    it("does not downgrade an installed-newer bundle even when a manifest unit is missing", () => {
+        const manifest = createManifest("1.0.0");
+        manifest.bundles.pipeline.items.push({
+            source: "pipeline/agents/b.md",
+            target: "agents/b.md",
+            category: "agent",
+        });
+
+        const report = compareVersions(createInstalled("2.0.0"), manifest);
+
         expect(report.upToDate).toHaveLength(1);
         expect(report.updates).toHaveLength(0);
     });

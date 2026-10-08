@@ -2,9 +2,9 @@ import { vi } from "vitest";
 
 import {
     compareVersions,
-    detectModified,
     downloadBundle,
     fetchManifest,
+    findBlockedUnits,
     installFile,
     installSkill,
     scanInstalled,
@@ -22,7 +22,7 @@ vi.mock("@/core/index.js", async (importOriginal) => {
         fetchManifest: vi.fn(),
         scanInstalled: vi.fn(),
         compareVersions: vi.fn(),
-        detectModified: vi.fn(),
+        findBlockedUnits: vi.fn(),
         downloadBundle: vi.fn(),
         installFile: vi.fn(),
         installSkill: vi.fn(),
@@ -44,7 +44,7 @@ vi.mock("@/ui/prompts.js", () => ({
 const mockFetchManifest = vi.mocked(fetchManifest);
 const mockScanInstalled = vi.mocked(scanInstalled);
 const mockCompareVersions = vi.mocked(compareVersions);
-const mockDetectModified = vi.mocked(detectModified);
+const mockFindBlockedUnits = vi.mocked(findBlockedUnits);
 const mockDownloadBundle = vi.mocked(downloadBundle);
 const mockInstallFile = vi.mocked(installFile);
 const mockInstallSkill = vi.mocked(installSkill);
@@ -190,7 +190,7 @@ describe("executeUpdate", () => {
         mockScanInstalled.mockResolvedValue([testInstalledBundle]);
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(updatesReport);
-        mockDetectModified.mockResolvedValue([
+        mockFindBlockedUnits.mockResolvedValue([
             { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
         ]);
         mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
@@ -233,10 +233,6 @@ describe("executeUpdate", () => {
             notInManifest: [],
             legacySkills: [{ bundleName: "pipeline", targetPath: "skills/sample", inManifest: true }],
         });
-        mockDetectModified.mockResolvedValue([
-            { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "unmodified" },
-            { targetPath: "skills/sample", kind: "skill", state: "legacy" },
-        ]);
         mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
         mockInstallFile.mockResolvedValue(undefined);
         mockInstallSkill.mockResolvedValue(undefined);
@@ -277,7 +273,7 @@ describe("executeUpdate", () => {
         mockScanInstalled.mockResolvedValue([testInstalledBundle]);
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(updatesReport);
-        mockDetectModified.mockResolvedValue([
+        mockFindBlockedUnits.mockResolvedValue([
             { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
         ]);
         mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
@@ -292,7 +288,7 @@ describe("executeUpdate", () => {
         mockScanInstalled.mockResolvedValue([testInstalledBundle]);
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(updatesReport);
-        mockDetectModified.mockResolvedValue([
+        mockFindBlockedUnits.mockResolvedValue([
             { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
         ]);
         mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");

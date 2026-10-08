@@ -10,7 +10,7 @@ import {
     scanInstalled,
 } from "@/core/index.js";
 import type { TemplateUnit } from "@/core/units.js";
-import type { InstallTarget, InstallTargetType, InstalledUnit, Platform } from "@/types/index.js";
+import type { InstalledUnit, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { describeUnitCounts } from "@/ui/format.js";
 import {
@@ -106,9 +106,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             ...(options.force ? [] : modified.map((status) => status.targetPath)),
             ...(options.force ? [] : legacyPaths),
         ]);
-        const installUnits = units.filter(
-            (unit) => options.force || !skippedPaths.has(unit.relativePath),
-        );
+        const installUnits = units.filter((unit) => options.force || !skippedPaths.has(unit.relativePath));
         const manifestPaths = new Set(units.map((unit) => `${unit.kind}\0${unit.relativePath}`));
         const orphans =
             installedBundle?.units.filter((unit) => !manifestPaths.has(`${unit.kind}\0${unit.relativePath}`)) ?? [];

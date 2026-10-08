@@ -3,7 +3,7 @@ import * as p from "@clack/prompts";
 import type { Bundle, InstallTarget, UpdateReport } from "@/types/index.js";
 import { ALL_PLATFORMS } from "@/types/index.js";
 
-import { confirmInstall, selectPlatform, showCheckReport, warnLegacySkills } from "../prompts.js";
+import { confirmInstall, selectPlatform, showCheckReport, showUpdateReport, warnLegacySkills } from "../prompts.js";
 
 vi.mock("@clack/prompts", () => ({
     intro: vi.fn(),
@@ -62,6 +62,32 @@ describe("legacy skill prompts", () => {
             expect.stringContaining("These skills are not in the current manifest and were left in place."),
         );
         expect(p.log.warn).not.toHaveBeenCalledWith(expect.stringContaining("Run `astp update --force` to migrate."));
+    });
+});
+
+describe("out-of-sync update prompts", () => {
+    it("labels same-version divergence out of sync in check and update reports", () => {
+        const report: UpdateReport = {
+            updates: [
+                {
+                    bundleName: "core",
+                    installedVersion: "1.0.0",
+                    availableVersion: "1.0.0",
+                    units: [{ targetPath: "agents/a.md", kind: "file", state: "new" }],
+                },
+            ],
+            upToDate: [],
+            notInManifest: [],
+            legacySkills: [],
+        };
+
+        vi.mocked(p.log.info).mockClear();
+        showCheckReport(report);
+        expect(String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0])).toContain("↻ Out of sync");
+
+        vi.mocked(p.log.info).mockClear();
+        showUpdateReport(report);
+        expect(String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0])).toContain("core: 1.0.0 out of sync (1 file)");
     });
 });
 

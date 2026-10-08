@@ -97,8 +97,7 @@ export async function scanInstalled(installRoot: string): Promise<InstalledBundl
     return Array.from(bundleUnits.entries()).map(([bundleName, units]) => ({
         bundleName,
         version: units.reduce(
-            (newest, unit) =>
-                compareSemver(unit.metadata.version, newest) > 0 ? unit.metadata.version : newest,
+            (newest, unit) => (compareSemver(unit.metadata.version, newest) > 0 ? unit.metadata.version : newest),
             units[0]?.metadata.version ?? "",
         ),
         units,
@@ -172,12 +171,14 @@ export function compareVersions(installed: InstalledBundle[], manifest: Manifest
         }
 
         const cmp = compareSemver(bundle.version, manifestBundle.version);
-        if (cmp < 0) {
+        const units = classifyUnits(bundle, manifestBundle);
+        const diverged = units.some((unit) => unit.state === "new" || unit.state === "removed");
+        if (cmp < 0 || (cmp === 0 && diverged)) {
             updates.push({
                 bundleName: bundle.bundleName,
                 installedVersion: bundle.version,
                 availableVersion: manifestBundle.version,
-                units: classifyUnits(bundle, manifestBundle),
+                units,
             });
         } else {
             upToDate.push(bundle);

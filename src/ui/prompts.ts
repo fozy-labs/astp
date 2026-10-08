@@ -194,8 +194,9 @@ export function showCheckReport(report: UpdateReport): void {
     }
 
     for (const update of report.updates) {
+        const status = update.installedVersion === update.availableVersion ? "↻ Out of sync" : "↑ Update available";
         lines.push(
-            `${update.bundleName.padEnd(15)}${update.installedVersion.padEnd(12)}${update.availableVersion.padEnd(12)}↑ Update available`,
+            `${update.bundleName.padEnd(15)}${update.installedVersion.padEnd(12)}${update.availableVersion.padEnd(12)}${status}`,
         );
     }
 
@@ -222,8 +223,11 @@ export function showUpdateReport(report: UpdateReport): void {
     for (const update of report.updates) {
         const skillCount = update.units.filter((unit) => unit.kind === "skill").length;
         const fileCount = update.units.filter((unit) => unit.kind === "file").length;
+        const counts = describeUnitCounts(fileCount, skillCount);
         lines.push(
-            `${update.bundleName}: ${update.installedVersion} → ${update.availableVersion} (${describeUnitCounts(fileCount, skillCount)})`,
+            update.installedVersion === update.availableVersion
+                ? `${update.bundleName}: ${update.installedVersion} out of sync (${counts})`
+                : `${update.bundleName}: ${update.installedVersion} → ${update.availableVersion} (${counts})`,
         );
     }
 
