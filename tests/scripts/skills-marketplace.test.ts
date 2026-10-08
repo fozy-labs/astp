@@ -3,6 +3,7 @@ import path from "node:path";
 
 import type { Manifest } from "@/types/index.js";
 
+import { findBlockSkillDirs } from "../../scripts/generate-skills-marketplace.ts";
 import {
     buildMarketplace,
     collectSkillLocations,
@@ -377,13 +378,15 @@ describe("committed marketplace", () => {
     }
 
     it("matches what the generator produces — run `npm run generate:skills` after editing the manifest", async () => {
-        const expected = serializeMarketplace(buildMarketplace(await readRepoManifest()));
+        const manifest = await readRepoManifest();
+        const expected = serializeMarketplace(buildMarketplace(manifest, await findBlockSkillDirs(manifest)));
         const committed = await fs.readFile(path.join(REPO_ROOT, MARKETPLACE_PATH), "utf8");
         expect(normalizeLineEndings(committed)).toBe(expected);
     });
 
     it("publishes the claude-code bundles", async () => {
-        const marketplace = buildMarketplace(await readRepoManifest());
+        const manifest = await readRepoManifest();
+        const marketplace = buildMarketplace(manifest, await findBlockSkillDirs(manifest));
         expect(marketplace.plugins.map((plugin) => plugin.name)).toEqual(["design", "docs", "fozy-labs"]);
     });
 

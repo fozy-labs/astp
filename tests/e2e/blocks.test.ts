@@ -446,6 +446,57 @@ describe("E2E: blocks", () => {
         });
     });
 
+    it("rejects a template with a stray closing tag", async () => {
+        contents[RULES_FILE] = `${FM}\nPlain text.\n</astp-block>\n`;
+        await expect(install()).rejects.toThrow(/invalid blocks/);
+    });
+
+    it("update selects a declined block that became required upstream", async () => {
+        await install();
+        expect(await fs.readFile(filePath(), "utf8")).not.toContain("<code_style>");
+
+        manifest = createBlocksManifest("1.1.0");
+        contents[RULES_FILE] = tplV1().replace('name="code_style" optional', 'name="code_style" required');
+        await update();
+        expect(await fs.readFile(filePath(), "utf8")).toContain("<code_style>");
+        const lock = await readLockFixture(rootDir());
+        const unit = lock.bundles.blocks.units[RULES_FILE]!;
+        expect(unit.blocks).toHaveProperty(`${RULES_FILE}#code_style`);
+        expect(unit.declinedBlocks ?? []).not.toContain(`${RULES_FILE}#code_style`);
+    });
+
+    it("a skill block file that went plain is kept when dirty; --force overwrites it", async () => {
+        manifest = createSkillManifest("1.0.0");
+        manifest.bundles.blockskill.items.push({
+            source: "blockskill/skills/fillable/extra.md",
+            target: "skills/fillable/extra.md",
+            category: "skill",
+        });
+        contents = {
+            "skills/fillable/SKILL.md": SKILL_TPL,
+            "skills/fillable/extra.md": `---\ndescription: extra\n---\n\n<astp-block name="fill_me">\n<FILL_INSTRUCTION>\nFill me.\n</FILL_INSTRUCTION>\n</astp-block>\n`,
+        };
+        await executeInstall({ bundle: "blockskill", platform: "claude-code", target: "project" });
+        const extraFile = filePath("skills/fillable/extra.md");
+        await fillFile("skills/fillable/extra.md", "Filled extra.\n");
+
+        manifest = createSkillManifest("1.1.0");
+        manifest.bundles.blockskill.items.push({
+            source: "blockskill/skills/fillable/extra.md",
+            target: "skills/fillable/extra.md",
+            category: "skill",
+        });
+        contents = {
+            "skills/fillable/SKILL.md": SKILL_TPL,
+            "skills/fillable/extra.md": "---\ndescription: extra v2\n---\n\nPlain replacement.\n",
+        };
+        await update();
+        expect(await fs.readFile(extraFile, "utf8")).toContain("Filled extra.");
+
+        await update(true);
+        expect(await fs.readFile(extraFile, "utf8")).toContain("Plain replacement.");
+    });
+
     it("edited frontmatter skips the unit; --force resets the frontmatter and keeps filled content", async () => {
         await install();
         await fillFile();

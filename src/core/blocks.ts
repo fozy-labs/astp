@@ -131,7 +131,7 @@ export function hasBlocks(content: string): boolean {
             fence = opened;
             continue;
         }
-        if (BLOCK_OPEN_PREFIX.test(text)) return true;
+        if (BLOCK_OPEN_PREFIX.test(text) || BLOCK_CLOSE.test(text)) return true;
     }
     return false;
 }

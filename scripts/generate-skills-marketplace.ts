@@ -12,6 +12,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 import { hasBlocks } from "../src/core/blocks.ts";
 import type { Manifest } from "../src/types/index.js";
@@ -55,7 +56,7 @@ async function main(): Promise<void> {
         return;
     }
 
-    for (const warning of await findUnlistedSkills(manifest, excludedSkills)) {
+    for (const warning of await findUnlistedSkills(manifest)) {
         console.warn(`warning: ${warning}`);
     }
 
@@ -110,10 +111,11 @@ async function validateSkillFiles(locations: SkillLocation[]): Promise<string[]>
  * a skill may be work in progress — but silence here would ship a bundle that
  * looks complete and is not.
  */
-async function findUnlistedSkills(manifest: Manifest, excludedSkills: ReadonlySet<string>): Promise<string[]> {
+async function findUnlistedSkills(manifest: Manifest): Promise<string[]> {
     const warnings: string[] = [];
     for (const bundle of selectBundles(manifest)) {
-        const listed = new Set(collectSkillNames(bundle, excludedSkills));
+        // Unfiltered: an excluded (block-using) skill is still listed in the manifest.
+        const listed = new Set(collectSkillNames(bundle));
         const skillsDir = path.join(REPO_ROOT, TEMPLATES_DIR, bundle.name, "skills");
         let entries;
         try {
@@ -195,9 +197,11 @@ async function readFileOrNull(filePath: string): Promise<string | null> {
     }
 }
 
-try {
-    await main();
-} catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+    try {
+        await main();
+    } catch (error) {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exitCode = 1;
+    }
 }

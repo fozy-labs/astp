@@ -175,6 +175,11 @@ describe("hasBlocks", () => {
         expect(hasBlocks('  <astp-block name="a">\n')).toBe(false);
         expect(hasBlocks('```\n<astp-block name="a">\n```\n')).toBe(false);
     });
+
+    it("detects an orphan closing tag outside fences", () => {
+        expect(hasBlocks("# Doc\n\n</astp-block>\n")).toBe(true);
+        expect(hasBlocks("```\n</astp-block>\n```\n")).toBe(false);
+    });
 });
 
 describe("hashes", () => {

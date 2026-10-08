@@ -151,7 +151,20 @@ export async function syncBundle(args: {
             continue;
         }
 
-        // Unit with blocks: merge each block file, then write.
+        // Unit with blocks: merge each block file, then write. A lock block
+        // file that went plain in the template is protected like a whole unit
+        // going plain — mergeUnitBlockFiles would not touch it, installSkill would.
+        if (current?.blocks?.dirty && !args.force && lockUnit) {
+            const lockTargets = new Set(
+                [...Object.keys(lockUnit.blocks ?? {}), ...(lockUnit.declinedBlocks ?? [])].map(
+                    (key) => splitBlockKey(key)[0],
+                ),
+            );
+            if ([...lockTargets].some((target) => !blockFiles.has(target))) {
+                result.skipped.push(status(current));
+                continue;
+            }
+        }
         const merged = await mergeUnitBlockFiles(args, rootDir, unit, blockFiles, lockUnit, result);
         const blockTargets = new Set(blockFiles.keys());
         const hash = await computeTemplateUnitHash(args.tempDir, unit, {

@@ -94,8 +94,9 @@ export async function selectUpdateBlocks(
     const lockDeclined = new Set(lockUnit?.declinedBlocks ?? []);
 
     const selectedKeys = new Set([...lockSelected].filter((key) => templateKeys.has(key)));
+    // Required blocks are always selected, even when previously declined.
+    for (const entry of entries.filter((entry) => entry.required)) selectedKeys.add(entry.key);
     const newEntries = entries.filter((entry) => !lockSelected.has(entry.key) && !lockDeclined.has(entry.key));
-    for (const entry of newEntries.filter((entry) => entry.required)) selectedKeys.add(entry.key);
 
     const newSelectable = newEntries.filter((entry) => !entry.required);
     if (newSelectable.length > 0) {
