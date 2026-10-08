@@ -204,6 +204,13 @@ export function warnModified(files: FileStatus[]): void {
     );
 }
 
+export function warnKeptRemoved(files: FileStatus[]): void {
+    const paths = files.map((f) => `  • ${f.targetPath}`).join("\n");
+    p.log.warn(
+        `${files.length} file${files.length === 1 ? "" : "s"} removed from the bundle upstream but modified locally — kept:\n${paths}\nUse --force to delete them.`,
+    );
+}
+
 export function showSuccess(message: string): void {
     p.log.success(message);
 }

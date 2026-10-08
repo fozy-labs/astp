@@ -1,7 +1,15 @@
 import { downloadBundle, fetchManifest, findBlockedTargets, installFile, resolveBundle } from "@/core/index.js";
 import type { Bundle, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { bundleSupportsPlatform, getBundlePlatforms, resolveTarget } from "@/types/index.js";
-import { confirmInstall, selectBundles, selectPlatform, selectTarget, showSuccess, spinner, warnModified } from "@/ui/prompts.js";
+import {
+    confirmInstall,
+    selectBundles,
+    selectPlatform,
+    selectTarget,
+    showSuccess,
+    spinner,
+    warnModified,
+} from "@/ui/prompts.js";
 
 export interface InstallOptions {
     bundle?: string;

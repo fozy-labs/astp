@@ -2,4 +2,11 @@ export { computeHash, extractAstpMetadata, injectAstpFields, stripAstpFields } f
 export { fetchManifest, resolveBundle, validateManifest } from "./manifest.js";
 export { downloadBundle } from "./fetcher.js";
 export { installFile, validateTargetPath } from "./installer.js";
-export { compareVersions, detectModified, findBlockedTargets, removeBundle, scanInstalled } from "./version.js";
+export {
+    compareVersions,
+    detectModified,
+    findBlockedTargets,
+    removeBundle,
+    removeFiles,
+    scanInstalled,
+} from "./version.js";

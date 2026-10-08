@@ -19,6 +19,7 @@ vi.mock("@/core/index.js", () => ({
     scanInstalled: vi.fn(),
     compareVersions: vi.fn(),
     findBlockedTargets: vi.fn(),
+    removeFiles: vi.fn(),
     downloadBundle: vi.fn(),
     installFile: vi.fn(),
 }));
@@ -30,6 +31,7 @@ vi.mock("@/ui/prompts.js", () => ({
     showInfo: vi.fn(),
     showSuccess: vi.fn(),
     showUpdateReport: vi.fn(),
+    warnKeptRemoved: vi.fn(),
     warnModified: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
@@ -120,7 +122,9 @@ describe("executeUpdate", () => {
         mockScanInstalled.mockResolvedValue([testInstalledBundle]);
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(updatesReport);
-        mockFindBlockedTargets.mockResolvedValue([{ targetPath: "agents/pipeline-approve.agent.md", state: "modified" }]);
+        mockFindBlockedTargets.mockResolvedValue([
+            { targetPath: "agents/pipeline-approve.agent.md", state: "modified" },
+        ]);
         mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
         mockInstallFile.mockResolvedValue(undefined);
 
@@ -155,7 +159,9 @@ describe("executeUpdate", () => {
         mockScanInstalled.mockResolvedValue([testInstalledBundle]);
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(updatesReport);
-        mockFindBlockedTargets.mockResolvedValue([{ targetPath: "agents/pipeline-approve.agent.md", state: "modified" }]);
+        mockFindBlockedTargets.mockResolvedValue([
+            { targetPath: "agents/pipeline-approve.agent.md", state: "modified" },
+        ]);
         mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
 
         await executeUpdate({ platform: "claude-code", target: "project" });
@@ -168,7 +174,9 @@ describe("executeUpdate", () => {
         mockScanInstalled.mockResolvedValue([testInstalledBundle]);
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(updatesReport);
-        mockFindBlockedTargets.mockResolvedValue([{ targetPath: "agents/pipeline-approve.agent.md", state: "modified" }]);
+        mockFindBlockedTargets.mockResolvedValue([
+            { targetPath: "agents/pipeline-approve.agent.md", state: "modified" },
+        ]);
         mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
         mockInstallFile.mockResolvedValue(undefined);
 

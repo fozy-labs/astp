@@ -4,6 +4,7 @@ import {
     fetchManifest,
     findBlockedTargets,
     installFile,
+    removeFiles,
     scanInstalled,
 } from "@/core/index.js";
 import type { InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
@@ -15,6 +16,7 @@ import {
     showSuccess,
     showUpdateReport,
     spinner,
+    warnKeptRemoved,
     warnModified,
 } from "@/ui/prompts.js";
 
@@ -55,8 +57,11 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
 
     let updatedCount = 0;
     let skippedCount = 0;
+    let removedCount = 0;
 
     for (const update of report.updates) {
+        const installedBundle = installed.find((b) => b.bundleName === update.bundleName);
+
         s.start(`Downloading ${update.bundleName}...`);
         const tempDir = await downloadBundle(manifest.repository, update.bundleName);
         s.stop(`Downloaded ${update.bundleName}.`);
@@ -82,9 +87,18 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             updatedCount++;
         }
         s.stop(`Installed ${update.bundleName}.`);
+
+        const manifestPaths = new Set(manifestBundle.items.map((item) => item.target));
+        const orphans = installedBundle?.files.filter((file) => !manifestPaths.has(file.relativePath)) ?? [];
+        if (orphans.length > 0) {
+            const result = await removeFiles(orphans, target.rootDir, options.force);
+            removedCount += result.removed.length;
+            skippedCount += result.skipped.length;
+            if (result.skipped.length > 0) warnKeptRemoved(result.skipped);
+        }
     }
 
     showSuccess(
-        `Updated ${updatedCount} file${updatedCount === 1 ? "" : "s"}${skippedCount > 0 ? `, skipped ${skippedCount} modified` : ""}`,
+        `Updated ${updatedCount} file${updatedCount === 1 ? "" : "s"}${skippedCount > 0 ? `, skipped ${skippedCount} modified` : ""}${removedCount > 0 ? `, removed ${removedCount}` : ""}`,
     );
 }

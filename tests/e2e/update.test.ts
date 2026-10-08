@@ -8,7 +8,14 @@ import { executeUpdate } from "@/commands/update.js";
 import { compareVersions, downloadBundle, extractAstpMetadata, fetchManifest, scanInstalled } from "@/core/index.js";
 import type { Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
-import { confirmInstall, selectPlatform, selectTarget, warnModified } from "@/ui/prompts.js";
+import {
+    confirmInstall,
+    selectPlatform,
+    selectTarget,
+    showSuccess,
+    warnKeptRemoved,
+    warnModified,
+} from "@/ui/prompts.js";
 
 import {
     cleanupDir,
@@ -41,6 +48,7 @@ vi.mock("@/ui/prompts.js", () => ({
     showInfo: vi.fn(),
     showCheckReport: vi.fn(),
     showUpdateReport: vi.fn(),
+    warnKeptRemoved: vi.fn(),
     warnModified: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
@@ -49,6 +57,8 @@ const mockFetchManifest = vi.mocked(fetchManifest);
 const mockDownloadBundle = vi.mocked(downloadBundle);
 const mockResolveTarget = vi.mocked(resolveTarget);
 const mockConfirmInstall = vi.mocked(confirmInstall);
+const mockShowSuccess = vi.mocked(showSuccess);
+const mockWarnKeptRemoved = vi.mocked(warnKeptRemoved);
 const mockWarnModified = vi.mocked(warnModified);
 const mockSelectTarget = vi.mocked(selectTarget);
 const mockSelectPlatform = vi.mocked(selectPlatform);
@@ -142,6 +152,52 @@ describe("E2E: update", () => {
         expect(await fs.readFile(unmanagedFile, "utf8")).toBe("UNMANAGED CONTENT\n");
         expect(mockWarnModified).toHaveBeenCalledWith([{ targetPath: newTarget, state: "modified" }]);
         expect(manifestV2.bundles.pipeline.items).toHaveLength(2);
+    });
+
+    it("removes unmodified files dropped from the bundle and empty directories", async () => {
+        const retained = "skills/a/SKILL.md";
+        const orphanSkill = "skills/z/SKILL.md";
+        const orphanReference = "skills/z/references/details.md";
+        const orphans = [orphanSkill, orphanReference];
+        await installManifest(manifestWithTargets("1.0.0", [retained, ...orphans]));
+
+        const manifestV2 = manifestWithTargets("1.1.0", [retained]);
+        await setupV2Mocks(manifestV2);
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        for (const orphan of orphans) {
+            await expect(fs.access(path.join(projectDir, ".claude", orphan))).rejects.toThrow();
+        }
+        await expect(fs.access(path.join(projectDir, ".claude", "skills", "z"))).rejects.toThrow();
+        expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining(", removed 2"));
+    });
+
+    it("keeps and warns about modified files dropped from the bundle", async () => {
+        const retained = "skills/a/SKILL.md";
+        const orphan = "skills/z/SKILL.md";
+        await installManifest(manifestWithTargets("1.0.0", [retained, orphan]));
+
+        const orphanFile = path.join(projectDir, ".claude", orphan);
+        await fs.appendFile(orphanFile, "\nUSER EDIT\n", "utf8");
+        await setupV2Mocks(manifestWithTargets("1.1.0", [retained]));
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(await fs.readFile(orphanFile, "utf8")).toContain("USER EDIT");
+        expect(mockWarnKeptRemoved).toHaveBeenCalledWith([{ targetPath: orphan, state: "modified" }]);
+    });
+
+    it("deletes modified files dropped from the bundle with --force", async () => {
+        const retained = "skills/a/SKILL.md";
+        const orphan = "skills/z/SKILL.md";
+        await installManifest(manifestWithTargets("1.0.0", [retained, orphan]));
+
+        const orphanFile = path.join(projectDir, ".claude", orphan);
+        await fs.appendFile(orphanFile, "\nUSER EDIT\n", "utf8");
+        await setupV2Mocks(manifestWithTargets("1.1.0", [retained]));
+        await executeUpdate({ force: true, platform: "claude-code", target: "project" });
+
+        await expect(fs.access(orphanFile)).rejects.toThrow();
+        expect(mockWarnKeptRemoved).not.toHaveBeenCalled();
     });
 
     // T35: Update to new version

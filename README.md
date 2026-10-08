@@ -54,7 +54,7 @@ Install template bundles. Existing locally modified or unmanaged files are skipp
 astp update [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Update installed files to the latest version from the manifest. Modified files are skipped by default — use `--force` to overwrite them.
+Update installed files to the latest version from the manifest. Files removed from a bundle are deleted; modified files are kept unless `--force` is used.
 
 ### check
 

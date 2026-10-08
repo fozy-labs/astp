@@ -39,10 +39,7 @@ export async function scanInstalled(installRoot: string): Promise<InstalledBundl
     return Array.from(bundleMap.entries()).map(([bundleName, files]) => ({
         bundleName,
         version: files.reduce(
-            (newest, file) =>
-                compareSemver(newest.metadata.version, file.metadata.version) < 0
-                    ? file
-                    : newest,
+            (newest, file) => (compareSemver(newest.metadata.version, file.metadata.version) < 0 ? file : newest),
             files[0],
         ).metadata.version,
         files,
@@ -147,9 +144,13 @@ function compareSemver(a: string, b: string): number {
 }
 
 export async function detectModified(bundle: InstalledBundle, _installRoot: string): Promise<FileStatus[]> {
+    return detectModifiedFiles(bundle.files);
+}
+
+async function detectModifiedFiles(files: InstalledFile[]): Promise<FileStatus[]> {
     const results: FileStatus[] = [];
 
-    for (const file of bundle.files) {
+    for (const file of files) {
         const content = await fs.readFile(file.filePath, "utf8");
         const state: FileState = isUnmodified(content, file.metadata.hash) ? "unmodified" : "modified";
         results.push({ targetPath: file.relativePath, state });
@@ -201,14 +202,22 @@ export async function removeBundle(
     installRoot: string,
     force = false,
 ): Promise<{ removed: string[]; skipped: FileStatus[] }> {
-    const statuses = await detectModified(bundle, installRoot);
+    return removeFiles(bundle.files, installRoot, force);
+}
+
+export async function removeFiles(
+    files: InstalledFile[],
+    installRoot: string,
+    force = false,
+): Promise<{ removed: string[]; skipped: FileStatus[] }> {
+    const statuses = await detectModifiedFiles(files);
     const modifiedPaths = new Set(
         statuses.filter((status) => status.state === "modified").map((status) => status.targetPath),
     );
     const skipped = statuses.filter((status) => status.state === "modified");
     const removed: string[] = [];
 
-    for (const file of bundle.files) {
+    for (const file of files) {
         if (modifiedPaths.has(file.relativePath) && !force) {
             continue;
         }
