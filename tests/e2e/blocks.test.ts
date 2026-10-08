@@ -10,7 +10,14 @@ import { executeUpdate } from "@/commands/update.js";
 import { downloadBundle, fetchManifest } from "@/core/index.js";
 import type { Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
-import { isInteractive, selectBlocks, selectUnits, showCheckReport, warnKeptBlocks } from "@/ui/prompts.js";
+import {
+    isInteractive,
+    selectBlocks,
+    selectUnits,
+    showCheckReport,
+    warnKeptBlocks,
+    warnKeptRemoved,
+} from "@/ui/prompts.js";
 
 import { cleanupDir, createTempProject, makeProjectTarget, readLockFixture } from "./helpers.js";
 import { setupTemplateDir } from "./helpers.js";
@@ -60,6 +67,7 @@ const mockSelectBlocks = vi.mocked(selectBlocks);
 const mockSelectUnits = vi.mocked(selectUnits);
 const mockShowCheckReport = vi.mocked(showCheckReport);
 const mockWarnKeptBlocks = vi.mocked(warnKeptBlocks);
+const mockWarnKeptRemoved = vi.mocked(warnKeptRemoved);
 
 const FM = "---\ndescription: Project map and code style\n---\n";
 
@@ -375,6 +383,63 @@ describe("E2E: blocks", () => {
         expect(content).toContain("Custom intro.");
         const ref = await fs.readFile(filePath("skills/fillable/references/ref.md"), "utf8");
         expect(ref).toContain("v1.1.0");
+        const lock = await readLockFixture(rootDir());
+        expect(lock.bundles.blockskill.units["skills/fillable"]!.blocks).toEqual({
+            "skills/fillable/SKILL.md#intro": expect.any(String),
+        });
+    });
+
+    it("deselecting a unit with a filled block keeps the file; --force removes it", async () => {
+        await install();
+        await fillFile();
+
+        mockIsInteractive.mockReturnValue(true);
+        mockSelectUnits.mockResolvedValue([]);
+        await install();
+        expect(await fs.readFile(filePath(), "utf8")).toContain("Filled by the agent.");
+        expect(mockWarnKeptRemoved).toHaveBeenCalled();
+
+        await install(true);
+        await expect(fs.access(filePath())).rejects.toThrow();
+    });
+
+    it("deselecting a clean block unit still removes the file", async () => {
+        await install();
+        mockIsInteractive.mockReturnValue(true);
+        mockSelectUnits.mockResolvedValue([]);
+        await install();
+        await expect(fs.access(filePath())).rejects.toThrow();
+    });
+
+    it("a unit leaving the bundle keeps a filled file on update; --force removes it", async () => {
+        await install();
+        await fillFile();
+
+        manifest = createBlocksManifest("1.1.0");
+        manifest.bundles.blocks.items = [];
+        await update();
+        expect(await fs.readFile(filePath(), "utf8")).toContain("Filled by the agent.");
+        expect(mockWarnKeptRemoved).toHaveBeenCalled();
+
+        await update(true);
+        await expect(fs.access(filePath())).rejects.toThrow();
+    });
+
+    it("a unit leaving the bundle still removes a clean block file", async () => {
+        await install();
+        manifest = createBlocksManifest("1.1.0");
+        manifest.bundles.blocks.items = [];
+        await update();
+        await expect(fs.access(filePath())).rejects.toThrow();
+    });
+
+    it("adopts an untracked block skill whose files equal the fresh render", async () => {
+        manifest = createSkillManifest("1.0.0");
+        contents = { "skills/fillable/SKILL.md": SKILL_TPL };
+        await executeInstall({ bundle: "blockskill", platform: "claude-code", target: "project" });
+        await fs.rm(path.join(rootDir(), "astp.lock"));
+
+        await executeInstall({ bundle: "blockskill", platform: "claude-code", target: "project" });
         const lock = await readLockFixture(rootDir());
         expect(lock.bundles.blockskill.units["skills/fillable"]!.blocks).toEqual({
             "skills/fillable/SKILL.md#intro": expect.any(String),

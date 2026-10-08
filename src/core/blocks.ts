@@ -446,7 +446,7 @@ export function mergeBlockFile(args: MergeBlockFileArgs): MergeBlockFileResult {
 
         if (args.selected.has(block.name)) {
             if (region && inLock) {
-                if (currentHash === lockHash) {
+                if (currentHash === lockHash || currentHash === templateHash) {
                     actions.set(block.name, { type: "replace", block });
                 } else if (templateHash !== lockHash) {
                     if (args.force) {
@@ -533,8 +533,9 @@ function mergeInstalled(
         const position = args.template.blocks.indexOf(block);
         let anchor: InstalledBlockRegion | undefined;
         for (let index = position - 1; index >= 0; index--) {
-            const candidate = installed.blocks.get(args.template.blocks[index]!.name);
-            if (candidate) {
+            const name = args.template.blocks[index]!.name;
+            const candidate = installed.blocks.get(name);
+            if (candidate && actions.get(name)?.type !== "remove") {
                 anchor = candidate;
                 break;
             }
@@ -546,8 +547,9 @@ function mergeInstalled(
             continue;
         }
         for (let index = position + 1; index < args.template.blocks.length; index++) {
-            const candidate = installed.blocks.get(args.template.blocks[index]!.name);
-            if (candidate) {
+            const name = args.template.blocks[index]!.name;
+            const candidate = installed.blocks.get(name);
+            if (candidate && actions.get(name)?.type !== "remove") {
                 anchor = candidate;
                 break;
             }

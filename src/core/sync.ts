@@ -69,7 +69,7 @@ export async function syncBundle(args: {
     const keptPaths = new Set<string>();
 
     const remove = async (unit: InstalledUnit, declined: boolean): Promise<void> => {
-        if (unit.state === "modified" && !args.force) {
+        if ((unit.state === "modified" || unit.blocks?.dirty) && !args.force) {
             result.kept.push(status(unit));
             if (declined) {
                 args.declined.delete(unit.relativePath);
@@ -331,7 +331,11 @@ async function compareUntrackedBlocks(
     if (unit.kind === "skill") {
         const onDisk = await listRelativeFiles(unitPath);
         const expectedPaths = new Set(unit.items.map((item) => item.target));
-        if (onDisk.some((file) => !expectedPaths.has(file)) || onDisk.length !== expectedPaths.size) return "modified";
+        if (
+            onDisk.some((file) => !expectedPaths.has(`${unit.relativePath}/${file}`)) ||
+            onDisk.length !== expectedPaths.size
+        )
+            return "modified";
     }
     for (const item of unit.kind === "skill" ? unit.items : [unit.item]) {
         const expected = merged.get(item.target) ?? (await fs.readFile(path.join(tempDir, item.target), "utf8"));
@@ -347,7 +351,7 @@ async function compareUntrackedBlocks(
     return "equal";
 }
 
-async function listRelativeFiles(dir: string): Promise<string[]> {
+async function listRelativeFiles(dir: string, prefix = ""): Promise<string[]> {
     const files: string[] = [];
     let entries;
     try {
@@ -357,8 +361,8 @@ async function listRelativeFiles(dir: string): Promise<string[]> {
     }
     for (const entry of entries) {
         const filePath = path.join(dir, entry.name);
-        if (entry.isDirectory()) files.push(...(await listRelativeFiles(filePath)));
-        else if (entry.isFile()) files.push(path.relative(dir, filePath).split(path.sep).join("/"));
+        if (entry.isDirectory()) files.push(...(await listRelativeFiles(filePath, `${prefix}${entry.name}/`)));
+        else if (entry.isFile()) files.push(`${prefix}${entry.name}`);
     }
     return files;
 }

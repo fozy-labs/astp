@@ -473,4 +473,70 @@ describe("mergeBlockFile", () => {
         });
         expect(result.content).toContain("<code_style>");
     });
+
+    const ABC = `---
+description: Anchors
+---
+
+<astp-block name="a">
+A
+</astp-block>
+
+<astp-block name="b">
+B
+</astp-block>
+
+<astp-block name="c">
+C
+</astp-block>
+`;
+
+    it("inserts a newly selected block whose preceding anchor is being removed", () => {
+        const installed = merge({ templateContent: ABC, selected: ["a", "c"] });
+        const result = merge({
+            templateContent: ABC,
+            installed: installed.content,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["b", "c"],
+        });
+        expect(result.content).not.toContain("<a>");
+        expect(result.content).toContain("<b>");
+        expect(result.content.indexOf("<b>")).toBeLessThan(result.content.indexOf("<c>"));
+        expect(Object.keys(result.blocks)).toEqual(["b", "c"]);
+    });
+
+    it("inserts a newly selected block whose following anchor is being removed", () => {
+        const bca = ABC.replace(
+            '<astp-block name="a">\nA\n</astp-block>\n\n<astp-block name="b">\nB\n</astp-block>',
+            '<astp-block name="b">\nB\n</astp-block>\n\n<astp-block name="a">\nA\n</astp-block>',
+        );
+        const installed = merge({ templateContent: bca, selected: ["a", "c"] });
+        const result = merge({
+            templateContent: bca,
+            installed: installed.content,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["b", "c"],
+        });
+        expect(result.content).not.toContain("<a>");
+        expect(result.content).toContain("<b>");
+        expect(result.content.indexOf("<b>")).toBeLessThan(result.content.indexOf("<c>"));
+        expect(Object.keys(result.blocks)).toEqual(["b", "c"]);
+    });
+
+    it("C == T is a clean replace, not a conflict", () => {
+        const installed = merge({ templateContent: TEMPLATE, selected: ["code_style"] });
+        const applied = installed.content.replace("Ready-made text.", "New ready-made text.");
+        const result = merge({
+            templateContent: TEMPLATE.replace("Ready-made text.", "New ready-made text."),
+            installed: applied,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["code_style"],
+        });
+        expect(result.conflicts).toEqual([]);
+        expect(result.content).not.toContain("FILL_INSTRUCTION");
+        expect(result.content).toContain("New ready-made text.");
+    });
 });
