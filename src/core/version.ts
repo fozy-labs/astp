@@ -81,8 +81,9 @@ export function compareVersions(installed: InstalledBundle[], manifest: Manifest
         }
 
         const cmp = compareSemver(bundle.version, manifestBundle.version);
-        if (cmp < 0) {
-            const files: FileStatus[] = classifyFiles(bundle, manifestBundle);
+        const files = classifyFiles(bundle, manifestBundle);
+        const diverged = files.some((file) => file.state === "new" || file.state === "removed");
+        if (cmp < 0 || (cmp === 0 && diverged)) {
             updates.push({
                 bundleName: bundle.bundleName,
                 installedVersion: bundle.version,

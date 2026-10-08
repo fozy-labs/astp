@@ -31,7 +31,7 @@ astp install fozy-labs --target project
 | `astp` | Launch interactive wizard |
 | `astp install [bundle] [--force]` | Install a bundle to the selected target |
 | `astp update [--force]` | Update installed files to latest versions |
-| `astp check` | Check for available updates |
+| `astp check` | Check for available updates and out-of-sync files |
 | `astp delete [bundle] [--force]` | Remove an installed bundle |
 
 All commands accept `--platform <claude-code>` and `--target <project|user>` to skip interactive prompts. Resolved roots:
@@ -62,7 +62,7 @@ Update installed files to the latest version from the manifest. Files removed fr
 astp check [--platform <claude-code>] [--target <project|user>]
 ```
 
-Compare installed file versions against the remote manifest and display a status report.
+Compare installed files with the remote manifest; `update` brings bundles back in sync.
 
 ### delete
 

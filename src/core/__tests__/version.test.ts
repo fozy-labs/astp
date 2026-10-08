@@ -8,7 +8,7 @@ import { computeHash, injectAstpFields } from "../frontmatter.js";
 import { compareVersions, detectModified, scanInstalled } from "../version.js";
 
 describe("compareVersions", () => {
-    const createManifest = (bundleVersion: string): Manifest => ({
+    const createManifest = (bundleVersion: string, targets = ["agents/a.md"]): Manifest => ({
         schemaVersion: 1,
         repository: "fozy-labs/astp",
         bundles: {
@@ -17,27 +17,25 @@ describe("compareVersions", () => {
                 version: bundleVersion,
                 description: "Pipeline",
                 default: false,
-                items: [{ source: "pipeline/agents/a.md", target: "agents/a.md", category: "agent" }],
+                items: targets.map((target) => ({ source: `pipeline/${target}`, target, category: "agent" })),
             },
         },
     });
 
-    const createInstalled = (version: string): InstalledBundle[] => [
+    const createInstalled = (version: string, relativePaths = ["agents/a.md"]): InstalledBundle[] => [
         {
             bundleName: "pipeline",
             version,
-            files: [
-                {
-                    filePath: "/root/agents/a.md",
-                    relativePath: "agents/a.md",
-                    metadata: {
-                        source: "fozy-labs/astp",
-                        bundle: "pipeline",
-                        version,
-                        hash: "abc",
-                    },
+            files: relativePaths.map((relativePath) => ({
+                filePath: `/root/${relativePath}`,
+                relativePath,
+                metadata: {
+                    source: "fozy-labs/astp",
+                    bundle: "pipeline",
+                    version,
+                    hash: "abc",
                 },
-            ],
+            })),
         },
     ];
 
@@ -58,9 +56,30 @@ describe("compareVersions", () => {
 
     // T10: Installed newer (no downgrade)
     it("T10: reports up to date when installed is newer (no downgrade)", () => {
-        const report = compareVersions(createInstalled("2.0.0"), createManifest("1.0.0"));
+        const report = compareVersions(
+            createInstalled("2.0.0"),
+            createManifest("1.0.0", ["agents/a.md", "agents/b.md"]),
+        );
         expect(report.upToDate).toHaveLength(1);
         expect(report.updates).toHaveLength(0);
+    });
+
+    it("detects a missing manifest item when versions match", () => {
+        const report = compareVersions(
+            createInstalled("1.0.0"),
+            createManifest("1.0.0", ["agents/a.md", "agents/b.md"]),
+        );
+        expect(report.updates).toHaveLength(1);
+        expect(report.updates[0].files).toContainEqual({ targetPath: "agents/b.md", state: "new" });
+    });
+
+    it("detects an orphaned installed file when versions match", () => {
+        const report = compareVersions(
+            createInstalled("1.0.0", ["agents/a.md", "skills/z/SKILL.md"]),
+            createManifest("1.0.0"),
+        );
+        expect(report.updates).toHaveLength(1);
+        expect(report.updates[0].files).toContainEqual({ targetPath: "skills/z/SKILL.md", state: "removed" });
     });
 
     // T11: Invalid semver

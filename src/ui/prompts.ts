@@ -174,7 +174,7 @@ export function showCheckReport(report: UpdateReport): void {
 
     for (const update of report.updates) {
         lines.push(
-            `${update.bundleName.padEnd(15)}${update.installedVersion.padEnd(12)}${update.availableVersion.padEnd(12)}↑ Update available`,
+            `${update.bundleName.padEnd(15)}${update.installedVersion.padEnd(12)}${update.availableVersion.padEnd(12)}${update.installedVersion === update.availableVersion ? "↻ Out of sync" : "↑ Update available"}`,
         );
     }
 
@@ -189,8 +189,11 @@ export function showUpdateReport(report: UpdateReport): void {
     const lines: string[] = [];
 
     for (const update of report.updates) {
+        const fileCount = `${update.files.length} file${update.files.length === 1 ? "" : "s"}`;
         lines.push(
-            `${update.bundleName}: ${update.installedVersion} → ${update.availableVersion} (${update.files.length} file${update.files.length === 1 ? "" : "s"})`,
+            update.installedVersion === update.availableVersion
+                ? `${update.bundleName}: ${update.installedVersion} out of sync (${fileCount})`
+                : `${update.bundleName}: ${update.installedVersion} → ${update.availableVersion} (${fileCount})`,
         );
     }
 

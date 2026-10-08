@@ -154,6 +154,54 @@ describe("E2E: update", () => {
         expect(manifestV2.bundles.pipeline.items).toHaveLength(2);
     });
 
+    it("installs a previously blocked target once its conflict is removed", async () => {
+        const existingTarget = "skills/a/SKILL.md";
+        await installManifest(manifestWithTargets("1.0.0", [existingTarget]));
+
+        const newTarget = "skills/b/SKILL.md";
+        const unmanagedFile = path.join(projectDir, ".claude", newTarget);
+        await fs.mkdir(path.dirname(unmanagedFile), { recursive: true });
+        await fs.writeFile(unmanagedFile, "MY OWN FILE\n", "utf8");
+
+        await setupV2Mocks(manifestWithTargets("1.1.0", [existingTarget, newTarget]));
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        await fs.rm(unmanagedFile);
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        const exists = await fs.access(unmanagedFile).then(
+            () => true,
+            () => false,
+        );
+        expect(exists).toBe(true);
+        const metadata = extractAstpMetadata(await fs.readFile(unmanagedFile, "utf8"));
+        expect(metadata?.bundle).toBe("pipeline");
+        expect(metadata?.version).toBe("1.1.0");
+    });
+
+    it("removes a modified orphan after its original content is restored", async () => {
+        const retained = "skills/a/SKILL.md";
+        const orphan = "skills/z/SKILL.md";
+        await installManifest(manifestWithTargets("1.0.0", [retained, orphan]));
+
+        const orphanFile = path.join(projectDir, ".claude", orphan);
+        const original = await fs.readFile(orphanFile, "utf8");
+        await fs.appendFile(orphanFile, "\nUSER EDIT\n", "utf8");
+        await setupV2Mocks(manifestWithTargets("1.1.0", [retained]));
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(await fs.readFile(orphanFile, "utf8")).toContain("USER EDIT");
+        await fs.writeFile(orphanFile, original, "utf8");
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        const exists = await fs.access(orphanFile).then(
+            () => true,
+            () => false,
+        );
+        expect(exists).toBe(false);
+        await expect(fs.access(path.join(projectDir, ".claude", "skills", "z"))).rejects.toThrow();
+    });
+
     it("removes unmodified files dropped from the bundle and empty directories", async () => {
         const retained = "skills/a/SKILL.md";
         const orphanSkill = "skills/z/SKILL.md";
