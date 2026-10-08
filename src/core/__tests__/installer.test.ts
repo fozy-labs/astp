@@ -5,6 +5,25 @@ import path from "node:path";
 import { describeTarget, resolveTarget } from "../../types/index.js";
 import { installFile, installSkill, validateTargetPath } from "../installer.js";
 
+async function snapshotDirectory(root: string): Promise<Record<string, string>> {
+    const snapshot: Record<string, string> = {};
+
+    async function visit(directory: string, relativeDirectory: string): Promise<void> {
+        for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+            const filePath = path.join(directory, entry.name);
+            const relativePath = path.join(relativeDirectory, entry.name);
+            if (entry.isDirectory()) {
+                await visit(filePath, relativePath);
+            } else if (entry.isFile()) {
+                snapshot[relativePath] = (await fs.readFile(filePath)).toString("base64");
+            }
+        }
+    }
+
+    await visit(root, "");
+    return snapshot;
+}
+
 describe("resolveTarget", () => {
     // T16: Project target
     it("T16: resolves claude-code project target to .claude under cwd", () => {
@@ -170,5 +189,62 @@ Agent body`;
         );
         expect(installed).toContain("# Stage content");
         expect(installed).toContain("astp-source:");
+    });
+});
+
+describe("installSkill failure safety", () => {
+    let tempDir: string;
+    let targetRoot: string;
+
+    beforeEach(async () => {
+        tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "astp-src-"));
+        targetRoot = await fs.mkdtemp(path.join(os.tmpdir(), "astp-tgt-"));
+    });
+
+    afterEach(async () => {
+        await fs.rm(tempDir, { recursive: true, force: true });
+        await fs.rm(targetRoot, { recursive: true, force: true });
+    });
+
+    it("preserves the installed skill and cleans staging when a source item is missing", async () => {
+        const relativePath = "skills/sample";
+        const skillDir = path.join(targetRoot, relativePath);
+        const referencePath = path.join(skillDir, "references", "keep.md");
+        await fs.mkdir(path.dirname(referencePath), { recursive: true });
+        await fs.writeFile(path.join(skillDir, "SKILL.md"), "Existing skill");
+        await fs.writeFile(referencePath, "Existing reference");
+        await fs.writeFile(path.join(skillDir, "asset.bin"), Buffer.from([0, 1, 2, 255]));
+        const existingTree = await snapshotDirectory(skillDir);
+
+        const sourceSkillDir = path.join(tempDir, relativePath);
+        await fs.mkdir(sourceSkillDir, { recursive: true });
+        await fs.writeFile(path.join(sourceSkillDir, "SKILL.md"), "Replacement skill");
+
+        await expect(
+            installSkill(
+                tempDir,
+                {
+                    kind: "skill",
+                    relativePath,
+                    items: [
+                        {
+                            source: "test-bundle/skills/sample/SKILL.md",
+                            target: "skills/sample/SKILL.md",
+                            category: "skill",
+                        },
+                        {
+                            source: "test-bundle/skills/sample/references/missing.md",
+                            target: "skills/sample/references/missing.md",
+                            category: "skill",
+                        },
+                    ],
+                },
+                { platform: "claude-code", type: "project", rootDir: targetRoot },
+                { source: "fozy-labs/astp", bundle: "test-bundle", version: "1.0.0" },
+            ),
+        ).rejects.toThrow();
+
+        expect(await snapshotDirectory(skillDir)).toEqual(existingTree);
+        expect((await fs.readdir(path.dirname(skillDir))).filter((entry) => entry.includes(".astp-tmp-"))).toEqual([]);
     });
 });

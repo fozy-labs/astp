@@ -51,14 +51,8 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
 
     const report = compareVersions(installed, manifest);
     const legacySkills = report.legacySkills;
-    const migratableLegacy: typeof legacySkills = [];
-    const unavailableLegacy: typeof legacySkills = [];
-    for (const legacySkill of legacySkills) {
-        const bundle = manifest.bundles[legacySkill.bundleName];
-        const units = bundle ? groupTemplateItems(bundle.items) : [];
-        const isAvailable = units.some((unit) => unit.kind === "skill" && unit.relativePath === legacySkill.targetPath);
-        (isAvailable ? migratableLegacy : unavailableLegacy).push(legacySkill);
-    }
+    const migratableLegacy = legacySkills.filter((skill) => skill.inManifest);
+    const unavailableLegacy = legacySkills.filter((skill) => !skill.inManifest);
 
     if (!options.force && migratableLegacy.length > 0) {
         warnLegacySkills(migratableLegacy);

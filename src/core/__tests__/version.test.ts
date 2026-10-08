@@ -89,6 +89,46 @@ describe("compareVersions", () => {
         expect(report.notInManifest).toHaveLength(1);
         expect(report.notInManifest[0].bundleName).toBe("pipeline");
     });
+
+    it("marks legacy skills according to their presence in the manifest", () => {
+        const manifest = createManifest("1.0.0");
+        manifest.bundles.pipeline.items.push({
+            source: "pipeline/skills/sample/SKILL.md",
+            target: "skills/sample/SKILL.md",
+            category: "skill",
+        });
+        const createLegacyBundle = (bundleName: string, relativePaths: string[]): InstalledBundle => ({
+            bundleName,
+            version: "1.0.0",
+            units: relativePaths.map((relativePath) => ({
+                kind: "skill",
+                dirPath: `/root/${relativePath}`,
+                skillFilePath: `/root/${relativePath}/SKILL.md`,
+                relativePath,
+                metadata: {
+                    source: "fozy-labs/astp",
+                    bundle: bundleName,
+                    version: "1.0.0",
+                    hash: "legacy",
+                },
+                legacy: true,
+            })),
+        });
+
+        const report = compareVersions(
+            [
+                createLegacyBundle("pipeline", ["skills/sample", "skills/removed"]),
+                createLegacyBundle("retired", ["skills/retired"]),
+            ],
+            manifest,
+        );
+
+        expect(report.legacySkills).toEqual([
+            { bundleName: "pipeline", targetPath: "skills/sample", inManifest: true },
+            { bundleName: "pipeline", targetPath: "skills/removed", inManifest: false },
+            { bundleName: "retired", targetPath: "skills/retired", inManifest: false },
+        ]);
+    });
 });
 
 describe("detectModified", () => {

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -43,19 +44,38 @@ export async function installSkill(
         throw new Error(`Skill directory '${unit.relativePath}' has no SKILL.md item.`);
     }
 
-    await fs.rm(skillDir, { recursive: true, force: true });
-    for (const item of unit.items) {
-        const sourceFile = path.join(tempDir, item.target);
-        const targetFile = path.join(target.rootDir, item.target);
-        const content = await fs.readFile(sourceFile);
-        await fs.mkdir(path.dirname(targetFile), { recursive: true });
-        await fs.writeFile(targetFile, content);
-    }
+    const stagingDir = path.join(path.dirname(skillDir), `.${path.basename(skillDir)}.astp-tmp-${randomUUID()}`);
+    let stagingCreated = false;
+    try {
+        await fs.mkdir(path.dirname(skillDir), { recursive: true });
+        await fs.mkdir(stagingDir);
+        stagingCreated = true;
 
-    const hash = await computeSkillTreeHash(skillDir);
-    const skillFilePath = path.join(skillDir, "SKILL.md");
-    const content = await fs.readFile(skillFilePath, "utf8");
-    await fs.writeFile(skillFilePath, injectAstpFields(content, meta, hash), "utf8");
+        for (const item of unit.items) {
+            const sourceFile = path.join(tempDir, item.target);
+            const targetFile = path.join(target.rootDir, item.target);
+            const stagingFile = path.join(stagingDir, path.relative(skillDir, targetFile));
+            await fs.mkdir(path.dirname(stagingFile), { recursive: true });
+            await fs.copyFile(sourceFile, stagingFile);
+        }
+
+        const hash = await computeSkillTreeHash(stagingDir);
+        const stagingSkillFile = path.join(
+            stagingDir,
+            path.relative(skillDir, path.join(target.rootDir, skillMd.target)),
+        );
+        const content = await fs.readFile(stagingSkillFile, "utf8");
+        await fs.writeFile(stagingSkillFile, injectAstpFields(content, meta, hash), "utf8");
+
+        await fs.rm(skillDir, { recursive: true, force: true });
+        await fs.rename(stagingDir, skillDir);
+        stagingCreated = false;
+    } catch (error) {
+        if (stagingCreated) {
+            await fs.rm(stagingDir, { recursive: true, force: true }).catch(() => undefined);
+        }
+        throw error;
+    }
 }
 
 export function validateTargetPath(installRoot: string, targetPath: string): void {

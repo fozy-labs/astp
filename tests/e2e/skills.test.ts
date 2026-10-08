@@ -274,6 +274,7 @@ describe("E2E: skill directory units", () => {
         expect(mockShowCheckReport.mock.calls[0][0].legacySkills).toContainEqual({
             bundleName: "skillpack",
             targetPath: "skills/sample",
+            inManifest: true,
         });
 
         await executeUpdate({ platform: "claude-code", target: "project" });

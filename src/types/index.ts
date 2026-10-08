@@ -127,7 +127,7 @@ export interface UpdateReport {
     /** Installed bundles not found in remote manifest (removed upstream). */
     notInManifest: InstalledBundle[];
     /** Skill directories still using per-file metadata from older installs. */
-    legacySkills: Array<{ bundleName: string; targetPath: string }>;
+    legacySkills: Array<{ bundleName: string; targetPath: string; inManifest: boolean }>;
 }
 
 /** Details about an available update for a single bundle. */

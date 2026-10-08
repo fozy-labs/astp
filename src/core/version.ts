@@ -142,13 +142,24 @@ export function compareVersions(installed: InstalledBundle[], manifest: Manifest
     const legacySkills: UpdateReport["legacySkills"] = [];
 
     for (const bundle of installed) {
+        const manifestBundle = manifest.bundles[bundle.bundleName];
+        const manifestSkillPaths = new Set(
+            manifestBundle
+                ? groupTemplateItems(manifestBundle.items)
+                      .filter((unit) => unit.kind === "skill")
+                      .map((unit) => unit.relativePath)
+                : [],
+        );
         for (const unit of bundle.units) {
             if (unit.kind === "skill" && unit.legacy) {
-                legacySkills.push({ bundleName: bundle.bundleName, targetPath: unit.relativePath });
+                legacySkills.push({
+                    bundleName: bundle.bundleName,
+                    targetPath: unit.relativePath,
+                    inManifest: manifestSkillPaths.has(unit.relativePath),
+                });
             }
         }
 
-        const manifestBundle = manifest.bundles[bundle.bundleName];
         if (!manifestBundle) {
             notInManifest.push(bundle);
             continue;

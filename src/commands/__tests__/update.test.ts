@@ -231,7 +231,7 @@ describe("executeUpdate", () => {
             updates: [],
             upToDate: [legacyBundle],
             notInManifest: [],
-            legacySkills: [{ bundleName: "pipeline", targetPath: "skills/sample" }],
+            legacySkills: [{ bundleName: "pipeline", targetPath: "skills/sample", inManifest: true }],
         });
         mockDetectModified.mockResolvedValue([
             { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "unmodified" },
@@ -255,16 +255,18 @@ describe("executeUpdate", () => {
             upToDate: [legacyBundleWithRemovedSkill],
             notInManifest: [],
             legacySkills: [
-                { bundleName: "pipeline", targetPath: "skills/sample" },
-                { bundleName: "pipeline", targetPath: "skills/removed" },
+                { bundleName: "pipeline", targetPath: "skills/sample", inManifest: true },
+                { bundleName: "pipeline", targetPath: "skills/removed", inManifest: false },
             ],
         });
 
         await executeUpdate({ platform: "claude-code", target: "project" });
 
-        expect(mockWarnLegacySkills).toHaveBeenCalledWith([{ bundleName: "pipeline", targetPath: "skills/sample" }]);
+        expect(mockWarnLegacySkills).toHaveBeenCalledWith([
+            { bundleName: "pipeline", targetPath: "skills/sample", inManifest: true },
+        ]);
         expect(mockWarnLegacySkills).toHaveBeenCalledWith(
-            [{ bundleName: "pipeline", targetPath: "skills/removed" }],
+            [{ bundleName: "pipeline", targetPath: "skills/removed", inManifest: false }],
             false,
         );
         expect(mockDownloadBundle).not.toHaveBeenCalled();

@@ -29,17 +29,23 @@ describe("selectPlatform", () => {
 });
 
 describe("legacy skill prompts", () => {
-    it("shows the force-migration hint in the check report", () => {
+    it("shows different check guidance for legacy skills with and without manifest entries", () => {
+        const currentSkill = { bundleName: "core", targetPath: "skills/current", inManifest: true };
+        const removedSkill = { bundleName: "core", targetPath: "skills/removed", inManifest: false };
         const report: UpdateReport = {
             updates: [],
             upToDate: [],
             notInManifest: [],
-            legacySkills: [{ bundleName: "core", targetPath: "skills/example" }],
+            legacySkills: [currentSkill, removedSkill],
         };
 
+        vi.mocked(p.log.info).mockClear();
         showCheckReport(report);
 
-        expect(p.log.info).toHaveBeenCalledWith(expect.stringContaining("run `astp update --force` to migrate"));
+        const reportText = String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0]);
+        expect(reportText).toContain("core: legacy skill skills/current — run `astp update --force` to migrate.");
+        expect(reportText).toContain("core: legacy skill skills/removed — not in the current manifest, left in place.");
+        expect(reportText).not.toContain("skills/removed — run `astp update --force` to migrate.");
     });
 
     it("shows the force-migration hint when legacy skills are skipped", () => {

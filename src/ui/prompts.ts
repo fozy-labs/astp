@@ -206,9 +206,10 @@ export function showCheckReport(report: UpdateReport): void {
     if (report.legacySkills.length > 0) {
         lines.push("");
         for (const skill of report.legacySkills) {
-            lines.push(
-                `${skill.bundleName}: legacy skill ${skill.targetPath} — run \`astp update --force\` to migrate.`,
-            );
+            const guidance = skill.inManifest
+                ? "run `astp update --force` to migrate."
+                : "not in the current manifest, left in place.";
+            lines.push(`${skill.bundleName}: legacy skill ${skill.targetPath} — ${guidance}`);
         }
     }
 
