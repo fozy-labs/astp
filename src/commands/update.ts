@@ -148,21 +148,23 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
         const installUnits = plannedBundle.units.filter(
             (unit) => options.force || !skippedPaths.has(unit.relativePath),
         );
-        s.start(`Downloading ${bundleName}...`);
-        const tempDir = await downloadBundle(manifest.repository, bundleName);
-        s.stop(`Downloaded ${bundleName}.`);
-        s.start(`Installing ${bundleName}...`);
-        for (const unit of installUnits) {
-            const metadata = { source: manifest.repository, bundle: bundleName, version: manifestBundle.version };
-            if (unit.kind === "skill") {
-                await installSkill(tempDir, unit, target, metadata);
-                updatedSkills++;
-            } else {
-                await installFile(tempDir, unit.item, target, metadata);
-                updatedFiles++;
+        if (installUnits.length > 0) {
+            s.start(`Downloading ${bundleName}...`);
+            const tempDir = await downloadBundle(manifest.repository, bundleName);
+            s.stop(`Downloaded ${bundleName}.`);
+            s.start(`Installing ${bundleName}...`);
+            for (const unit of installUnits) {
+                const metadata = { source: manifest.repository, bundle: bundleName, version: manifestBundle.version };
+                if (unit.kind === "skill") {
+                    await installSkill(tempDir, unit, target, metadata);
+                    updatedSkills++;
+                } else {
+                    await installFile(tempDir, unit.item, target, metadata);
+                    updatedFiles++;
+                }
             }
+            s.stop(`Installed ${bundleName}.`);
         }
-        s.stop(`Installed ${bundleName}.`);
     }
 
     const updatedCounts = describeUnitCounts(updatedFiles, updatedSkills);

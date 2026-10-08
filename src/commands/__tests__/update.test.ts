@@ -7,6 +7,7 @@ import {
     findBlockedUnits,
     installFile,
     installSkill,
+    removeUnits,
     scanInstalled,
 } from "@/core/index.js";
 import type { Bundle, InstalledBundle, InstallTarget, Manifest, TemplateItem, UpdateReport } from "@/types/index.js";
@@ -26,6 +27,7 @@ vi.mock("@/core/index.js", async (importOriginal) => {
         downloadBundle: vi.fn(),
         installFile: vi.fn(),
         installSkill: vi.fn(),
+        removeUnits: vi.fn(),
     };
 });
 
@@ -48,6 +50,7 @@ const mockFindBlockedUnits = vi.mocked(findBlockedUnits);
 const mockDownloadBundle = vi.mocked(downloadBundle);
 const mockInstallFile = vi.mocked(installFile);
 const mockInstallSkill = vi.mocked(installSkill);
+const mockRemoveUnits = vi.mocked(removeUnits);
 const mockSelectPlatform = vi.mocked(selectPlatform);
 const mockSelectTarget = vi.mocked(selectTarget);
 const mockShowInfo = vi.mocked(showInfo);
@@ -221,6 +224,49 @@ describe("executeUpdate", () => {
         await executeUpdate({ platform: "claude-code", target: "project" });
 
         expect(mockShowInfo).toHaveBeenCalledWith("All bundles up to date.");
+        expect(mockDownloadBundle).not.toHaveBeenCalled();
+    });
+
+    it("removes orphans without downloading when the manifest has no units", async () => {
+        const emptyManifest: Manifest = {
+            ...testManifest,
+            bundles: { pipeline: { ...testBundle, items: [] } },
+        };
+        mockScanInstalled.mockResolvedValue([testInstalledBundle]);
+        mockFetchManifest.mockResolvedValue(emptyManifest);
+        mockCompareVersions.mockReturnValue(updatesReport);
+        mockFindBlockedUnits.mockResolvedValue([]);
+        mockRemoveUnits.mockResolvedValue({ removed: [], skipped: [] });
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(mockRemoveUnits).toHaveBeenCalledWith(testInstalledBundle.units, expect.any(String), undefined);
+        expect(mockDownloadBundle).not.toHaveBeenCalled();
+    });
+
+    it("removes orphans without downloading when every manifest unit is blocked", async () => {
+        const installedBundle: InstalledBundle = {
+            ...testInstalledBundle,
+            units: [
+                ...testInstalledBundle.units,
+                {
+                    ...testInstalledBundle.units[0],
+                    filePath: "/project/.claude/agents/old.agent.md",
+                    relativePath: "agents/old.agent.md",
+                },
+            ],
+        };
+        mockScanInstalled.mockResolvedValue([installedBundle]);
+        mockFetchManifest.mockResolvedValue(testManifest);
+        mockCompareVersions.mockReturnValue(updatesReport);
+        mockFindBlockedUnits.mockResolvedValue([
+            { targetPath: testItem.target, kind: "file", state: "modified" },
+        ]);
+        mockRemoveUnits.mockResolvedValue({ removed: [], skipped: [] });
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(mockRemoveUnits).toHaveBeenCalledWith([installedBundle.units[1]], expect.any(String), undefined);
         expect(mockDownloadBundle).not.toHaveBeenCalled();
     });
 
