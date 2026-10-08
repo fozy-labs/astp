@@ -15,7 +15,7 @@ import type {
 } from "@/types/index.js";
 
 import { computeHash, extractAstpMetadata, stripAstpFields } from "./frontmatter.js";
-import { validateTargetPath } from "./installer.js";
+import { validateUnitTargets } from "./installer.js";
 import { computeSkillTreeHash } from "./skill-tree.js";
 import type { TemplateUnit } from "./units.js";
 import { groupTemplateItems } from "./units.js";
@@ -289,12 +289,7 @@ export async function findBlockedUnits(
     bundleName: string,
     units: TemplateUnit[],
 ): Promise<FileStatus[]> {
-    for (const unit of units) {
-        validateTargetPath(installRoot, unit.relativePath);
-        if (unit.kind === "skill") {
-            for (const item of unit.items) validateTargetPath(installRoot, item.target);
-        }
-    }
+    validateUnitTargets(installRoot, units);
 
     const blocked: FileStatus[] = [];
     for (const unit of units) {

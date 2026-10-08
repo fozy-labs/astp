@@ -8,6 +8,7 @@ import {
     installSkill,
     removeUnits,
     scanInstalled,
+    validateUnitTargets,
 } from "@/core/index.js";
 import type { TemplateUnit } from "@/core/units.js";
 import type { InstalledUnit, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
@@ -119,6 +120,14 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
         const manifestBundle = manifest.bundles[bundleName];
         if (!manifestBundle) continue;
 
+        validateUnitTargets(target.rootDir, plannedBundle.units);
+        let tempDir: string | undefined;
+        if (plannedBundle.units.length > 0) {
+            s.start(`Downloading ${bundleName}...`);
+            tempDir = await downloadBundle(manifest.repository, bundleName);
+            s.stop(`Downloaded ${bundleName}.`);
+        }
+
         if (plannedBundle.orphans.length > 0) {
             const result = await removeUnits(plannedBundle.orphans, target.rootDir, options.force);
             if (result.skipped.length > 0) warnKeptRemoved(result.skipped);
@@ -148,10 +157,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
         const installUnits = plannedBundle.units.filter(
             (unit) => options.force || !skippedPaths.has(unit.relativePath),
         );
-        if (installUnits.length > 0) {
-            s.start(`Downloading ${bundleName}...`);
-            const tempDir = await downloadBundle(manifest.repository, bundleName);
-            s.stop(`Downloaded ${bundleName}.`);
+        if (tempDir && installUnits.length > 0) {
             s.start(`Installing ${bundleName}...`);
             for (const unit of installUnits) {
                 const metadata = { source: manifest.repository, bundle: bundleName, version: manifestBundle.version };

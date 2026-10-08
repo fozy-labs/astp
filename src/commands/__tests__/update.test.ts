@@ -1,7 +1,12 @@
-import { vi } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+import { afterEach, vi } from "vitest";
 
 import {
     compareVersions,
+    computeSkillTreeHash,
     downloadBundle,
     fetchManifest,
     findBlockedUnits,
@@ -57,6 +62,12 @@ const mockShowInfo = vi.mocked(showInfo);
 const mockShowSuccess = vi.mocked(showSuccess);
 const mockWarnLegacySkills = vi.mocked(warnLegacySkills);
 const mockWarnModified = vi.mocked(warnModified);
+
+const temporaryRoots: string[] = [];
+
+afterEach(async () => {
+    await Promise.all(temporaryRoots.splice(0).map((rootDir) => fs.rm(rootDir, { recursive: true, force: true })));
+});
 
 const testTarget: InstallTarget = {
     platform: "claude-code",
@@ -183,6 +194,64 @@ const updatesReport: UpdateReport = {
     legacySkills: [],
 };
 
+async function prepareDroppedSkill(item: TemplateItem) {
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "astp-update-"));
+    temporaryRoots.push(rootDir);
+    const dirPath = path.join(rootDir, "skills/a");
+    const skillFilePath = path.join(dirPath, "SKILL.md");
+    const notesFilePath = path.join(dirPath, "notes.md");
+    await fs.mkdir(dirPath, { recursive: true });
+    await fs.writeFile(skillFilePath, "# Original skill\n");
+    await fs.writeFile(notesFilePath, "Original notes\n");
+
+    const actual = await vi.importActual<typeof import("@/core/index.js")>("@/core/index.js");
+    mockRemoveUnits.mockImplementation(actual.removeUnits);
+    mockSelectTarget.mockResolvedValue({ platform: "claude-code", type: "project", rootDir });
+
+    const installedBundle: InstalledBundle = {
+        bundleName: "pipeline",
+        version: "1.0.0",
+        units: [
+            {
+                kind: "skill",
+                dirPath,
+                skillFilePath,
+                relativePath: "skills/a",
+                metadata: {
+                    source: "fozy-labs/astp",
+                    bundle: "pipeline",
+                    version: "1.0.0",
+                    hash: await computeSkillTreeHash(dirPath),
+                },
+                legacy: false,
+            },
+        ],
+    };
+    const manifest: Manifest = {
+        ...testManifest,
+        bundles: { pipeline: { ...testBundle, version: "1.1.0", items: [item] } },
+    };
+    mockScanInstalled.mockResolvedValue([installedBundle]);
+    mockFetchManifest.mockResolvedValue(manifest);
+    mockCompareVersions.mockReturnValue({
+        updates: [
+            {
+                bundleName: "pipeline",
+                installedVersion: "1.0.0",
+                availableVersion: "1.1.0",
+                units: [{ targetPath: "skills/a", kind: "skill", state: "removed" }],
+            },
+        ],
+        upToDate: [],
+        notInManifest: [],
+        legacySkills: [],
+    });
+    mockFindBlockedUnits.mockResolvedValue([]);
+    mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
+
+    return { rootDir, skillFilePath, notesFilePath };
+}
+
 beforeEach(() => {
     vi.clearAllMocks();
 });
@@ -244,7 +313,35 @@ describe("executeUpdate", () => {
         expect(mockDownloadBundle).not.toHaveBeenCalled();
     });
 
-    it("removes orphans without downloading when every manifest unit is blocked", async () => {
+    it("does not remove a dropped skill when downloading the replacement fails", async () => {
+        const { skillFilePath, notesFilePath } = await prepareDroppedSkill({
+            source: "pipeline/skills/a/b/SKILL.md",
+            target: "skills/a/b/SKILL.md",
+            category: "skill",
+        });
+        mockDownloadBundle.mockRejectedValue(new Error("network down"));
+
+        await expect(executeUpdate({ platform: "claude-code" })).rejects.toThrow("network down");
+
+        await expect(fs.readFile(skillFilePath, "utf8")).resolves.toBe("# Original skill\n");
+        await expect(fs.readFile(notesFilePath, "utf8")).resolves.toBe("Original notes\n");
+    });
+
+    it("does not remove a dropped skill when a manifest target is invalid", async () => {
+        const { skillFilePath, notesFilePath } = await prepareDroppedSkill({
+            source: "pipeline/skills/a/b/SKILL.md",
+            target: "skills/../../evil/SKILL.md",
+            category: "skill",
+        });
+
+        await expect(executeUpdate({ platform: "claude-code" })).rejects.toThrow(/Invalid target path/);
+
+        expect(mockDownloadBundle).not.toHaveBeenCalled();
+        await expect(fs.readFile(skillFilePath, "utf8")).resolves.toBe("# Original skill\n");
+        await expect(fs.readFile(notesFilePath, "utf8")).resolves.toBe("Original notes\n");
+    });
+
+    it("removes orphans and installs nothing when every manifest unit is blocked", async () => {
         const orphanUnit: InstalledBundle["units"][number] = {
             kind: "file",
             filePath: "/project/.claude/agents/old.agent.md",
@@ -265,11 +362,14 @@ describe("executeUpdate", () => {
         mockCompareVersions.mockReturnValue(updatesReport);
         mockFindBlockedUnits.mockResolvedValue([{ targetPath: testItem.target, kind: "file", state: "modified" }]);
         mockRemoveUnits.mockResolvedValue({ removed: [], skipped: [] });
+        mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
 
         await executeUpdate({ platform: "claude-code", target: "project" });
 
         expect(mockRemoveUnits).toHaveBeenCalledWith([orphanUnit], expect.any(String), undefined);
-        expect(mockDownloadBundle).not.toHaveBeenCalled();
+        expect(mockDownloadBundle).toHaveBeenCalledTimes(1);
+        expect(mockInstallFile).not.toHaveBeenCalled();
+        expect(mockInstallSkill).not.toHaveBeenCalled();
     });
 
     it("migrates only legacy skills when the bundle version is current", async () => {
