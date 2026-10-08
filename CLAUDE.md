@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-`astp` (`@fozy-labs/astp`) is a Node ≥ 22 CLI that installs, updates, checks and deletes bundles of agent Markdown files (skills, agents, instructions) for Claude Code. The repo holds both the CLI (`src/`) and the bundles it ships (`templates/`).
+`astp` (`@fozy-labs/astp`) is a Node ≥ 22 CLI that installs, updates, checks and deletes bundles of agent files (skills, agents, instructions) for Claude Code. The repo holds both the CLI (`src/`) and the bundles it ships (`templates/`).
 
 ## Commands
 
@@ -21,9 +21,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `core/` - no UI; everything goes through `core/index.ts`
     - `manifest.ts` - fetch `templates/manifest.json` from GitHub `main`, validate it
     - `fetcher.ts` - giget download of one bundle dir into a temp dir
-    - `installer.ts` - write a file under the install root, path-traversal guard
+    - `installer.ts` - write an agent/instruction file or a whole skill dir under the install root, path-traversal guard
+    - `units.ts` - group manifest items: one unit per skill dir, one per other file
+    - `skill-tree.ts` - skill dir hash over all its files
     - `frontmatter.ts` - inject / read / strip `astp-*` fields, content hash
-    - `version.ts` - scan installed files, compare with manifest, detect local edits, remove
+    - `version.ts` - scan installed units, compare with manifest, detect local edits and legacy skills, remove
   - `types/` - `Manifest`, `Bundle`, `Platform`
     - `platform.ts` - bundle ↔ platform filter
     - `resolve-target.ts` - platform × project/user → root dir (`.claude`, `$CLAUDE_CONFIG_DIR` or `~/.claude`)
@@ -53,7 +55,7 @@ flowchart LR
 ```
 
 - The CLI always reads templates from GitHub `main`, never from the local checkout: a `templates/` change reaches users on merge, not on npm release, and cannot be tried locally through `astp install`.
-- No lock file: `astp-source`, `astp-bundle`, `astp-version` and `astp-hash` in each installed file's frontmatter are the whole install state. `update` skips files whose hash no longer matches unless `--force`.
+- No lock file: `astp-source`, `astp-bundle`, `astp-version` and `astp-hash` in frontmatter are the whole install state. Agents and instructions carry them per file; a skill only in its root `SKILL.md`, with `astp-hash` over every file in its dir. `update` skips units whose hash no longer matches unless `--force`.
 - Template sources never contain `astp-*` fields; the installer adds them.
 - A manifest item's `target` is its `source` minus the bundle prefix, and giget lays files out by `target`.
 - Watch that changes landing in `main` come with a version bump for their bundle in `manifest.json`.
