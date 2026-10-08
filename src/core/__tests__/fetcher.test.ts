@@ -1,9 +1,7 @@
 import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 
 import { downloadTemplate } from "giget";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { downloadBundle } from "../fetcher.js";
 
@@ -16,6 +14,13 @@ const mockedDownloadTemplate = vi.mocked(downloadTemplate);
 describe("downloadBundle", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+    });
+
+    afterEach(async () => {
+        const dirs = mockedDownloadTemplate.mock.calls
+            .map(([, options]) => options?.dir)
+            .filter((dir): dir is string => !!dir);
+        await Promise.all(dirs.map((dir) => fs.rm(dir, { recursive: true, force: true })));
     });
 
     it("composes correct giget source string with default ref", async () => {
@@ -90,25 +95,15 @@ describe("downloadBundle", () => {
     });
 
     it("removes the temp directory after a download failure", async () => {
-        const tempEntriesBefore = new Set(await fs.readdir(os.tmpdir()));
         mockedDownloadTemplate.mockRejectedValue(new Error("network timeout"));
 
-        try {
-            await expect(downloadBundle("fozy-labs/astp", "docs")).rejects.toThrow(
-                "Failed to download bundle 'docs': network timeout",
-            );
+        await expect(downloadBundle("fozy-labs/astp", "docs")).rejects.toThrow(
+            "Failed to download bundle 'docs': network timeout",
+        );
 
-            const createdTempDirs = (await fs.readdir(os.tmpdir())).filter(
-                (entry) => entry.startsWith("astp-docs-") && !tempEntriesBefore.has(entry),
-            );
-            expect(createdTempDirs).toEqual([]);
-        } finally {
-            const newTempDirs = (await fs.readdir(os.tmpdir())).filter(
-                (entry) => entry.startsWith("astp-docs-") && !tempEntriesBefore.has(entry),
-            );
-            await Promise.all(
-                newTempDirs.map((entry) => fs.rm(path.join(os.tmpdir(), entry), { recursive: true, force: true })),
-            );
-        }
+        const dir = mockedDownloadTemplate.mock.calls[0]?.[1]?.dir;
+        expect(dir).toEqual(expect.stringMatching(/astp-docs-/));
+        if (!dir) throw new Error("Expected download temp directory");
+        await expect(fs.stat(dir)).rejects.toMatchObject({ code: "ENOENT" });
     });
 });
