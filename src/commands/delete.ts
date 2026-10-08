@@ -78,7 +78,7 @@ export async function executeDelete(options: DeleteOptions): Promise<void> {
             installedState.lock.bundles[bundle.bundleName] = lockBundle;
         }
         for (const unit of bundle.units) {
-            if (unit.state === "modified" && !options.force) {
+            if ((unit.state === "modified" || unit.blocks?.dirty) && !options.force) {
                 kept.push(toStatus(unit));
                 continue;
             }

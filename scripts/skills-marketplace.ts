@@ -9,9 +9,11 @@
  *
  * Repository-side tooling: it validates the *sources* committed here, while
  * `src/core/manifest.ts` validates a manifest downloaded by an installed CLI.
- * The two never share a runtime — only types.
+ * They share only types and `src/core/blocks.ts`, the pure block parser — a
+ * single definition of the format.
  */
 
+import { parseTemplateBlocks } from "../src/core/blocks.ts";
 import type { Bundle, Manifest, TemplateItem } from "../src/types/index.js";
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -79,9 +81,9 @@ export function supportsClaudeCode(bundle: Bundle): boolean {
     return !bundle.platforms || bundle.platforms.includes("claude-code");
 }
 
-export function selectBundles(manifest: Manifest): Bundle[] {
+export function selectBundles(manifest: Manifest, excludedSkills: ReadonlySet<string> = new Set()): Bundle[] {
     return Object.values(manifest.bundles)
-        .filter((bundle) => supportsClaudeCode(bundle) && bundle.items.some(isSkillItem))
+        .filter((bundle) => supportsClaudeCode(bundle) && collectSkillNames(bundle, excludedSkills).length > 0)
         .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -89,13 +91,18 @@ function isSkillItem(item: TemplateItem): boolean {
     return item.category === "skill";
 }
 
-/** Skill directory names of a bundle, derived from `skills/<name>/...` targets. */
-export function collectSkillNames(bundle: Bundle): string[] {
+/**
+ * Skill directory names of a bundle, derived from `skills/<name>/...` targets.
+ * `excludedSkills` holds `templates/<bundle>/skills/<name>` dirs whose files use
+ * `<astp-block>` — only the astp CLI understands them, so they stay out of the
+ * marketplace.
+ */
+export function collectSkillNames(bundle: Bundle, excludedSkills: ReadonlySet<string> = new Set()): string[] {
     const names = new Set<string>();
     for (const item of bundle.items) {
         if (!isSkillItem(item)) continue;
         const name = skillNameFromTarget(item.target);
-        if (name) names.add(name);
+        if (name && !excludedSkills.has(`${TEMPLATES_DIR}/${bundle.name}/skills/${name}`)) names.add(name);
     }
     return [...names].sort((a, b) => a.localeCompare(b));
 }
@@ -107,9 +114,12 @@ function skillNameFromTarget(target: string): string | null {
 }
 
 /** Every skill directory the marketplace will point at, for on-disk validation. */
-export function collectSkillLocations(manifest: Manifest): SkillLocation[] {
-    return selectBundles(manifest).flatMap((bundle) =>
-        collectSkillNames(bundle).map((skillName) => ({
+export function collectSkillLocations(
+    manifest: Manifest,
+    excludedSkills: ReadonlySet<string> = new Set(),
+): SkillLocation[] {
+    return selectBundles(manifest, excludedSkills).flatMap((bundle) =>
+        collectSkillNames(bundle, excludedSkills).map((skillName) => ({
             pluginName: bundle.name,
             skillName,
             dir: `${TEMPLATES_DIR}/${bundle.name}/skills/${skillName}`,
@@ -119,23 +129,23 @@ export function collectSkillLocations(manifest: Manifest): SkillLocation[] {
 
 // ── Marketplace Construction ─────────────────────────────────────────
 
-export function buildMarketplace(manifest: Manifest): Marketplace {
+export function buildMarketplace(manifest: Manifest, excludedSkills: ReadonlySet<string> = new Set()): Marketplace {
     const { owner, repo } = splitRepository(manifest.repository);
     return {
         name: repo,
         owner: { name: owner, url: `https://github.com/${owner}` },
         metadata: { description: GENERATED_NOTE },
-        plugins: selectBundles(manifest).map(toPlugin),
+        plugins: selectBundles(manifest, excludedSkills).map((bundle) => toPlugin(bundle, excludedSkills)),
     };
 }
 
-function toPlugin(bundle: Bundle): MarketplacePlugin {
+function toPlugin(bundle: Bundle, excludedSkills: ReadonlySet<string>): MarketplacePlugin {
     return {
         name: bundle.name,
         source: `./${TEMPLATES_DIR}/${bundle.name}`,
         description: bundle.description,
         version: bundle.version,
-        skills: collectSkillNames(bundle).map((name) => `./skills/${name}`),
+        skills: collectSkillNames(bundle, excludedSkills).map((name) => `./skills/${name}`),
     };
 }
 
@@ -210,6 +220,20 @@ export function parseManifest(raw: string): Manifest {
  * Checks the manifest entries the marketplace is built from. Returns every
  * problem found so a maintainer fixes them in one pass.
  */
+/**
+ * `<astp-block>` parse errors for every `.md` manifest item. `contents` maps
+ * `item.source` to the file contents read from disk.
+ */
+export function validateBlockSources(contents: Map<string, string>): string[] {
+    const errors: string[] = [];
+    for (const [source, content] of [...contents.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+        for (const error of parseTemplateBlocks(content).errors) {
+            errors.push(`${source}: ${error}`);
+        }
+    }
+    return errors;
+}
+
 export function validateManifestSources(manifest: Manifest): string[] {
     const errors: string[] = [];
     const ownerOfSkill = new Map<string, string>();

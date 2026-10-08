@@ -1,16 +1,19 @@
 import fs from "node:fs/promises";
 
 import {
+    assertBundleBlocks,
     assertBundleSources,
     compareVersions,
     downloadBundle,
     fetchManifest,
     groupTemplateItems,
     loadInstalled,
+    readUnitBlockFiles,
     syncBundle,
     validateUnitTargets,
     writeLock,
 } from "@/core/index.js";
+import type { BlockSelections } from "@/core/index.js";
 import type { FileStatus, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { describeUnitCounts } from "@/ui/format.js";
@@ -23,10 +26,14 @@ import {
     showSuccess,
     showUpdateReport,
     spinner,
+    warnBlockConflicts,
+    warnKeptBlocks,
     warnKeptRemoved,
     warnLegacyModified,
     warnModified,
 } from "@/ui/prompts.js";
+
+import { selectUpdateBlocks } from "./blocks.js";
 
 export interface UpdateOptions {
     force?: boolean;
@@ -115,6 +122,18 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
         try {
             s.stop(`Downloaded ${bundleName}.`);
             await assertBundleSources(tempDir, bundleName, units);
+            await assertBundleBlocks(tempDir, bundleName, units);
+
+            const blockSelections: BlockSelections = new Map();
+            for (const unit of units) {
+                if (!selected.has(unit.relativePath)) continue;
+                const blockFiles = await readUnitBlockFiles(tempDir, unit);
+                if (blockFiles.size === 0) continue;
+                const lockUnit = installedState.lock.bundles[bundleName]?.units[unit.relativePath];
+                const selections = await selectUpdateBlocks(unit.relativePath, blockFiles, lockUnit);
+                for (const [fileTarget, selection] of selections) blockSelections.set(fileTarget, selection);
+            }
+
             s.start(`Updating ${bundleName}...`);
             const result = await syncBundle({
                 target,
@@ -125,6 +144,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                 tempDir,
                 selected,
                 declined,
+                blockSelections,
                 force: options.force ?? false,
             });
             await writeLock(target.rootDir, installedState.lock);
@@ -137,6 +157,8 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             if (modified.length > 0) warnModified(modified);
             if (legacy.length > 0) warnLegacyModified(legacy);
             if (result.kept.length > 0) warnKeptRemoved(result.kept);
+            if (result.keptBlocks.length > 0) warnKeptBlocks(result.keptBlocks);
+            if (result.conflictBlocks.length > 0) warnBlockConflicts(result.conflictBlocks);
             s.stop(`Updated ${bundleName}.`);
         } finally {
             await fs.rm(tempDir, { recursive: true, force: true });

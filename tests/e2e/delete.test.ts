@@ -39,6 +39,7 @@ vi.mock("@/ui/prompts.js", () => ({
     selectTarget: vi.fn(),
     selectBundles: vi.fn(),
     selectInstalledBundles: vi.fn(),
+    selectBlocks: vi.fn(),
     selectUnits: vi.fn(),
     selectNewUnits: vi.fn(),
     confirmInstall: vi.fn(),
@@ -49,6 +50,8 @@ vi.mock("@/ui/prompts.js", () => ({
     showUpdateReport: vi.fn(),
     warnModified: vi.fn(),
     warnLegacyModified: vi.fn(),
+    warnBlockConflicts: vi.fn(),
+    warnKeptBlocks: vi.fn(),
     warnKeptRemoved: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));

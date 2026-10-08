@@ -46,11 +46,14 @@ vi.mock("@/ui/prompts.js", () => ({
     selectNewUnits: vi.fn(),
     selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
+    selectBlocks: vi.fn(),
     selectUnits: vi.fn(),
     showCheckReport: vi.fn(),
     showInfo: vi.fn(),
     showSuccess: vi.fn(),
     showUpdateReport: vi.fn(),
+    warnBlockConflicts: vi.fn(),
+    warnKeptBlocks: vi.fn(),
     warnKeptRemoved: vi.fn(),
     warnLegacyModified: vi.fn(),
     warnModified: vi.fn(),
@@ -297,7 +300,7 @@ describe("lock-file command flows", () => {
         expect(mockFetchManifest).not.toHaveBeenCalled();
     });
 
-    it("persists completed bundles when a later bundle download fails", async () => {
+    it("persists nothing when a later bundle download fails — all bundles download before any install", async () => {
         manifest = createManifest("1.0.0", ["agents/guide.md"], ["first", "second"]);
         mockDownloadBundle.mockImplementation(async (_repository, bundleName) => {
             if (bundleName === "second") throw new Error("download failed");
@@ -306,9 +309,8 @@ describe("lock-file command flows", () => {
             return dir;
         });
         await expect(executeInstall({ platform: "claude-code", target: "project" })).rejects.toThrow("download failed");
-        const lock = JSON.parse(await fs.readFile(path.join(rootDir, "astp.lock"), "utf8"));
-        expect(lock.bundles.first).toBeDefined();
-        expect(lock.bundles.second).toBeUndefined();
+        await expect(fs.access(path.join(rootDir, "astp.lock"))).rejects.toThrow();
+        expect(await fs.readdir(rootDir).catch(() => [])).not.toContain("agents");
     });
 
     it("prints detailed JSON list output without prompt noise", async () => {

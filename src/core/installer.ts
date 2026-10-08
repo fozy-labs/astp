@@ -4,19 +4,25 @@ import path from "node:path";
 
 import type { InstallTarget, TemplateItem } from "@/types/index.js";
 
+import { hasBlocks, parseTemplateBlocks } from "./blocks.js";
 import { computeHash } from "./frontmatter.js";
 import { assertInsideRoot } from "./path-safety.js";
 import { computeSkillTreeHash } from "./skill-tree.js";
 import type { SkillTemplateUnit, TemplateUnit } from "./units.js";
 
-export async function installFile(tempDir: string, item: TemplateItem, target: InstallTarget): Promise<string> {
+export async function installFile(
+    tempDir: string,
+    item: TemplateItem,
+    target: InstallTarget,
+    contentOverride?: string,
+): Promise<string> {
     // giget downloads the bundle subdirectory, so file paths inside tempDir
     // mirror item.target (source path without the bundle prefix)
     const sourceFile = path.join(tempDir, item.target);
     validateTargetPath(target.rootDir, item.target);
     await assertInsideRoot(target.rootDir, item.target);
 
-    const content = await fs.readFile(sourceFile);
+    const content = contentOverride ?? (await fs.readFile(sourceFile));
     const targetFile = path.join(target.rootDir, item.target);
     await fs.mkdir(path.dirname(targetFile), { recursive: true });
     await fs.rm(targetFile, { recursive: true, force: true });
@@ -24,7 +30,17 @@ export async function installFile(tempDir: string, item: TemplateItem, target: I
     return computeHash(content.toString("utf8"));
 }
 
-export async function installSkill(tempDir: string, unit: SkillTemplateUnit, target: InstallTarget): Promise<string> {
+export interface InstallSkillOptions {
+    /** Merged contents for files with blocks, written instead of the template bytes. */
+    overrides?: ReadonlyMap<string, string>;
+}
+
+export async function installSkill(
+    tempDir: string,
+    unit: SkillTemplateUnit,
+    target: InstallTarget,
+    options: InstallSkillOptions = {},
+): Promise<string> {
     const skillDir = path.join(target.rootDir, unit.relativePath);
     validateTargetPath(target.rootDir, unit.relativePath);
     await assertInsideRoot(target.rootDir, unit.relativePath);
@@ -46,7 +62,9 @@ export async function installSkill(tempDir: string, unit: SkillTemplateUnit, tar
             const targetFile = path.join(target.rootDir, item.target);
             const stagingFile = path.join(stagingDir, path.relative(skillDir, targetFile));
             await fs.mkdir(path.dirname(stagingFile), { recursive: true });
-            await fs.copyFile(sourceFile, stagingFile);
+            const override = options.overrides?.get(item.target);
+            if (override !== undefined) await fs.writeFile(stagingFile, override, "utf8");
+            else await fs.copyFile(sourceFile, stagingFile);
         }
 
         const hash = await computeSkillTreeHash(stagingDir);
@@ -109,5 +127,22 @@ export async function assertBundleSources(tempDir: string, bundleName: string, u
         throw new Error(
             `Downloaded bundle '${bundleName}' is missing files listed in the manifest: ${missing.join(", ")}`,
         );
+    }
+}
+
+/** Every downloaded template file with `<astp-block>` tags must parse without errors. */
+export async function assertBundleBlocks(tempDir: string, bundleName: string, units: TemplateUnit[]): Promise<void> {
+    const errors: string[] = [];
+    for (const unit of units) {
+        for (const item of unit.kind === "skill" ? unit.items : [unit.item]) {
+            const content = await fs.readFile(path.join(tempDir, item.target), "utf8");
+            if (!hasBlocks(content)) continue;
+            for (const error of parseTemplateBlocks(content).errors) {
+                errors.push(`${item.target}: ${error}`);
+            }
+        }
+    }
+    if (errors.length > 0) {
+        throw new Error(`Downloaded bundle '${bundleName}' has invalid blocks:\n${errors.join("\n")}`);
     }
 }

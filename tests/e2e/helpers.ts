@@ -11,7 +11,16 @@ export async function readLockFixture(rootDir: string): Promise<{
         {
             source: string;
             declined: string[];
-            units: Record<string, { kind: "file" | "skill"; version: string; hash: string }>;
+            units: Record<
+                string,
+                {
+                    kind: "file" | "skill";
+                    version: string;
+                    hash: string;
+                    blocks?: Record<string, string>;
+                    declinedBlocks?: string[];
+                }
+            >;
         }
     >;
 }> {
@@ -171,9 +180,9 @@ export function createFixtureManifest(version = "1.0.0"): Manifest {
                         category: "agent",
                     },
                     {
-                        source: "pipeline/instructions/thoughts-workflow.instructions.md",
-                        target: "instructions/thoughts-workflow.instructions.md",
-                        category: "instruction",
+                        source: "pipeline/rules/thoughts-workflow.rules.md",
+                        target: "rules/thoughts-workflow.rules.md",
+                        category: "rule",
                     },
                     {
                         source: "pipeline/skills/pipeline-01-research/SKILL.md",
@@ -217,14 +226,18 @@ export async function createTempProject(): Promise<{ dir: string; cleanup: () =>
  * Creates a temp directory with template files matching what `downloadBundle` would return.
  * File paths inside the directory match `item.target` for each bundle item.
  */
-export async function setupTemplateDir(manifest: Manifest, bundleName: string): Promise<string> {
+export async function setupTemplateDir(
+    manifest: Manifest,
+    bundleName: string,
+    contents: Record<string, string> = {},
+): Promise<string> {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), `astp-tpl-${bundleName}-`));
     const bundle = manifest.bundles[bundleName];
 
     for (const item of bundle.items) {
         const filePath = path.join(dir, item.target);
         await fs.mkdir(path.dirname(filePath), { recursive: true });
-        const content = generateTemplateContent(item, bundle.version);
+        const content = contents[item.target] ?? generateTemplateContent(item, bundle.version);
         await fs.writeFile(filePath, content, typeof content === "string" ? "utf8" : undefined);
     }
 
@@ -242,8 +255,8 @@ function generateTemplateContent(item: TemplateItem, version: string): string | 
             return `---\nname: ${name}\ndescription: ${name} description\n---\n# ${name}\n\nAgent v${version} description.\n`;
         case "skill":
             return `---\nname: ${name}\ndescription: ${name} description\n---\n# ${name}\n\nSkill v${version} content.\n`;
-        case "instruction":
-            return `---\ndescription: ${name}\n---\n# ${name}\n\nInstruction v${version} content.\n`;
+        case "rule":
+            return `---\ndescription: ${name}\n---\n# ${name}\n\nRule v${version} content.\n`;
         default:
             throw new Error(`Unknown category: ${item.category}`);
     }

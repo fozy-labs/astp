@@ -407,3 +407,82 @@ describe("loadInstalled legacy compatibility", () => {
         expect(loaded.bundles[0]?.version).toBe("1.1.0");
     });
 });
+
+describe("loadInstalled with blocks", () => {
+    let rootDir: string;
+
+    beforeEach(async () => {
+        rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "astp-version-blocks-"));
+    });
+
+    afterEach(async () => {
+        await fs.rm(rootDir, { recursive: true, force: true });
+    });
+
+    const TEMPLATE_FM = "---\ndescription: d\n---\n";
+    const BLOCK_CONTENT = "text\n";
+    // import lazily to keep the top import list untouched
+    async function lockUnitFor(extra: Record<string, unknown> = {}) {
+        const { frontmatterHash, blockHash } = await import("../blocks.js");
+        return {
+            kind: "file" as const,
+            version: "1.0.0",
+            hash: frontmatterHash(TEMPLATE_FM),
+            blocks: { "rules/x.md#a": blockHash(BLOCK_CONTENT) },
+            declinedBlocks: ["rules/x.md#gone"],
+            ...extra,
+        };
+    }
+
+    async function setup(content: string) {
+        await fs.mkdir(path.join(rootDir, "rules"), { recursive: true });
+        await fs.writeFile(path.join(rootDir, "rules/x.md"), content);
+        await writeLock(rootDir, {
+            schemaVersion: 1,
+            bundles: {
+                core: {
+                    source: "repo",
+                    declined: [],
+                    units: { "rules/x.md": await lockUnitFor() },
+                },
+            },
+        });
+        const loaded = await loadInstalled(rootDir);
+        return loaded.bundles[0]!.units[0]!;
+    }
+
+    const CLEAN = `${TEMPLATE_FM}\n<a>\n${BLOCK_CONTENT}</a>\n`;
+
+    it("reports a clean block file as unmodified with no missing/dirty", async () => {
+        const unit = await setup(CLEAN);
+        expect(unit.state).toBe("unmodified");
+        expect(unit.blocks).toEqual({ missing: false, dirty: false });
+    });
+
+    it("a filled block is dirty but still unmodified", async () => {
+        const unit = await setup(CLEAN.replace("text", "filled"));
+        expect(unit.state).toBe("unmodified");
+        expect(unit.blocks).toEqual({ missing: false, dirty: true });
+    });
+
+    it("consumer text outside blocks is dirty", async () => {
+        const unit = await setup(`${CLEAN}extra\n`);
+        expect(unit.blocks).toEqual({ missing: false, dirty: true });
+    });
+
+    it("a deleted block is missing, not modified", async () => {
+        const unit = await setup(`${TEMPLATE_FM}\n`);
+        expect(unit.state).toBe("unmodified");
+        expect(unit.blocks).toEqual({ missing: true, dirty: false });
+    });
+
+    it("an unparseable file is modified", async () => {
+        const unit = await setup(`${TEMPLATE_FM}\n<a>\n${BLOCK_CONTENT}`);
+        expect(unit.state).toBe("modified");
+    });
+
+    it("edited frontmatter is modified", async () => {
+        const unit = await setup(CLEAN.replace("description: d", "description: other"));
+        expect(unit.state).toBe("modified");
+    });
+});

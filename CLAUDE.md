@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-`astp` (`@fozy-labs/astp`) is a Node ≥ 22 CLI that installs, updates, checks and deletes bundles of agent files (skills, agents, instructions) for Claude Code. The repo holds both the CLI (`src/`) and the bundles it ships (`templates/`).
+`astp` (`@fozy-labs/astp`) is a Node ≥ 22 CLI that installs, updates, checks and deletes bundles of agent files (skills, agents, rules) for Claude Code. The repo holds both the CLI (`src/`) and the bundles it ships (`templates/`).
 
 ## Commands
 
@@ -21,7 +21,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `core/` - no UI; everything goes through `core/index.ts`
     - `manifest.ts` - fetch `templates/manifest.json` from GitHub `main`, validate it
     - `fetcher.ts` - giget download of one bundle dir into a temp dir
-    - `installer.ts` - write an agent/instruction file or a whole skill dir under the install root, path-traversal guard
+    - `installer.ts` - write an agent/rule file or a whole skill dir under the install root, path-traversal guard
+    - `blocks.ts` - pure `<astp-block>` parser and per-block merge; also used by `scripts/`
     - `units.ts` - group manifest items: one unit per skill dir, one per other file
     - `skill-tree.ts` - skill dir hash over all its files
     - `frontmatter.ts` - read / strip legacy `astp-*` fields, `description`, content hash
@@ -57,8 +58,8 @@ flowchart LR
 ```
 
 - The CLI always reads templates from GitHub `main`, never from the local checkout: a `templates/` change reaches users on merge, not on npm release, and cannot be tried locally through `astp install`.
-- `astp.lock` in the install root is the whole install state: `kind`, `version`, `hash` per unit (a skill's hash covers every file in its dir), `declined` per bundle. `install` and `update` skip modified or foreign units unless `--force`.
-- Installed files are byte-identical to templates; `astp-*` fields mark only legacy installs.
+- `astp.lock` in the install root is the whole install state: `kind`, `version`, `hash` per unit (a skill's hash covers every file in its dir; for block files, only frontmatter), `blocks`/`declinedBlocks`, `declined` per bundle. `install` and `update` skip modified or foreign units unless `--force`.
+- Files without blocks are byte-identical to templates; `astp-*` fields mark only legacy installs.
 - A manifest item's `target` is its `source` minus the bundle prefix, and giget lays files out by `target`.
 - Watch that changes landing in `main` come with a version bump for their bundle in `manifest.json`.
 - A new platform needs an entry in `ALL_PLATFORMS` and in `PLATFORM_ROOTS` (`resolve-target.ts`).
