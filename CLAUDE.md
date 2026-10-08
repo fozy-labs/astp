@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-`astp` (`@fozy-labs/astp`) is a Node ≥ 22 CLI that installs, updates, checks and deletes bundles of agent Markdown files (skills, agents, instructions) for VS Code Copilot and Claude Code. The repo holds both the CLI (`src/`) and the bundles it ships (`templates/`).
+`astp` (`@fozy-labs/astp`) is a Node ≥ 22 CLI that installs, updates, checks and deletes bundles of agent Markdown files (skills, agents, instructions) for Claude Code. The repo holds both the CLI (`src/`) and the bundles it ships (`templates/`).
 
 ## Commands
 
@@ -25,12 +25,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     - `frontmatter.ts` - inject / read / strip `astp-*` fields, content hash
     - `version.ts` - scan installed files, compare with manifest, detect local edits, remove
   - `types/` - `Manifest`, `Bundle`, `Platform`
-    - `platform.ts` - bundle ↔ platform filter; no `platforms` field means `vscode` only
-    - `resolve-target.ts` - platform × project/user → root dir (`.github`, `~/.copilot`, `.claude`, `$CLAUDE_CONFIG_DIR` or `~/.claude`)
+    - `platform.ts` - bundle ↔ platform filter
+    - `resolve-target.ts` - platform × project/user → root dir (`.claude`, `$CLAUDE_CONFIG_DIR` or `~/.claude`)
   - `ui/` - `@clack/prompts` wizard and prompts
 - `templates/` - shipped bundles; author guide in [templates/README.md](templates/README.md)
   - `manifest.json` - source of truth: bundles, versions, platforms, `source` → `target` items
-  - `<bundle>/` - base, rdpi (vscode only); fozy-labs, docs, design (both platforms)
+  - `<bundle>/` - fozy-labs, docs, design
 - `scripts/` - marketplace generator (run by Node type stripping, own `tsconfig.json`)
 - `tests/`
   - `e2e/` - command flows with `fetchManifest` / `downloadBundle` mocked, no network
@@ -47,7 +47,7 @@ flowchart LR
     cmd --> mf["manifest.ts<br/>raw.githubusercontent … main"]
     cmd --> dl["fetcher.ts<br/>giget templates/&lt;bundle&gt;"]
     dl --> inst["installer.ts + frontmatter.ts"]
-    inst --> root["platform root<br/>.github · .claude · ~/…"]
+    inst --> root["platform root<br/>.claude · ~/…"]
     root --> ver["version.ts<br/>scan astp-* fields"]
     ver --> cmd
 ```
