@@ -6,7 +6,7 @@ import type { InstallTarget, TemplateItem } from "@/types/index.js";
 
 import { computeHash, injectAstpFields } from "./frontmatter.js";
 import { computeSkillTreeHash } from "./skill-tree.js";
-import type { SkillTemplateUnit } from "./units.js";
+import type { SkillTemplateUnit, TemplateUnit } from "./units.js";
 
 export async function installFile(
     tempDir: string,
@@ -95,5 +95,34 @@ export function validateTargetPath(installRoot: string, targetPath: string): voi
     const resolved = path.resolve(installRoot, targetPath);
     if (!resolved.startsWith(normalizedRoot + path.sep) && resolved !== normalizedRoot) {
         throw new Error(`Invalid target path: resolved path escapes install root: ${targetPath}`);
+    }
+}
+
+export function validateUnitTargets(installRoot: string, units: TemplateUnit[]): void {
+    for (const unit of units) {
+        validateTargetPath(installRoot, unit.relativePath);
+        if (unit.kind === "skill") {
+            for (const item of unit.items) validateTargetPath(installRoot, item.target);
+        }
+    }
+}
+
+export async function assertBundleSources(tempDir: string, bundleName: string, units: TemplateUnit[]): Promise<void> {
+    const missing: string[] = [];
+    for (const unit of units) {
+        for (const item of unit.kind === "skill" ? unit.items : [unit.item]) {
+            try {
+                if (!(await fs.stat(path.join(tempDir, item.target))).isFile()) missing.push(item.target);
+            } catch (error) {
+                const code = (error as NodeJS.ErrnoException).code;
+                if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
+                missing.push(item.target);
+            }
+        }
+    }
+    if (missing.length > 0) {
+        throw new Error(
+            `Downloaded bundle '${bundleName}' is missing files listed in the manifest: ${missing.join(", ")}`,
+        );
     }
 }

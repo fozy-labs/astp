@@ -1,4 +1,7 @@
+import fs from "node:fs/promises";
+
 import {
+    assertBundleSources,
     compareVersions,
     downloadBundle,
     fetchManifest,
@@ -8,6 +11,7 @@ import {
     installSkill,
     removeUnits,
     scanInstalled,
+    validateUnitTargets,
 } from "@/core/index.js";
 import type { TemplateUnit } from "@/core/units.js";
 import type { InstalledUnit, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
@@ -119,51 +123,68 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
         const manifestBundle = manifest.bundles[bundleName];
         if (!manifestBundle) continue;
 
-        if (plannedBundle.orphans.length > 0) {
-            const result = await removeUnits(plannedBundle.orphans, target.rootDir, options.force);
-            if (result.skipped.length > 0) warnKeptRemoved(result.skipped);
-            removedFiles += result.removed.filter((status) => status.kind === "file").length;
-            removedSkills += result.removed.filter((status) => status.kind === "skill").length;
-            skippedFiles += result.skipped.filter((status) => status.kind === "file").length;
-            skippedSkills += result.skipped.filter((status) => status.kind === "skill").length;
-        }
-
-        const legacyPaths = legacyPathsByBundle.get(bundleName) ?? new Set<string>();
-        const statuses = await findBlockedUnits(target.rootDir, bundleName, plannedBundle.units);
-        const modified = statuses.filter(
-            (status) => status.state === "modified" && !legacyPaths.has(status.targetPath),
-        );
-        if (!options.force && modified.length > 0) {
-            warnModified(modified);
-            skippedFiles += modified.filter((status) => status.kind === "file").length;
-            skippedSkills += modified.filter((status) => status.kind === "skill").length;
-        }
-
-        if (!options.force) skippedSkills += legacyPaths.size;
-
-        const skippedPaths = new Set([
-            ...(options.force ? [] : modified.map((status) => status.targetPath)),
-            ...(options.force ? [] : legacyPaths),
-        ]);
-        const installUnits = plannedBundle.units.filter(
-            (unit) => options.force || !skippedPaths.has(unit.relativePath),
-        );
-        if (installUnits.length > 0) {
+        validateUnitTargets(target.rootDir, plannedBundle.units);
+        let tempDir: string | undefined;
+        if (plannedBundle.units.length > 0) {
             s.start(`Downloading ${bundleName}...`);
-            const tempDir = await downloadBundle(manifest.repository, bundleName);
+            tempDir = await downloadBundle(manifest.repository, bundleName);
             s.stop(`Downloaded ${bundleName}.`);
-            s.start(`Installing ${bundleName}...`);
-            for (const unit of installUnits) {
-                const metadata = { source: manifest.repository, bundle: bundleName, version: manifestBundle.version };
-                if (unit.kind === "skill") {
-                    await installSkill(tempDir, unit, target, metadata);
-                    updatedSkills++;
-                } else {
-                    await installFile(tempDir, unit.item, target, metadata);
-                    updatedFiles++;
-                }
+        }
+
+        try {
+            if (tempDir) {
+                await assertBundleSources(tempDir, bundleName, groupTemplateItems(manifestBundle.items));
             }
-            s.stop(`Installed ${bundleName}.`);
+
+            if (plannedBundle.orphans.length > 0) {
+                const result = await removeUnits(plannedBundle.orphans, target.rootDir, options.force);
+                if (result.skipped.length > 0) warnKeptRemoved(result.skipped);
+                removedFiles += result.removed.filter((status) => status.kind === "file").length;
+                removedSkills += result.removed.filter((status) => status.kind === "skill").length;
+                skippedFiles += result.skipped.filter((status) => status.kind === "file").length;
+                skippedSkills += result.skipped.filter((status) => status.kind === "skill").length;
+            }
+
+            const legacyPaths = legacyPathsByBundle.get(bundleName) ?? new Set<string>();
+            const statuses = await findBlockedUnits(target.rootDir, bundleName, plannedBundle.units);
+            const modified = statuses.filter(
+                (status) => status.state === "modified" && !legacyPaths.has(status.targetPath),
+            );
+            if (!options.force && modified.length > 0) {
+                warnModified(modified);
+                skippedFiles += modified.filter((status) => status.kind === "file").length;
+                skippedSkills += modified.filter((status) => status.kind === "skill").length;
+            }
+
+            if (!options.force) skippedSkills += legacyPaths.size;
+
+            const skippedPaths = new Set([
+                ...(options.force ? [] : modified.map((status) => status.targetPath)),
+                ...(options.force ? [] : legacyPaths),
+            ]);
+            const installUnits = plannedBundle.units.filter(
+                (unit) => options.force || !skippedPaths.has(unit.relativePath),
+            );
+            if (tempDir && installUnits.length > 0) {
+                s.start(`Installing ${bundleName}...`);
+                for (const unit of installUnits) {
+                    const metadata = {
+                        source: manifest.repository,
+                        bundle: bundleName,
+                        version: manifestBundle.version,
+                    };
+                    if (unit.kind === "skill") {
+                        await installSkill(tempDir, unit, target, metadata);
+                        updatedSkills++;
+                    } else {
+                        await installFile(tempDir, unit.item, target, metadata);
+                        updatedFiles++;
+                    }
+                }
+                s.stop(`Installed ${bundleName}.`);
+            }
+        } finally {
+            if (tempDir) await fs.rm(tempDir, { recursive: true, force: true });
         }
     }
 

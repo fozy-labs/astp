@@ -16,6 +16,7 @@ export async function downloadBundle(repository: string, bundleName: string, ref
         });
         return result.dir;
     } catch (error) {
+        await fs.rm(tempDir, { recursive: true, force: true });
         const message = error instanceof Error ? error.message : String(error);
         throw new Error(`Failed to download bundle '${bundleName}': ${message}`);
     }
