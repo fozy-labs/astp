@@ -106,3 +106,23 @@ export function validateUnitTargets(installRoot: string, units: TemplateUnit[]):
         }
     }
 }
+
+export async function assertBundleSources(tempDir: string, bundleName: string, units: TemplateUnit[]): Promise<void> {
+    const missing: string[] = [];
+    for (const unit of units) {
+        for (const item of unit.kind === "skill" ? unit.items : [unit.item]) {
+            try {
+                if (!(await fs.stat(path.join(tempDir, item.target))).isFile()) missing.push(item.target);
+            } catch (error) {
+                const code = (error as NodeJS.ErrnoException).code;
+                if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
+                missing.push(item.target);
+            }
+        }
+    }
+    if (missing.length > 0) {
+        throw new Error(
+            `Downloaded bundle '${bundleName}' is missing files listed in the manifest: ${missing.join(", ")}`,
+        );
+    }
+}

@@ -2,7 +2,13 @@ export { computeHash, extractAstpMetadata, injectAstpFields, stripAstpFields } f
 export { fetchManifest, resolveBundle, validateManifest } from "./manifest.js";
 export { downloadBundle } from "./fetcher.js";
 export { computeSkillTreeHash } from "./skill-tree.js";
-export { installFile, installSkill, validateTargetPath, validateUnitTargets } from "./installer.js";
+export {
+    assertBundleSources,
+    installFile,
+    installSkill,
+    validateTargetPath,
+    validateUnitTargets,
+} from "./installer.js";
 export {
     compareVersions,
     detectModified,

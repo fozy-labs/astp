@@ -247,9 +247,27 @@ async function prepareDroppedSkill(item: TemplateItem) {
         legacySkills: [],
     });
     mockFindBlockedUnits.mockResolvedValue([]);
-    mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
 
     return { rootDir, skillFilePath, notesFilePath };
+}
+
+async function createTempBundle(items: TemplateItem[]): Promise<string> {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "astp-update-bundle-"));
+    temporaryRoots.push(tempDir);
+    await Promise.all(
+        items.map(async (item) => {
+            const sourcePath = path.join(tempDir, item.target);
+            await fs.mkdir(path.dirname(sourcePath), { recursive: true });
+            await fs.writeFile(sourcePath, "template content\n");
+        }),
+    );
+    return tempDir;
+}
+
+async function mockBundleDownload(items: TemplateItem[]): Promise<string> {
+    const tempDir = await createTempBundle(items);
+    mockDownloadBundle.mockResolvedValue(tempDir);
+    return tempDir;
 }
 
 beforeEach(() => {
@@ -265,7 +283,7 @@ describe("executeUpdate", () => {
         mockFindBlockedUnits.mockResolvedValue([
             { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
         ]);
-        mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
+        await mockBundleDownload(testBundle.items);
         mockInstallFile.mockResolvedValue(undefined);
 
         await executeUpdate({ force: true, platform: "claude-code", target: "project" });
@@ -327,6 +345,25 @@ describe("executeUpdate", () => {
         await expect(fs.readFile(notesFilePath, "utf8")).resolves.toBe("Original notes\n");
     });
 
+    it("does not remove a dropped skill when the downloaded bundle is missing a source", async () => {
+        const { skillFilePath, notesFilePath } = await prepareDroppedSkill({
+            source: "pipeline/skills/a/b/SKILL.md",
+            target: "skills/a/b/SKILL.md",
+            category: "skill",
+        });
+        const tempDir = await createTempBundle([]);
+        mockDownloadBundle.mockResolvedValue(tempDir);
+
+        await expect(executeUpdate({ platform: "claude-code" })).rejects.toThrow(
+            /missing files listed in the manifest/,
+        );
+
+        expect(mockInstallSkill).not.toHaveBeenCalled();
+        await expect(fs.readFile(skillFilePath, "utf8")).resolves.toBe("# Original skill\n");
+        await expect(fs.readFile(notesFilePath, "utf8")).resolves.toBe("Original notes\n");
+        await expect(fs.stat(tempDir)).rejects.toMatchObject({ code: "ENOENT" });
+    });
+
     it("does not remove a dropped skill when a manifest target is invalid", async () => {
         const { skillFilePath, notesFilePath } = await prepareDroppedSkill({
             source: "pipeline/skills/a/b/SKILL.md",
@@ -362,7 +399,7 @@ describe("executeUpdate", () => {
         mockCompareVersions.mockReturnValue(updatesReport);
         mockFindBlockedUnits.mockResolvedValue([{ targetPath: testItem.target, kind: "file", state: "modified" }]);
         mockRemoveUnits.mockResolvedValue({ removed: [], skipped: [] });
-        mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
+        const tempDir = await mockBundleDownload([testItem]);
 
         await executeUpdate({ platform: "claude-code", target: "project" });
 
@@ -370,6 +407,7 @@ describe("executeUpdate", () => {
         expect(mockDownloadBundle).toHaveBeenCalledTimes(1);
         expect(mockInstallFile).not.toHaveBeenCalled();
         expect(mockInstallSkill).not.toHaveBeenCalled();
+        await expect(fs.stat(tempDir)).rejects.toMatchObject({ code: "ENOENT" });
     });
 
     it("migrates only legacy skills when the bundle version is current", async () => {
@@ -381,7 +419,7 @@ describe("executeUpdate", () => {
             notInManifest: [],
             legacySkills: [{ bundleName: "pipeline", targetPath: "skills/sample", inManifest: true }],
         });
-        mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
+        await mockBundleDownload(legacyManifest.bundles.pipeline?.items ?? []);
         mockInstallFile.mockResolvedValue(undefined);
         mockInstallSkill.mockResolvedValue(undefined);
 
@@ -424,7 +462,7 @@ describe("executeUpdate", () => {
         mockFindBlockedUnits.mockResolvedValue([
             { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
         ]);
-        mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
+        await mockBundleDownload(testBundle.items);
 
         await executeUpdate({ platform: "claude-code", target: "project" });
 
@@ -439,7 +477,7 @@ describe("executeUpdate", () => {
         mockFindBlockedUnits.mockResolvedValue([
             { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
         ]);
-        mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
+        await mockBundleDownload(testBundle.items);
         mockInstallFile.mockResolvedValue(undefined);
 
         await executeUpdate({ force: true, platform: "claude-code", target: "project" });

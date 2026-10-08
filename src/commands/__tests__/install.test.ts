@@ -1,4 +1,8 @@
-import { vi } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+import { afterEach, vi } from "vitest";
 
 import { downloadBundle, fetchManifest, installFile, installSkill, resolveBundle } from "@/core/index.js";
 import type { Bundle, InstallTarget, Manifest, Platform, TemplateItem } from "@/types/index.js";
@@ -39,6 +43,9 @@ const mockSelectTarget = vi.mocked(selectTarget);
 const mockSelectBundles = vi.mocked(selectBundles);
 const mockConfirmInstall = vi.mocked(confirmInstall);
 const mockShowSuccess = vi.mocked(showSuccess);
+
+const temporaryRoots: string[] = [];
+let tempBundleDir: string;
 
 const testItem: TemplateItem = {
     source: "core/skills/orchestrate/SKILL.md",
@@ -82,10 +89,16 @@ const testTarget: InstallTarget = {
     rootDir: "/project/.claude",
 };
 
-beforeEach(() => {
+afterEach(async () => {
+    await Promise.all(temporaryRoots.splice(0).map((rootDir) => fs.rm(rootDir, { recursive: true, force: true })));
+});
+
+beforeEach(async () => {
     vi.clearAllMocks();
+    tempBundleDir = await fs.mkdtemp(path.join(os.tmpdir(), "astp-install-bundle-"));
+    temporaryRoots.push(tempBundleDir);
     mockFetchManifest.mockResolvedValue(testManifest);
-    mockDownloadBundle.mockResolvedValue("/tmp/astp-base");
+    mockDownloadBundle.mockResolvedValue(tempBundleDir);
     mockInstallFile.mockResolvedValue(undefined);
     mockInstallSkill.mockResolvedValue(undefined);
     mockConfirmInstall.mockResolvedValue(true);
@@ -105,7 +118,7 @@ describe("executeInstall", () => {
         expect(mockDownloadBundle).toHaveBeenCalledWith("fozy-labs/astp", "core");
         expect(mockInstallSkill).toHaveBeenCalledTimes(1);
         expect(mockInstallSkill).toHaveBeenCalledWith(
-            "/tmp/astp-base",
+            tempBundleDir,
             {
                 kind: "skill",
                 relativePath: "skills/orchestrate",
@@ -114,6 +127,14 @@ describe("executeInstall", () => {
             expect.objectContaining({ type: "project", platform: "claude-code" }),
             { source: "fozy-labs/astp", bundle: "core", version: "1.0.0" },
         );
+    });
+
+    it("removes the downloaded temp directory after a successful install", async () => {
+        mockResolveBundle.mockReturnValue(testBundle);
+
+        await executeInstall({ bundle: "core", platform: "claude-code", target: "project" });
+
+        await expect(fs.stat(tempBundleDir)).rejects.toMatchObject({ code: "ENOENT" });
     });
 
     it("prompts for platform, target, and bundles when no arguments provided", async () => {

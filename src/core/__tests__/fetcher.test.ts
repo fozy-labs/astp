@@ -1,3 +1,7 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
 import { downloadTemplate } from "giget";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -83,5 +87,28 @@ describe("downloadBundle", () => {
         await expect(downloadBundle("fozy-labs/astp", "docs")).rejects.toThrow(
             "Failed to download bundle 'docs': network timeout",
         );
+    });
+
+    it("removes the temp directory after a download failure", async () => {
+        const tempEntriesBefore = new Set(await fs.readdir(os.tmpdir()));
+        mockedDownloadTemplate.mockRejectedValue(new Error("network timeout"));
+
+        try {
+            await expect(downloadBundle("fozy-labs/astp", "docs")).rejects.toThrow(
+                "Failed to download bundle 'docs': network timeout",
+            );
+
+            const createdTempDirs = (await fs.readdir(os.tmpdir())).filter(
+                (entry) => entry.startsWith("astp-docs-") && !tempEntriesBefore.has(entry),
+            );
+            expect(createdTempDirs).toEqual([]);
+        } finally {
+            const newTempDirs = (await fs.readdir(os.tmpdir())).filter(
+                (entry) => entry.startsWith("astp-docs-") && !tempEntriesBefore.has(entry),
+            );
+            await Promise.all(
+                newTempDirs.map((entry) => fs.rm(path.join(os.tmpdir(), entry), { recursive: true, force: true })),
+            );
+        }
     });
 });

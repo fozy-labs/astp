@@ -98,8 +98,19 @@ describe("E2E: skill directory units", () => {
     async function setupBundle(bundleName = "skillpack"): Promise<string> {
         const templateDir = await setupTemplateDir(manifest, bundleName);
         templateDirs.push(templateDir);
-        mockDownloadBundle.mockResolvedValue(templateDir);
+        mockDownloadFrom(templateDir);
         return templateDir;
+    }
+
+    function mockDownloadFrom(templateDir: string): void {
+        mockDownloadBundle.mockImplementation(async () => {
+            const downloadDir = await fs.mkdtemp(`${templateDir}-download-`);
+            templateDirs.push(downloadDir);
+            for (const entry of await fs.readdir(templateDir)) {
+                await fs.cp(path.join(templateDir, entry), path.join(downloadDir, entry), { recursive: true });
+            }
+            return downloadDir;
+        });
     }
 
     async function installSkillpack(): Promise<void> {
@@ -254,7 +265,7 @@ describe("E2E: skill directory units", () => {
         mockFetchManifest.mockResolvedValue(manifestV2);
         const templateDir = await setupTemplateDir(manifestV2, "skillpack");
         templateDirs.push(templateDir);
-        mockDownloadBundle.mockResolvedValue(templateDir);
+        mockDownloadFrom(templateDir);
 
         await executeUpdate({ platform: "claude-code", target: "project" });
 
@@ -301,7 +312,7 @@ describe("E2E: skill directory units", () => {
         mockFetchManifest.mockResolvedValue(versionedManifest);
         const templateDir = await setupTemplateDir(versionedManifest, "skillpack");
         templateDirs.push(templateDir);
-        mockDownloadBundle.mockResolvedValue(templateDir);
+        mockDownloadFrom(templateDir);
 
         await executeUpdate({ platform: "claude-code", target: "project" });
 
@@ -365,7 +376,7 @@ Skill A v1.1 content`,
         mockFetchManifest.mockResolvedValue(manifestV2);
         const templateDir = await setupTemplateDir(manifestV2, "skillpack");
         templateDirs.push(templateDir);
-        mockDownloadBundle.mockResolvedValue(templateDir);
+        mockDownloadFrom(templateDir);
         const userFile = path.join(projectDir, ".claude", "skills", "new", "user.txt");
         await fs.mkdir(path.dirname(userFile), { recursive: true });
         await fs.writeFile(userFile, "unmanaged");

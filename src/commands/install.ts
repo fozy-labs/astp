@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+
 import {
     downloadBundle,
     fetchManifest,
@@ -62,44 +64,48 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
     for (const bundle of selectedBundles) {
         s.start(`Downloading ${bundle.name}...`);
         const tempDir = await downloadBundle(manifest.repository, bundle.name);
-        s.stop(`Downloaded ${bundle.name}.`);
+        try {
+            s.stop(`Downloaded ${bundle.name}.`);
 
-        s.start(`Installing ${bundle.name}...`);
-        const units = groupTemplateItems(bundle.items);
-        const blocked = await findBlockedUnits(target.rootDir, bundle.name, units);
-        const modified = blocked.filter((status) => status.state === "modified");
-        const legacy = blocked.filter((status) => status.state === "legacy");
-        if (!options.force && modified.length > 0) warnModified(modified);
-        if (!options.force && legacy.length > 0) {
-            warnLegacySkills(
-                legacy.map((status) => ({
-                    bundleName: bundle.name,
-                    targetPath: status.targetPath,
-                    inManifest: true,
-                })),
-            );
-        }
-        if (!options.force) {
-            skippedFiles += blocked.filter((status) => status.kind === "file").length;
-            skippedSkills += blocked.filter((status) => status.kind === "skill").length;
-        }
-        const blockedPaths = new Set(options.force ? [] : blocked.map((status) => status.targetPath));
-        for (const unit of units) {
-            if (blockedPaths.has(unit.relativePath)) continue;
-            const metadata = {
-                source: manifest.repository,
-                bundle: bundle.name,
-                version: bundle.version,
-            };
-            if (unit.kind === "skill") {
-                await installSkill(tempDir, unit, target, metadata);
-                skillCount++;
-            } else {
-                await installFile(tempDir, unit.item, target, metadata);
-                fileCount++;
+            s.start(`Installing ${bundle.name}...`);
+            const units = groupTemplateItems(bundle.items);
+            const blocked = await findBlockedUnits(target.rootDir, bundle.name, units);
+            const modified = blocked.filter((status) => status.state === "modified");
+            const legacy = blocked.filter((status) => status.state === "legacy");
+            if (!options.force && modified.length > 0) warnModified(modified);
+            if (!options.force && legacy.length > 0) {
+                warnLegacySkills(
+                    legacy.map((status) => ({
+                        bundleName: bundle.name,
+                        targetPath: status.targetPath,
+                        inManifest: true,
+                    })),
+                );
             }
+            if (!options.force) {
+                skippedFiles += blocked.filter((status) => status.kind === "file").length;
+                skippedSkills += blocked.filter((status) => status.kind === "skill").length;
+            }
+            const blockedPaths = new Set(options.force ? [] : blocked.map((status) => status.targetPath));
+            for (const unit of units) {
+                if (blockedPaths.has(unit.relativePath)) continue;
+                const metadata = {
+                    source: manifest.repository,
+                    bundle: bundle.name,
+                    version: bundle.version,
+                };
+                if (unit.kind === "skill") {
+                    await installSkill(tempDir, unit, target, metadata);
+                    skillCount++;
+                } else {
+                    await installFile(tempDir, unit.item, target, metadata);
+                    fileCount++;
+                }
+            }
+            s.stop(`Installed ${bundle.name}.`);
+        } finally {
+            await fs.rm(tempDir, { recursive: true, force: true });
         }
-        s.stop(`Installed ${bundle.name}.`);
     }
 
     const skippedCounts = describeUnitCounts(skippedFiles, skippedSkills);
