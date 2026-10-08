@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { describeTarget, resolveTarget } from "../../types/index.js";
-import { installFile, validateTargetPath } from "../installer.js";
+import { installFile, installSkill, validateTargetPath } from "../installer.js";
 
 describe("resolveTarget", () => {
     // T16: Project target
@@ -144,12 +144,18 @@ Agent body`;
         await fs.mkdir(path.join(tempDir, "skills", "pipeline-01-research"), { recursive: true });
         await fs.writeFile(path.join(tempDir, "skills", "pipeline-01-research", "SKILL.md"), sourceContent);
 
-        await installFile(
+        await installSkill(
             tempDir,
             {
-                source: "test-bundle/skills/pipeline-01-research/SKILL.md",
-                target: "skills/pipeline-01-research/SKILL.md",
-                category: "skill",
+                kind: "skill",
+                relativePath: "skills/pipeline-01-research",
+                items: [
+                    {
+                        source: "test-bundle/skills/pipeline-01-research/SKILL.md",
+                        target: "skills/pipeline-01-research/SKILL.md",
+                        category: "skill",
+                    },
+                ],
             },
             { platform: "claude-code", type: "project", rootDir: targetRoot },
             { source: "fozy-labs/astp", bundle: "test-bundle", version: "1.0.0" },

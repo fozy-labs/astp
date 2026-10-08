@@ -1,4 +1,5 @@
 export { launchWizard } from "./wizard.js";
+export { describeUnitCounts } from "./format.js";
 export {
     confirmDelete,
     confirmInstall,

@@ -1,6 +1,14 @@
-import { downloadBundle, fetchManifest, installFile, resolveBundle } from "@/core/index.js";
+import {
+    downloadBundle,
+    fetchManifest,
+    groupTemplateItems,
+    installFile,
+    installSkill,
+    resolveBundle,
+} from "@/core/index.js";
 import type { Bundle, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { bundleSupportsPlatform, getBundlePlatforms, resolveTarget } from "@/types/index.js";
+import { describeUnitCounts } from "@/ui/format.js";
 import { confirmInstall, selectBundles, selectPlatform, selectTarget, showSuccess, spinner } from "@/ui/prompts.js";
 
 export interface InstallOptions {
@@ -36,23 +44,30 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
     const confirmed = await confirmInstall(selectedBundles, target);
     if (!confirmed) return;
 
-    let installedCount = 0;
+    let fileCount = 0;
+    let skillCount = 0;
     for (const bundle of selectedBundles) {
         s.start(`Downloading ${bundle.name}...`);
         const tempDir = await downloadBundle(manifest.repository, bundle.name);
         s.stop(`Downloaded ${bundle.name}.`);
 
         s.start(`Installing ${bundle.name}...`);
-        for (const item of bundle.items) {
-            await installFile(tempDir, item, target, {
+        for (const unit of groupTemplateItems(bundle.items)) {
+            const metadata = {
                 source: manifest.repository,
                 bundle: bundle.name,
                 version: bundle.version,
-            });
-            installedCount++;
+            };
+            if (unit.kind === "skill") {
+                await installSkill(tempDir, unit, target, metadata);
+                skillCount++;
+            } else {
+                await installFile(tempDir, unit.item, target, metadata);
+                fileCount++;
+            }
         }
         s.stop(`Installed ${bundle.name}.`);
     }
 
-    showSuccess(`Installed ${installedCount} file${installedCount === 1 ? "" : "s"} to ${target.rootDir}`);
+    showSuccess(`Installed ${describeUnitCounts(fileCount, skillCount)} to ${target.rootDir}`);
 }

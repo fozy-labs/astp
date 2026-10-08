@@ -39,8 +39,9 @@ const testTarget: InstallTarget = {
 const testInstalledBundle: InstalledBundle = {
     bundleName: "pipeline",
     version: "1.0.0",
-    files: [
+    units: [
         {
+            kind: "file",
             filePath: "/project/.claude/agents/pipeline-approve.agent.md",
             relativePath: "agents/pipeline-approve.agent.md",
             metadata: {
@@ -80,11 +81,12 @@ const mixedReport: UpdateReport = {
             bundleName: "pipeline",
             installedVersion: "1.0.0",
             availableVersion: "1.2.0",
-            files: [{ targetPath: "agents/pipeline-approve.agent.md", state: "unmodified" }],
+            units: [{ targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "unmodified" }],
         },
     ],
     upToDate: [],
     notInManifest: [],
+    legacySkills: [],
 };
 
 beforeEach(() => {
@@ -118,7 +120,7 @@ describe("executeCheck", () => {
         const upToDateBundle: InstalledBundle = {
             bundleName: "core",
             version: "1.0.0",
-            files: [],
+            units: [],
         };
 
         const report: UpdateReport = {
@@ -127,11 +129,12 @@ describe("executeCheck", () => {
                     bundleName: "pipeline",
                     installedVersion: "1.0.0",
                     availableVersion: "1.2.0",
-                    files: [],
+                    units: [],
                 },
             ],
             upToDate: [upToDateBundle],
             notInManifest: [],
+            legacySkills: [],
         };
 
         mockScanInstalled.mockResolvedValue([testInstalledBundle, upToDateBundle]);

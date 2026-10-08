@@ -4,6 +4,8 @@ import path from "node:path";
 import type { InstallTarget, TemplateItem } from "@/types/index.js";
 
 import { computeHash, injectAstpFields } from "./frontmatter.js";
+import { computeSkillTreeHash } from "./skill-tree.js";
+import type { SkillTemplateUnit } from "./units.js";
 
 export async function installFile(
     tempDir: string,
@@ -14,17 +16,46 @@ export async function installFile(
     // giget downloads the bundle subdirectory, so file paths inside tempDir
     // mirror item.target (source path without the bundle prefix)
     const sourceFile = path.join(tempDir, item.target);
-    const sourceContent = await fs.readFile(sourceFile, "utf8");
-
     validateTargetPath(target.rootDir, item.target);
 
-    const content = sourceContent;
+    const content = await fs.readFile(sourceFile, "utf8");
     const hash = computeHash(content);
     const finalContent = injectAstpFields(content, meta, hash);
 
     const targetFile = path.join(target.rootDir, item.target);
     await fs.mkdir(path.dirname(targetFile), { recursive: true });
     await fs.writeFile(targetFile, finalContent, "utf8");
+}
+
+export async function installSkill(
+    tempDir: string,
+    unit: SkillTemplateUnit,
+    target: InstallTarget,
+    meta: { source: string; bundle: string; version: string },
+): Promise<void> {
+    const skillDir = path.join(target.rootDir, unit.relativePath);
+    validateTargetPath(target.rootDir, unit.relativePath);
+    for (const item of unit.items) validateTargetPath(target.rootDir, item.target);
+
+    const skillMdPath = path.posix.join(unit.relativePath, "SKILL.md");
+    const skillMd = unit.items.find((item) => item.target === skillMdPath);
+    if (!skillMd) {
+        throw new Error(`Skill directory '${unit.relativePath}' has no SKILL.md item.`);
+    }
+
+    await fs.rm(skillDir, { recursive: true, force: true });
+    for (const item of unit.items) {
+        const sourceFile = path.join(tempDir, item.target);
+        const targetFile = path.join(target.rootDir, item.target);
+        const content = await fs.readFile(sourceFile);
+        await fs.mkdir(path.dirname(targetFile), { recursive: true });
+        await fs.writeFile(targetFile, content);
+    }
+
+    const hash = await computeSkillTreeHash(skillDir);
+    const skillFilePath = path.join(skillDir, "SKILL.md");
+    const content = await fs.readFile(skillFilePath, "utf8");
+    await fs.writeFile(skillFilePath, injectAstpFields(content, meta, hash), "utf8");
 }
 
 export function validateTargetPath(installRoot: string, targetPath: string): void {

@@ -1,6 +1,7 @@
 import { detectModified, removeBundle, scanInstalled } from "@/core/index.js";
 import type { InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
+import { describeUnitCounts } from "@/ui/format.js";
 import {
     confirmDelete,
     selectInstalledBundles,
@@ -9,6 +10,7 @@ import {
     showInfo,
     showSuccess,
     spinner,
+    warnLegacySkills,
     warnModified,
 } from "@/ui/prompts.js";
 
@@ -44,33 +46,43 @@ export async function executeDelete(options: DeleteOptions): Promise<void> {
         return;
     }
 
-    let removedCount = 0;
-    let skippedCount = 0;
+    let removedFiles = 0;
+    let removedSkills = 0;
+    let skippedFiles = 0;
+    let skippedSkills = 0;
 
     for (const bundle of selectedBundles) {
         const modifiedFiles = await detectModified(bundle, target.rootDir);
         const modified = modifiedFiles.filter((file) => file.state === "modified");
+        const legacy = modifiedFiles
+            .filter((file) => file.state === "legacy")
+            .map((file) => ({ bundleName: bundle.bundleName, targetPath: file.targetPath }));
 
         if (modified.length > 0 && !options.force) {
             warnModified(modified);
         }
+        if (legacy.length > 0 && !options.force) warnLegacySkills(legacy);
 
         s.start(`Deleting ${bundle.bundleName}...`);
         const result = await removeBundle(bundle, target.rootDir, options.force ?? false);
         s.stop(`Deleted ${bundle.bundleName}.`);
 
-        removedCount += result.removed.length;
-        skippedCount += result.skipped.length;
+        const unitKinds = new Map(bundle.units.map((unit) => [unit.relativePath, unit.kind]));
+        removedSkills += result.removed.filter((relativePath) => unitKinds.get(relativePath) === "skill").length;
+        removedFiles += result.removed.filter((relativePath) => unitKinds.get(relativePath) === "file").length;
+        skippedSkills += result.skipped.filter((status) => status.kind === "skill").length;
+        skippedFiles += result.skipped.filter((status) => status.kind === "file").length;
     }
 
-    if (removedCount === 0 && skippedCount > 0) {
-        showInfo(`No files deleted, skipped ${skippedCount} modified file${skippedCount === 1 ? "" : "s"}.`);
+    if (removedFiles + removedSkills === 0 && skippedFiles + skippedSkills > 0) {
+        const skipped = describeUnitCounts(skippedFiles, skippedSkills);
+        showInfo(`No files or skills deleted, skipped ${skipped}.`);
         return;
     }
 
-    showSuccess(
-        `Deleted ${removedCount} file${removedCount === 1 ? "" : "s"}${skippedCount > 0 ? `, skipped ${skippedCount} modified` : ""}`,
-    );
+    const removed = describeUnitCounts(removedFiles, removedSkills);
+    const skipped = describeUnitCounts(skippedFiles, skippedSkills);
+    showSuccess(`Deleted ${removed}${skippedFiles + skippedSkills > 0 ? `, skipped ${skipped}` : ""}`);
 }
 
 function resolveInstalledBundle(installed: Awaited<ReturnType<typeof scanInstalled>>, bundleName: string) {
