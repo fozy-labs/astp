@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `ui/` - `@clack/prompts` wizard and prompts
 - `templates/` - shipped bundles; author guide in [templates/README.md](templates/README.md)
   - `manifest.json` - source of truth: bundles, versions, platforms, `source` → `target` items
-  - `<bundle>/` - fozy-labs, docs, design
+  - `<bundle>/` - fozy-labs, docs, design, matt
 - `scripts/` - marketplace generator (run by Node type stripping, own `tsconfig.json`)
 - `tests/`
   - `e2e/` - command flows with `fetchManifest` / `downloadBundle` mocked, no network
@@ -53,7 +53,7 @@ flowchart LR
 ```
 
 - The CLI always reads templates from GitHub `main`, never from the local checkout: a `templates/` change reaches users on merge, not on npm release, and cannot be tried locally through `astp install`.
-- No lock file: `astp-source`, `astp-bundle`, `astp-version` and `astp-hash` in each installed file's frontmatter are the whole install state. `update` skips files whose hash no longer matches unless `--force`.
+- No lock file: `astp-source`, `astp-bundle`, `astp-version` and `astp-hash` in the header of each installed skill file are the whole install state. `update` skips files whose hash no longer matches unless `--force`.
 - Template sources never contain `astp-*` fields; the installer adds them.
 - A manifest item's `target` is its `source` minus the bundle prefix, and giget lays files out by `target`.
 - Watch that changes landing in `main` come with a version bump for their bundle in `manifest.json`.
