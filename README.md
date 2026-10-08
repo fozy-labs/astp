@@ -134,7 +134,7 @@ astp install fozy-labs --platform claude-code --target project
 
 `astp` fetches template files from the [`fozy-labs/astp`](https://github.com/fozy-labs/astp) GitHub repository using [giget](https://github.com/unjs/giget). A `manifest.json` file in the repository defines available bundles, their versions, and file mappings. Install state lives in `astp.lock`; commit it in projects. Installed files are byte-identical to their templates.
 
-Installs from astp <= 0.3.1 carry `astp-*` fields — `astp update` migrates unmodified ones, and `astp update --force` replaces modified ones.
+Installs from astp ≤ 0.3.1 carry `astp-*` fields — `astp update` migrates unmodified ones, and `astp update --force` replaces modified ones.
 
 ## Maintaining
 

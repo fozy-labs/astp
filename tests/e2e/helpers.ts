@@ -4,6 +4,20 @@ import path from "node:path";
 
 import type { InstallTarget, Manifest, TemplateItem } from "@/types/index.js";
 
+export async function readLockFixture(rootDir: string): Promise<{
+    schemaVersion: number;
+    bundles: Record<
+        string,
+        {
+            source: string;
+            declined: string[];
+            units: Record<string, { kind: "file" | "skill"; version: string; hash: string }>;
+        }
+    >;
+}> {
+    return JSON.parse(await fs.readFile(path.join(rootDir, "astp.lock"), "utf8"));
+}
+
 // ── Fixture Manifests ─────────────────────────────────────────────────
 
 export function createFixtureManifest(version = "1.0.0"): Manifest {

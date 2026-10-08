@@ -100,7 +100,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             await assertBundleSources(tempDir, bundleName, units);
             s.start(`Updating ${bundleName}...`);
             const result = await syncBundle({
-                rootDir: target.rootDir,
+                target,
                 manifest,
                 bundle,
                 installed,

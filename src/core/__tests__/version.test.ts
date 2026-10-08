@@ -2,10 +2,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import type { InstalledBundle, InstalledUnit, Manifest } from "@/types/index.js";
+
 import { computeHash } from "../frontmatter.js";
 import { writeLock } from "../lock.js";
 import { computeSkillTreeHash } from "../skill-tree.js";
-import { loadInstalled } from "../version.js";
+import { compareVersions, loadInstalled } from "../version.js";
 
 describe("loadInstalled", () => {
     let rootDir: string;
@@ -115,5 +117,293 @@ describe("loadInstalled", () => {
         expect(loaded.bundles[0]?.units).toContainEqual(
             expect.objectContaining({ relativePath: "skills/sample", kind: "skill", state: "modified" }),
         );
+    });
+});
+
+describe("compareVersions", () => {
+    const createManifest = (bundleVersion: string): Manifest => ({
+        schemaVersion: 1,
+        repository: "fozy-labs/astp",
+        bundles: {
+            pipeline: {
+                name: "pipeline",
+                version: bundleVersion,
+                description: "Pipeline",
+                default: false,
+                items: [{ source: "pipeline/agents/a.md", target: "agents/a.md", category: "agent" }],
+            },
+        },
+    });
+
+    const createUnit = (
+        version: string,
+        relativePath = "agents/a.md",
+        state: InstalledUnit["state"] = "unmodified",
+        origin: InstalledUnit["origin"] = "lock",
+        kind: InstalledUnit["kind"] = "file",
+    ): InstalledUnit => ({ kind, relativePath, version, state, origin });
+
+    const createInstalled = (version: string, units = [createUnit(version)]): InstalledBundle[] => [
+        { bundleName: "pipeline", version, units, declined: [] },
+    ];
+
+    it("detects an update when the manifest version is newer", () => {
+        const report = compareVersions(createInstalled("1.0.0"), createManifest("1.2.0"));
+        expect(report.updates).toHaveLength(1);
+        expect(report.updates[0]).toMatchObject({ installedVersion: "1.0.0", availableVersion: "1.2.0" });
+    });
+
+    it("reports up to date when versions match", () => {
+        const report = compareVersions(createInstalled("1.0.0"), createManifest("1.0.0"));
+        expect(report.upToDate).toHaveLength(1);
+        expect(report.updates).toHaveLength(0);
+    });
+
+    it("reports a same-version bundle as an update when a manifest unit is new", () => {
+        const manifest = createManifest("1.0.0");
+        manifest.bundles.pipeline!.items.push({
+            source: "pipeline/agents/b.md",
+            target: "agents/b.md",
+            category: "agent",
+        });
+
+        const report = compareVersions(createInstalled("1.0.0"), manifest);
+        expect(report.updates).toHaveLength(1);
+        expect(report.updates[0]?.units).toContainEqual({
+            targetPath: "agents/b.md",
+            kind: "file",
+            state: "new",
+        });
+    });
+
+    it("reports a same-version bundle as an update when an installed unit is orphaned", () => {
+        const manifest = createManifest("1.0.0");
+        manifest.bundles.pipeline!.items = [];
+
+        const report = compareVersions(createInstalled("1.0.0"), manifest);
+        expect(report.updates).toHaveLength(1);
+        expect(report.updates[0]?.units).toContainEqual({
+            targetPath: "agents/a.md",
+            kind: "file",
+            state: "removed",
+        });
+    });
+
+    it("does not downgrade when the installed version is newer", () => {
+        const report = compareVersions(createInstalled("2.0.0"), createManifest("1.0.0"));
+        expect(report.upToDate).toHaveLength(1);
+        expect(report.updates).toHaveLength(0);
+    });
+
+    it("does not downgrade an installed-newer bundle when a manifest unit is new", () => {
+        const manifest = createManifest("1.0.0");
+        manifest.bundles.pipeline!.items.push({
+            source: "pipeline/agents/b.md",
+            target: "agents/b.md",
+            category: "agent",
+        });
+
+        const report = compareVersions(createInstalled("2.0.0"), manifest);
+        expect(report.upToDate).toHaveLength(1);
+        expect(report.updates).toHaveLength(0);
+    });
+
+    it("handles invalid semver as an available update", () => {
+        const report = compareVersions(createInstalled("not-a-version"), createManifest("1.0.0"));
+        expect(report.updates).toHaveLength(1);
+    });
+
+    it("classifies bundles missing from the manifest as not in the manifest", () => {
+        const manifest: Manifest = {
+            schemaVersion: 1,
+            repository: "fozy-labs/astp",
+            bundles: {
+                core: {
+                    name: "core",
+                    version: "1.0.0",
+                    description: "Core",
+                    default: true,
+                    items: [],
+                },
+            },
+        };
+        const report = compareVersions(createInstalled("1.0.0"), manifest);
+        expect(report.notInManifest).toHaveLength(1);
+        expect(report.notInManifest[0]?.bundleName).toBe("pipeline");
+    });
+
+    it("reports legacy units with cleanliness and manifest membership", () => {
+        const manifest = createManifest("1.0.0");
+        manifest.bundles.pipeline!.items.push({
+            source: "pipeline/skills/sample/SKILL.md",
+            target: "skills/sample/SKILL.md",
+            category: "skill",
+        });
+        const report = compareVersions(
+            [
+                {
+                    bundleName: "pipeline",
+                    version: "1.0.0",
+                    units: [
+                        createUnit("1.0.0", "skills/sample", "unmodified", "legacy", "skill"),
+                        createUnit("1.0.0", "skills/removed", "modified", "legacy", "skill"),
+                    ],
+                    declined: [],
+                },
+                {
+                    bundleName: "retired",
+                    version: "1.0.0",
+                    units: [createUnit("1.0.0", "skills/retired", "unmodified", "legacy", "skill")],
+                    declined: [],
+                },
+            ],
+            manifest,
+        );
+        expect(report.legacySkills).toEqual([
+            { bundleName: "pipeline", targetPath: "skills/sample", kind: "skill", clean: true, inManifest: true },
+            { bundleName: "pipeline", targetPath: "skills/removed", kind: "skill", clean: false, inManifest: false },
+            { bundleName: "retired", targetPath: "skills/retired", kind: "skill", clean: true, inManifest: false },
+        ]);
+    });
+});
+
+describe("loadInstalled legacy compatibility", () => {
+    let rootDir: string;
+
+    beforeEach(async () => {
+        rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "astp-legacy-"));
+    });
+
+    afterEach(async () => {
+        await fs.rm(rootDir, { recursive: true, force: true });
+    });
+
+    async function writeLegacyFile(
+        relativePath: string,
+        version: string,
+        content: string,
+        hash = computeHash(content),
+    ) {
+        const filePath = path.join(rootDir, relativePath);
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.writeFile(
+            filePath,
+            `---\nastp-source: fozy-labs/astp\nastp-bundle: pipeline\nastp-version: ${version}\nastp-hash: ${hash}\n---\n${content}`,
+        );
+        return filePath;
+    }
+
+    async function writeLegacySkill(relativePath: string, version: string, content: string, modified = false) {
+        const skillDir = path.join(rootDir, relativePath);
+        await fs.mkdir(skillDir, { recursive: true });
+        const filePath = await writeLegacyFile(path.join(relativePath, "SKILL.md"), version, content);
+        if (modified) await fs.appendFile(filePath, "\nlocal edit");
+    }
+
+    it("treats a legacy file with a matching hash as unmodified", async () => {
+        const content = "---\nname: test\n---\nBody";
+        await writeLegacyFile("agent.md", "1.0.0", content);
+        const loaded = await loadInstalled(rootDir);
+        expect(loaded.bundles[0]?.units).toContainEqual(
+            expect.objectContaining({ relativePath: "agent.md", origin: "legacy", state: "unmodified" }),
+        );
+    });
+
+    it("treats a legacy file with a mismatching hash as modified", async () => {
+        const content = "---\nname: test\n---\nBody";
+        const filePath = await writeLegacyFile("agent.md", "1.0.0", content);
+        await fs.appendFile(filePath, "\nlocal edit");
+        const loaded = await loadInstalled(rootDir);
+        expect(loaded.bundles[0]?.units).toContainEqual(
+            expect.objectContaining({ relativePath: "agent.md", origin: "legacy", state: "modified" }),
+        );
+    });
+
+    it("treats a legacy file without a hash as modified", async () => {
+        await writeLegacyFile("agent.md", "1.0.0", "Agent", "");
+        const loaded = await loadInstalled(rootDir);
+        expect(loaded.bundles[0]?.units).toContainEqual(
+            expect.objectContaining({ relativePath: "agent.md", origin: "legacy", state: "modified" }),
+        );
+    });
+
+    it("scans legacy units but excludes unmanaged files", async () => {
+        const content = "---\nname: managed\n---\nBody";
+        await writeLegacyFile("agents/managed-a.md", "1.0.0", content);
+        await writeLegacyFile("agents/managed-b.md", "1.0.0", content);
+        await fs.mkdir(path.join(rootDir, "agents"), { recursive: true });
+        await fs.writeFile(path.join(rootDir, "agents/custom.md"), "---\nname: custom\n---\nBody");
+
+        const loaded = await loadInstalled(rootDir);
+        expect(loaded.bundles).toHaveLength(1);
+        expect(loaded.bundles[0]?.units.map((unit) => unit.relativePath)).toEqual([
+            "agents/managed-a.md",
+            "agents/managed-b.md",
+        ]);
+    });
+
+    it("compares a legacy unit and a new manifest unit against the manifest", async () => {
+        await writeLegacyFile("agents/a.md", "1.0.0", "Agent");
+        const installed = await loadInstalled(rootDir);
+        const manifest: Manifest = {
+            schemaVersion: 1,
+            repository: "fozy-labs/astp",
+            bundles: {
+                pipeline: {
+                    name: "pipeline",
+                    version: "2.0.0",
+                    description: "Pipeline",
+                    default: false,
+                    items: [
+                        { source: "pipeline/agents/a.md", target: "agents/a.md", category: "agent" },
+                        { source: "pipeline/agents/new.md", target: "agents/new.md", category: "agent" },
+                    ],
+                },
+            },
+        };
+        const report = compareVersions(installed.bundles, manifest);
+        expect(report.updates[0]?.units).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ targetPath: "agents/a.md", state: "legacy" }),
+                expect.objectContaining({ targetPath: "agents/new.md", state: "new" }),
+            ]),
+        );
+    });
+
+    it("chooses the oldest version among clean legacy units", async () => {
+        await writeLegacySkill("skills/a", "1.0.0", "# a\n");
+        await writeLegacyFile("agents/b.md", "1.1.0", "b");
+        await writeLegacyFile("agents/c.md", "1.1.0", "c");
+        const loaded = await loadInstalled(rootDir);
+        expect(loaded.bundles[0]?.units).toHaveLength(3);
+        expect(loaded.bundles[0]?.version).toBe("1.0.0");
+    });
+
+    it("ignores modified old units when choosing the bundle version", async () => {
+        await writeLegacySkill("skills/a", "1.0.0", "# a\n", true);
+        await writeLegacyFile("agents/b.md", "1.1.0", "b");
+        const loaded = await loadInstalled(rootDir);
+        expect(loaded.bundles[0]?.version).toBe("1.1.0");
+    });
+
+    it("uses the newest version when every installed unit is modified", async () => {
+        const oldFile = await writeLegacyFile("agents/a.md", "1.0.0", "a");
+        const newFile = await writeLegacyFile("agents/b.md", "1.1.0", "b");
+        await fs.appendFile(oldFile, "\nedit");
+        await fs.appendFile(newFile, "\nedit");
+        const loaded = await loadInstalled(rootDir);
+        expect(loaded.bundles[0]?.version).toBe("1.1.0");
+    });
+
+    it("uses the newest version when the other installed file units are modified", async () => {
+        for (let index = 0; index < 5; index++) {
+            const version = index === 4 ? "1.1.0" : "1.0.0";
+            const filePath = await writeLegacyFile(`agents/${index}.md`, version, `Agent ${index}`);
+            if (index < 4) await fs.appendFile(filePath, "\nEdited");
+        }
+        const loaded = await loadInstalled(rootDir);
+        expect(loaded.bundles[0]?.units).toHaveLength(5);
+        expect(loaded.bundles[0]?.units.filter((unit) => unit.version === "1.0.0")).toHaveLength(4);
+        expect(loaded.bundles[0]?.version).toBe("1.1.0");
     });
 });

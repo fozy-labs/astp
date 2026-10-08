@@ -115,7 +115,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             await assertBundleSources(tempDir, plan.bundle.name, units);
             s.start(`Installing ${plan.bundle.name}...`);
             const result = await syncBundle({
-                rootDir: target.rootDir,
+                target,
                 manifest,
                 bundle: plan.bundle,
                 installed: installedState.bundles.find((entry) => entry.bundleName === plan.bundle.name),

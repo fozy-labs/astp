@@ -92,15 +92,6 @@ Bundle versions follow semver:
 - **Minor**: New files added to the bundle.
 - **Patch**: Content fixes to existing files.
 
-## Frontmatter Metadata
+## Install State
 
-During installation, the CLI injects four `astp-*` fields into each installed file's YAML frontmatter:
-
-| Field | Purpose |
-|-------|---------|
-| `astp-source` | Identifies the source repository (e.g., `fozy-labs/astp`). |
-| `astp-bundle` | Identifies the bundle (e.g., `docs`). |
-| `astp-version` | Bundle version at install/update time (e.g., `1.0.0`). |
-| `astp-hash` | SHA-256 hash of template content for modification detection. |
-
-These fields are managed by the CLI — do not add them to template source files.
+Installed files remain byte-identical to template sources. Install state is recorded in `astp.lock` at the target root.

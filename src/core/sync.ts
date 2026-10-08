@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import type { Bundle, FileStatus, InstalledBundle, InstalledUnit, Manifest } from "@/types/index.js";
+import type { Bundle, FileStatus, InstalledBundle, InstalledUnit, InstallTarget, Manifest } from "@/types/index.js";
 
 import { computeHash } from "./frontmatter.js";
 import { installFile, installSkill } from "./installer.js";
@@ -17,7 +17,7 @@ export interface SyncResult {
 }
 
 export async function syncBundle(args: {
-    rootDir: string;
+    target: InstallTarget;
     manifest: Manifest;
     bundle: Bundle;
     installed?: InstalledBundle;
@@ -28,6 +28,7 @@ export async function syncBundle(args: {
     force: boolean;
 }): Promise<SyncResult> {
     const result: SyncResult = { installed: [], removed: [], skipped: [], kept: [] };
+    const rootDir = args.target.rootDir;
     const units = groupTemplateItems(args.bundle.items);
     const manifestPaths = new Set(units.map((unit) => `${unit.kind}\0${unit.relativePath}`));
     const manifestUnitPaths = new Set(units.map((unit) => unit.relativePath));
@@ -56,7 +57,7 @@ export async function syncBundle(args: {
             }
             return;
         }
-        await removePath(args.rootDir, unit.relativePath);
+        await removePath(rootDir, unit.relativePath);
         delete lockBundle.units[unit.relativePath];
         if (unit.origin === "legacy") removedLegacy.add(unit.relativePath);
         if (declined) args.declined.add(unit.relativePath);
@@ -73,7 +74,6 @@ export async function syncBundle(args: {
         else args.declined.add(unit.relativePath);
     }
 
-    const target = { platform: "claude-code" as const, type: "project" as const, rootDir: args.rootDir };
     for (const unit of units) {
         if (!args.selected.has(unit.relativePath)) continue;
         const current = currentByPath.get(unit.relativePath);
@@ -83,7 +83,7 @@ export async function syncBundle(args: {
         }
 
         if (!current) {
-            const diskState = await compareUntracked(args.rootDir, args.tempDir, unit);
+            const diskState = await compareUntracked(rootDir, args.tempDir, unit);
             if (diskState === "equal") {
                 lockBundle.units[unit.relativePath] = {
                     kind: unit.kind,
@@ -101,8 +101,8 @@ export async function syncBundle(args: {
 
         const hash =
             unit.kind === "skill"
-                ? await installSkill(args.tempDir, unit, target)
-                : await installFile(args.tempDir, unit.item, target);
+                ? await installSkill(args.tempDir, unit, args.target)
+                : await installFile(args.tempDir, unit.item, args.target);
         lockBundle.units[unit.relativePath] = { kind: unit.kind, version: args.bundle.version, hash };
         if (current?.origin === "legacy") removedLegacy.add(current.relativePath);
         result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });

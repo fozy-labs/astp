@@ -1,7 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { extractAstpMetadata, loadInstalled, resolveUnitPaths, writeLock } from "@/core/index.js";
+import {
+    extractAstpMetadata,
+    loadInstalled,
+    removeEmptyDirectories,
+    resolveUnitPaths,
+    writeLock,
+} from "@/core/index.js";
 import type {
     FileStatus,
     InstalledBundle,
@@ -121,22 +127,6 @@ async function readLegacySource(rootDir: string, units: InstalledUnit[]): Promis
         return extractAstpMetadata(await fs.readFile(metadataPath, "utf8"))?.source ?? "";
     } catch {
         return "";
-    }
-}
-
-async function removeEmptyDirectories(startDir: string, rootDir: string): Promise<void> {
-    const normalizedRoot = path.resolve(rootDir);
-    let currentDir = path.resolve(startDir);
-    while (currentDir.startsWith(normalizedRoot) && currentDir !== normalizedRoot) {
-        let entries;
-        try {
-            entries = await fs.readdir(currentDir);
-        } catch {
-            return;
-        }
-        if (entries.length > 0) return;
-        await fs.rmdir(currentDir);
-        currentDir = path.dirname(currentDir);
     }
 }
 

@@ -11,6 +11,6 @@ export {
     validateTargetPath,
     validateUnitTargets,
 } from "./installer.js";
-export { syncBundle } from "./sync.js";
+export { removeEmptyDirectories, syncBundle } from "./sync.js";
 export { compareVersions, loadInstalled } from "./version.js";
 export { groupTemplateItems, resolveUnitPaths } from "./units.js";
