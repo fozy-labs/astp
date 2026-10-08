@@ -15,7 +15,9 @@ import type {
 } from "@/types/index.js";
 
 import { computeHash, extractAstpMetadata, stripAstpFields } from "./frontmatter.js";
+import { validateTargetPath } from "./installer.js";
 import { computeSkillTreeHash } from "./skill-tree.js";
+import type { TemplateUnit } from "./units.js";
 import { groupTemplateItems } from "./units.js";
 
 interface TaggedMarkdown {
@@ -261,6 +263,85 @@ export async function detectModified(bundle: InstalledBundle, _installRoot: stri
     }
 
     return results;
+}
+
+export async function findBlockedUnits(
+    installRoot: string,
+    bundleName: string,
+    units: TemplateUnit[],
+): Promise<FileStatus[]> {
+    for (const unit of units) {
+        validateTargetPath(installRoot, unit.relativePath);
+        if (unit.kind === "skill") {
+            for (const item of unit.items) validateTargetPath(installRoot, item.target);
+        }
+    }
+
+    const blocked: FileStatus[] = [];
+    for (const unit of units) {
+        const unitPath = path.join(installRoot, unit.relativePath);
+        let unitStat;
+        try {
+            unitStat = await fs.lstat(unitPath);
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+            throw error;
+        }
+
+        if (unit.kind === "file") {
+            if (!unitStat.isFile()) {
+                blocked.push({ targetPath: unit.relativePath, kind: "file", state: "modified" });
+                continue;
+            }
+            const content = await fs.readFile(unitPath, "utf8");
+            const metadata = extractAstpMetadata(content);
+            if (
+                !metadata ||
+                metadata.bundle !== bundleName ||
+                !metadata.hash ||
+                computeHash(stripAstpFields(content)) !== metadata.hash
+            ) {
+                blocked.push({ targetPath: unit.relativePath, kind: "file", state: "modified" });
+            }
+            continue;
+        }
+
+        if (!unitStat.isDirectory()) {
+            blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "modified" });
+            continue;
+        }
+        const skillFilePath = path.join(unitPath, "SKILL.md");
+        let skillFileStat;
+        try {
+            skillFileStat = await fs.lstat(skillFilePath);
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+                blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "modified" });
+                continue;
+            }
+            throw error;
+        }
+        if (!skillFileStat.isFile()) {
+            blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "modified" });
+            continue;
+        }
+        const content = await fs.readFile(skillFilePath, "utf8");
+        const metadata = extractAstpMetadata(content);
+        if (!metadata || metadata.bundle !== bundleName) {
+            blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "modified" });
+            continue;
+        }
+        const contentHash = computeHash(stripAstpFields(content));
+        if (metadata.hash === contentHash) {
+            blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "legacy" });
+            continue;
+        }
+        if (!metadata.hash || (await computeSkillTreeHash(unitPath)) !== metadata.hash) {
+            blocked.push({ targetPath: unit.relativePath, kind: "skill", state: "modified" });
+        }
+    }
+
+    return blocked;
 }
 
 export async function removeBundle(

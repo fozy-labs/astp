@@ -25,6 +25,7 @@ import {
     showCheckReport,
     showInfo,
     warnLegacySkills,
+    warnModified,
 } from "@/ui/prompts.js";
 
 import { cleanupDir, createFixtureManifest, createTempProject, makeProjectTarget, setupTemplateDir } from "./helpers.js";
@@ -63,6 +64,7 @@ const mockConfirmDelete = vi.mocked(confirmDelete);
 const mockShowCheckReport = vi.mocked(showCheckReport);
 const mockShowInfo = vi.mocked(showInfo);
 const mockWarnLegacySkills = vi.mocked(warnLegacySkills);
+const mockWarnModified = vi.mocked(warnModified);
 
 describe("E2E: skill directory units", () => {
     let projectDir: string;
@@ -238,6 +240,32 @@ describe("E2E: skill directory units", () => {
         await executeUpdate({ force: true, platform: "claude-code", target: "project" });
         expect(await fs.readFile(referencePath, "utf8")).not.toBe("User edit");
         expect(extractAstpMetadata(await fs.readFile(path.join(skillRoot(), "SKILL.md"), "utf8"))?.version).toBe("1.1.0");
+    });
+
+    it("preserves an unmanaged skill directory that collides with a new update unit", async () => {
+        await installSkillpack();
+        const manifestV2 = createFixtureManifest("1.1.0");
+        manifestV2.bundles.skillpack.items.push({
+            source: "skillpack/skills/new/SKILL.md",
+            target: "skills/new/SKILL.md",
+            category: "skill",
+        });
+        manifest = manifestV2;
+        mockFetchManifest.mockResolvedValue(manifestV2);
+        const templateDir = await setupTemplateDir(manifestV2, "skillpack");
+        templateDirs.push(templateDir);
+        mockDownloadBundle.mockResolvedValue(templateDir);
+        const userFile = path.join(projectDir, ".claude", "skills", "new", "user.txt");
+        await fs.mkdir(path.dirname(userFile), { recursive: true });
+        await fs.writeFile(userFile, "unmanaged");
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(await fs.readFile(userFile, "utf8")).toBe("unmanaged");
+        expect(mockWarnModified).toHaveBeenCalledWith(
+            expect.arrayContaining([expect.objectContaining({ targetPath: "skills/new", kind: "skill" })]),
+        );
+        await expect(fs.access(path.join(path.dirname(userFile), "SKILL.md"))).rejects.toThrow();
     });
 
     async function writeLegacyInstall(singleFile = false): Promise<void> {

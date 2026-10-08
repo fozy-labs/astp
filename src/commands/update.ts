@@ -1,8 +1,8 @@
 import {
     compareVersions,
-    detectModified,
     downloadBundle,
     fetchManifest,
+    findBlockedUnits,
     groupTemplateItems,
     installFile,
     installSkill,
@@ -82,29 +82,31 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
     const plan: Array<{ bundleName: string; units: TemplateUnit[] }> = [];
     for (const update of report.updates) {
         const bundleName = update.bundleName;
-        const installedBundle = installed.find((bundle) => bundle.bundleName === bundleName);
         const manifestBundle = manifest.bundles[bundleName];
         if (!manifestBundle) continue;
 
-        const statuses = installedBundle ? await detectModified(installedBundle, target.rootDir) : [];
-        const modified = statuses.filter((status) => status.state === "modified");
+        const legacyPaths = legacyPathsByBundle.get(bundleName) ?? new Set<string>();
+        const units = groupTemplateItems(manifestBundle.items);
+        const statuses = await findBlockedUnits(target.rootDir, bundleName, units);
+        const modified = statuses.filter(
+            (status) => status.state === "modified" && !legacyPaths.has(status.targetPath),
+        );
         if (!options.force && modified.length > 0) {
             warnModified(modified);
             skippedFiles += modified.filter((status) => status.kind === "file").length;
             skippedSkills += modified.filter((status) => status.kind === "skill").length;
         }
 
-        const legacyPaths = legacyPathsByBundle.get(bundleName) ?? new Set<string>();
         if (!options.force) skippedSkills += legacyPaths.size;
 
         const skippedPaths = new Set([
             ...(options.force ? [] : modified.map((status) => status.targetPath)),
             ...(options.force ? [] : legacyPaths),
         ]);
-        const units = groupTemplateItems(manifestBundle.items).filter(
+        const installUnits = units.filter(
             (unit) => options.force || !skippedPaths.has(unit.relativePath),
         );
-        plan.push({ bundleName, units });
+        plan.push({ bundleName, units: installUnits });
     }
 
     if (options.force) {
