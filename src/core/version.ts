@@ -8,10 +8,12 @@ import type {
     InstalledBundle,
     InstalledFile,
     Manifest,
+    TemplateItem,
     UpdateReport,
 } from "@/types/index.js";
 
 import { computeHash, extractAstpMetadata, stripAstpFields } from "./frontmatter.js";
+import { validateTargetPath } from "./installer.js";
 
 export async function scanInstalled(installRoot: string): Promise<InstalledBundle[]> {
     const files = await findMdFiles(installRoot);
@@ -149,19 +151,49 @@ export async function detectModified(bundle: InstalledBundle, _installRoot: stri
 
     for (const file of bundle.files) {
         const content = await fs.readFile(file.filePath, "utf8");
-
-        if (!file.metadata.hash) {
-            results.push({ targetPath: file.relativePath, state: "modified" });
-            continue;
-        }
-
-        const stripped = stripAstpFields(content);
-        const currentHash = computeHash(stripped);
-        const state: FileState = currentHash === file.metadata.hash ? "unmodified" : "modified";
+        const state: FileState = isUnmodified(content, file.metadata.hash) ? "unmodified" : "modified";
         results.push({ targetPath: file.relativePath, state });
     }
 
     return results;
+}
+
+export async function findBlockedTargets(
+    installRoot: string,
+    bundleName: string,
+    items: TemplateItem[],
+): Promise<FileStatus[]> {
+    const blocked: FileStatus[] = [];
+
+    for (const item of items) {
+        validateTargetPath(installRoot, item.target);
+        const targetFile = path.join(installRoot, item.target);
+
+        let stats;
+        try {
+            stats = await fs.lstat(targetFile);
+        } catch (error) {
+            if (error instanceof Error && "code" in error && error.code === "ENOENT") continue;
+            throw error;
+        }
+
+        if (!stats.isFile()) {
+            blocked.push({ targetPath: item.target, state: "modified" });
+            continue;
+        }
+
+        const content = await fs.readFile(targetFile, "utf8");
+        const metadata = extractAstpMetadata(content);
+        if (!metadata || metadata.bundle !== bundleName || !isUnmodified(content, metadata.hash)) {
+            blocked.push({ targetPath: item.target, state: "modified" });
+        }
+    }
+
+    return blocked;
+}
+
+function isUnmodified(content: string, hash: string): boolean {
+    return Boolean(hash) && computeHash(stripAstpFields(content)) === hash;
 }
 
 export async function removeBundle(

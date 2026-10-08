@@ -1,8 +1,8 @@
 import {
     compareVersions,
-    detectModified,
     downloadBundle,
     fetchManifest,
+    findBlockedTargets,
     installFile,
     scanInstalled,
 } from "@/core/index.js";
@@ -57,25 +57,22 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
     let skippedCount = 0;
 
     for (const update of report.updates) {
-        const installedBundle = installed.find((b) => b.bundleName === update.bundleName);
-
         s.start(`Downloading ${update.bundleName}...`);
         const tempDir = await downloadBundle(manifest.repository, update.bundleName);
         s.stop(`Downloaded ${update.bundleName}.`);
 
-        const modifiedFiles = installedBundle ? await detectModified(installedBundle, target.rootDir) : [];
-        const modifiedPaths = new Set(modifiedFiles.filter((f) => f.state === "modified").map((f) => f.targetPath));
-
-        if (modifiedPaths.size > 0 && !options.force) {
-            warnModified(modifiedFiles.filter((f) => f.state === "modified"));
-            skippedCount += modifiedPaths.size;
-        }
-
         const manifestBundle = manifest.bundles[update.bundleName];
+        const blockedFiles = await findBlockedTargets(target.rootDir, update.bundleName, manifestBundle.items);
+        const blockedPaths = new Set(blockedFiles.map((file) => file.targetPath));
+
+        if (blockedFiles.length > 0 && !options.force) {
+            warnModified(blockedFiles);
+            skippedCount += blockedFiles.length;
+        }
 
         s.start(`Installing ${update.bundleName}...`);
         for (const item of manifestBundle.items) {
-            if (modifiedPaths.has(item.target) && !options.force) continue;
+            if (blockedPaths.has(item.target) && !options.force) continue;
 
             await installFile(tempDir, item, target, {
                 source: manifest.repository,

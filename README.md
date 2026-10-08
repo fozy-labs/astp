@@ -29,7 +29,7 @@ astp install fozy-labs --target project
 | Command | Description |
 |---------|-------------|
 | `astp` | Launch interactive wizard |
-| `astp install [bundle]` | Install a bundle to the selected target |
+| `astp install [bundle] [--force]` | Install a bundle to the selected target |
 | `astp update [--force]` | Update installed files to latest versions |
 | `astp check` | Check for available updates |
 | `astp delete [bundle] [--force]` | Remove an installed bundle |
@@ -43,10 +43,10 @@ All commands accept `--platform <claude-code>` and `--target <project|user>` to 
 ### install
 
 ```bash
-astp install [bundle] [--platform <claude-code>] [--target <project|user>]
+astp install [bundle] [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Install template bundles. Without arguments, prompts for target directory and bundle selection (the platform prompt is skipped while only one platform is supported). With `--platform` and `--target`, runs non-interactively. Bundles that don't support the requested platform are rejected with a clear error.
+Install template bundles. Existing locally modified or unmanaged files are skipped by default; use `--force` to overwrite them. Without arguments, prompts for target directory and bundle selection (the platform prompt is skipped while only one platform is supported). With `--platform` and `--target`, runs non-interactively. Bundles that don't support the requested platform are rejected with a clear error.
 
 ### update
 

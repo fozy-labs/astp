@@ -127,6 +127,23 @@ describe("E2E: update", () => {
         expect(compareVersions(installed, manifestV2).updates).toHaveLength(0);
     });
 
+    it("keeps an unmanaged file at a newly added target during update", async () => {
+        const existingTarget = "skills/a/SKILL.md";
+        await installManifest(manifestWithTargets("1.0.0", [existingTarget]));
+
+        const newTarget = "skills/new/SKILL.md";
+        const unmanagedFile = path.join(projectDir, ".claude", newTarget);
+        await fs.mkdir(path.dirname(unmanagedFile), { recursive: true });
+        await fs.writeFile(unmanagedFile, "UNMANAGED CONTENT\n", "utf8");
+
+        const manifestV2 = await setupV2Mocks(manifestWithTargets("1.1.0", [existingTarget, newTarget]));
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(await fs.readFile(unmanagedFile, "utf8")).toBe("UNMANAGED CONTENT\n");
+        expect(mockWarnModified).toHaveBeenCalledWith([{ targetPath: newTarget, state: "modified" }]);
+        expect(manifestV2.bundles.pipeline.items).toHaveLength(2);
+    });
+
     // T35: Update to new version
     it("T35: updates files to v1.1.0", async () => {
         await installPipeline();

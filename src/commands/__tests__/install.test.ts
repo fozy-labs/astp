@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 
-import { downloadBundle, fetchManifest, installFile, resolveBundle } from "@/core/index.js";
+import { downloadBundle, fetchManifest, findBlockedTargets, installFile, resolveBundle } from "@/core/index.js";
 import type { Bundle, InstallTarget, Manifest, Platform, TemplateItem } from "@/types/index.js";
 import { confirmInstall, selectBundles, selectPlatform, selectTarget, showSuccess } from "@/ui/prompts.js";
 
@@ -11,6 +11,7 @@ vi.mock("@/core/index.js", () => ({
     fetchManifest: vi.fn(),
     resolveBundle: vi.fn(),
     downloadBundle: vi.fn(),
+    findBlockedTargets: vi.fn(),
     installFile: vi.fn(),
 }));
 
@@ -21,12 +22,14 @@ vi.mock("@/ui/prompts.js", () => ({
     selectBundles: vi.fn(),
     confirmInstall: vi.fn(),
     showSuccess: vi.fn(),
+    warnModified: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
 
 const mockFetchManifest = vi.mocked(fetchManifest);
 const mockResolveBundle = vi.mocked(resolveBundle);
 const mockDownloadBundle = vi.mocked(downloadBundle);
+const mockFindBlockedTargets = vi.mocked(findBlockedTargets);
 const mockInstallFile = vi.mocked(installFile);
 const mockSelectPlatform = vi.mocked(selectPlatform);
 const mockSelectTarget = vi.mocked(selectTarget);
@@ -80,6 +83,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     mockFetchManifest.mockResolvedValue(testManifest);
     mockDownloadBundle.mockResolvedValue("/tmp/astp-base");
+    mockFindBlockedTargets.mockResolvedValue([]);
     mockInstallFile.mockResolvedValue(undefined);
     mockConfirmInstall.mockResolvedValue(true);
 });
