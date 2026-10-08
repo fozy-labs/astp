@@ -1,4 +1,5 @@
-export { computeHash, extractAstpMetadata, injectAstpFields, stripAstpFields } from "./frontmatter.js";
+export type { MetadataFormat } from "./frontmatter.js";
+export { computeHash, extractAstpMetadata, injectAstpFields, metadataFormat, stripAstpFields } from "./frontmatter.js";
 export { fetchManifest, resolveBundle, validateManifest } from "./manifest.js";
 export { downloadBundle } from "./fetcher.js";
 export { installFile, validateTargetPath } from "./installer.js";

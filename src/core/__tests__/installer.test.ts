@@ -178,4 +178,44 @@ Agent body`;
         expect(installed).toContain("# Stage content");
         expect(installed).toContain("astp-source:");
     });
+
+    it("installs a .sh file with the astp block after the shebang", async () => {
+        const sourceContent = "#!/usr/bin/env bash\nset -euo pipefail\necho hi\n";
+        await fs.mkdir(path.join(tempDir, "skills", "wizard"), { recursive: true });
+        await fs.writeFile(path.join(tempDir, "skills", "wizard", "template.sh"), sourceContent);
+
+        await installFile(
+            tempDir,
+            {
+                source: "test-bundle/skills/wizard/template.sh",
+                target: "skills/wizard/template.sh",
+                category: "skill",
+            },
+            { platform: "claude-code", type: "project", rootDir: targetRoot },
+            { source: "fozy-labs/astp", bundle: "test-bundle", version: "1.0.0" },
+        );
+
+        const installed = await fs.readFile(path.join(targetRoot, "skills", "wizard", "template.sh"), "utf8");
+        expect(installed.split("\n")[0]).toBe("#!/usr/bin/env bash");
+        expect(installed).toContain("# astp-bundle: test-bundle");
+        expect(installed).toContain("echo hi");
+    });
+
+    it("rejects an unsupported file type", async () => {
+        await fs.mkdir(path.join(tempDir, "skills", "x"), { recursive: true });
+        await fs.writeFile(path.join(tempDir, "skills", "x", "data.json"), "{}");
+
+        await expect(
+            installFile(
+                tempDir,
+                {
+                    source: "test-bundle/skills/x/data.json",
+                    target: "skills/x/data.json",
+                    category: "skill",
+                },
+                { platform: "vscode", type: "project", rootDir: targetRoot },
+                { source: "fozy-labs/astp", bundle: "test-bundle", version: "1.0.0" },
+            ),
+        ).rejects.toThrow(/unsupported file type/);
+    });
 });

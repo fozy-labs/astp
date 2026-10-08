@@ -77,6 +77,50 @@ describe("validateManifest", () => {
     it("T15: throws on non-object input (string)", () => {
         expect(() => validateManifest("string")).toThrow("expected an object");
     });
+
+    it("accepts an item with a .sh target", () => {
+        const data = {
+            ...validManifestData,
+            bundles: {
+                matt: {
+                    name: "matt",
+                    version: "1.0.0",
+                    description: "m",
+                    default: false,
+                    items: [
+                        {
+                            source: "matt/skills/wizard/template.sh",
+                            target: "skills/wizard/template.sh",
+                            category: "skill",
+                        },
+                    ],
+                },
+            },
+        };
+        expect(() => validateManifest(data)).not.toThrow();
+    });
+
+    it("rejects an item with an unsupported file type", () => {
+        const data = {
+            ...validManifestData,
+            bundles: {
+                broken: {
+                    name: "broken",
+                    version: "1.0.0",
+                    description: "x",
+                    default: false,
+                    items: [
+                        {
+                            source: "broken/skills/x/data.json",
+                            target: "skills/x/data.json",
+                            category: "skill",
+                        },
+                    ],
+                },
+            },
+        };
+        expect(() => validateManifest(data)).toThrow(/unsupported file type/);
+    });
 });
 
 describe("platform validation", () => {
@@ -114,7 +158,7 @@ describe("platform validation", () => {
                     version: "1.0.0",
                     description: "Legacy bundle",
                     default: false,
-                    items: [{ source: "x", target: "x", category: "skill" }],
+                    items: [{ source: "legacy/x.md", target: "x.md", category: "skill" }],
                 },
             },
         };
@@ -132,7 +176,7 @@ describe("platform validation", () => {
                     description: "x",
                     default: false,
                     platforms: [],
-                    items: [{ source: "x", target: "x", category: "skill" }],
+                    items: [{ source: "broken/x.md", target: "x.md", category: "skill" }],
                 },
             },
         };
@@ -149,7 +193,7 @@ describe("platform validation", () => {
                     description: "x",
                     default: false,
                     platforms: ["jetbrains"],
-                    items: [{ source: "x", target: "x", category: "skill" }],
+                    items: [{ source: "broken/x.md", target: "x.md", category: "skill" }],
                 },
             },
         };

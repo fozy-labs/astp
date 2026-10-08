@@ -3,7 +3,7 @@ import path from "node:path";
 
 import type { InstallTarget, TemplateItem } from "@/types/index.js";
 
-import { computeHash, injectAstpFields } from "./frontmatter.js";
+import { computeHash, injectAstpFields, metadataFormat } from "./frontmatter.js";
 
 export async function installFile(
     tempDir: string,
@@ -18,9 +18,14 @@ export async function installFile(
 
     validateTargetPath(target.rootDir, item.target);
 
+    const format = metadataFormat(item.target);
+    if (!format) {
+        throw new Error(`Cannot install '${item.target}': unsupported file type (astp tracks .md and .sh files)`);
+    }
+
     const content = sourceContent;
     const hash = computeHash(content);
-    const finalContent = injectAstpFields(content, meta, hash);
+    const finalContent = injectAstpFields(content, meta, hash, format);
 
     const targetFile = path.join(target.rootDir, item.target);
     await fs.mkdir(path.dirname(targetFile), { recursive: true });

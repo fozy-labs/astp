@@ -11,10 +11,10 @@ import type {
     UpdateReport,
 } from "@/types/index.js";
 
-import { computeHash, extractAstpMetadata, stripAstpFields } from "./frontmatter.js";
+import { computeHash, extractAstpMetadata, metadataFormat, stripAstpFields } from "./frontmatter.js";
 
 export async function scanInstalled(installRoot: string): Promise<InstalledBundle[]> {
-    const files = await findMdFiles(installRoot);
+    const files = await findTrackedFiles(installRoot);
     const installedFiles: InstalledFile[] = [];
 
     for (const filePath of files) {
@@ -41,7 +41,7 @@ export async function scanInstalled(installRoot: string): Promise<InstalledBundl
     }));
 }
 
-async function findMdFiles(dir: string): Promise<string[]> {
+async function findTrackedFiles(dir: string): Promise<string[]> {
     const results: string[] = [];
 
     let entries;
@@ -54,8 +54,8 @@ async function findMdFiles(dir: string): Promise<string[]> {
     for (const entry of entries) {
         const fullPath = path.join(dir, entry.name);
         if (entry.isDirectory()) {
-            results.push(...(await findMdFiles(fullPath)));
-        } else if (entry.isFile() && entry.name.endsWith(".md")) {
+            results.push(...(await findTrackedFiles(fullPath)));
+        } else if (entry.isFile() && metadataFormat(entry.name) !== null) {
             results.push(fullPath);
         }
     }

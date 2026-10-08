@@ -3,8 +3,9 @@ import path from "node:path";
 
 import { vi } from "vitest";
 
+import { executeDelete } from "@/commands/delete.js";
 import { executeInstall } from "@/commands/install.js";
-import { downloadBundle, extractAstpMetadata, fetchManifest } from "@/core/index.js";
+import { downloadBundle, extractAstpMetadata, fetchManifest, scanInstalled } from "@/core/index.js";
 import type { Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { confirmInstall } from "@/ui/prompts.js";
@@ -36,7 +37,9 @@ vi.mock("@/ui/prompts.js", () => ({
     selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     selectBundles: vi.fn(),
+    selectInstalledBundles: vi.fn(),
     confirmInstall: vi.fn(),
+    confirmDelete: vi.fn().mockResolvedValue(true),
     showSuccess: vi.fn(),
     showInfo: vi.fn(),
     showCheckReport: vi.fn(),
@@ -117,6 +120,57 @@ describe("E2E: install", () => {
         expect(metadata!.source).toBe("fozy-labs/astp");
         expect(metadata!.bundle).toBe("base");
         expect(metadata!.version).toBe("1.0.0");
+    });
+
+    it("installs a bundle mixing SKILL.md and a .sh script, tracks both, deletes both", async () => {
+        manifest.bundles.matt = {
+            name: "matt",
+            version: "1.0.0",
+            description: "Matt bundle",
+            default: false,
+            platforms: ["vscode", "claude-code"],
+            items: [
+                {
+                    source: "matt/skills/wizard/SKILL.md",
+                    target: "skills/wizard/SKILL.md",
+                    category: "skill",
+                },
+                {
+                    source: "matt/skills/wizard/scripts/run.sh",
+                    target: "skills/wizard/scripts/run.sh",
+                    category: "skill",
+                },
+            ],
+        };
+
+        const tplDir = await setupTemplateDir(manifest, "matt");
+        templateDirs.push(tplDir);
+        // The fixture generator writes Markdown-shaped content; give the script a real shebang body.
+        await fs.writeFile(
+            path.join(tplDir, "skills", "wizard", "scripts", "run.sh"),
+            "#!/usr/bin/env bash\nset -euo pipefail\necho run\n",
+            "utf8",
+        );
+        mockDownloadBundle.mockResolvedValue(tplDir);
+
+        await executeInstall({ bundle: "matt", platform: "vscode", target: "project" });
+
+        const rootDir = path.join(projectDir, ".github");
+        const shPath = path.join(rootDir, "skills", "wizard", "scripts", "run.sh");
+        const mdPath = path.join(rootDir, "skills", "wizard", "SKILL.md");
+
+        const sh = await fs.readFile(shPath, "utf8");
+        expect(sh.split("\n")[0]).toBe("#!/usr/bin/env bash");
+        expect(sh).toContain("# astp-bundle: matt");
+
+        const installed = await scanInstalled(rootDir);
+        expect(installed).toHaveLength(1);
+        expect(installed[0].bundleName).toBe("matt");
+        expect(installed[0].files).toHaveLength(2);
+
+        await executeDelete({ bundle: "matt", platform: "vscode", target: "project" });
+        await expect(fs.access(shPath)).rejects.toThrow();
+        await expect(fs.access(mdPath)).rejects.toThrow();
     });
 
     // T38: astp install nonexistent --target project

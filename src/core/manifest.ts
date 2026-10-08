@@ -1,5 +1,7 @@
-import type { Bundle, Manifest, Platform } from "@/types/index.js";
+import type { Bundle, Manifest, Platform, TemplateItem } from "@/types/index.js";
 import { ALL_PLATFORMS } from "@/types/index.js";
+
+import { metadataFormat } from "./frontmatter.js";
 
 const SUPPORTED_SCHEMA_VERSION = 1;
 const VALID_PLATFORMS: ReadonlySet<Platform> = new Set(ALL_PLATFORMS);
@@ -89,6 +91,15 @@ function validateBundle(key: string, data: unknown): void {
 
     if (!("items" in bundle) || !Array.isArray(bundle.items)) {
         throw new Error(`Invalid bundle '${key}': missing or invalid items`);
+    }
+
+    for (const item of bundle.items) {
+        const target = (item as TemplateItem)?.target;
+        if (typeof target !== "string" || metadataFormat(target) === null) {
+            throw new Error(
+                `Invalid bundle '${key}': item '${String(target)}' has an unsupported file type (astp tracks .md and .sh files)`,
+            );
+        }
     }
 
     if ("platforms" in bundle && bundle.platforms !== undefined) {

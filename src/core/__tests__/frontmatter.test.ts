@@ -1,4 +1,21 @@
-import { computeHash, extractAstpMetadata, injectAstpFields, stripAstpFields } from "../frontmatter.js";
+import { computeHash, extractAstpMetadata, injectAstpFields, metadataFormat, stripAstpFields } from "../frontmatter.js";
+
+describe("metadataFormat", () => {
+    it("returns 'frontmatter' for .md files", () => {
+        expect(metadataFormat("a/b.md")).toBe("frontmatter");
+        expect(metadataFormat("skills/x/SKILL.MD")).toBe("frontmatter");
+    });
+
+    it("returns 'hash-comment' for .sh files, case-insensitive", () => {
+        expect(metadataFormat("x.sh")).toBe("hash-comment");
+        expect(metadataFormat("x.SH")).toBe("hash-comment");
+    });
+
+    it("returns null for unsupported or extensionless paths", () => {
+        expect(metadataFormat("x.json")).toBeNull();
+        expect(metadataFormat("x")).toBeNull();
+    });
+});
 
 describe("extractAstpMetadata", () => {
     // T01: Parse frontmatter with existing fields + astp fields
@@ -34,6 +51,28 @@ name: foo
 description: bar
 ---
 Body`;
+        expect(extractAstpMetadata(content)).toBeNull();
+    });
+
+    it("extracts the four fields from the hash-comment form", () => {
+        const content = `#!/usr/bin/env bash
+# astp-source: fozy-labs/astp
+# astp-bundle: matt
+# astp-version: 1.0.0
+# astp-hash: abc123
+set -euo pipefail
+`;
+
+        expect(extractAstpMetadata(content)).toEqual({
+            source: "fozy-labs/astp",
+            bundle: "matt",
+            version: "1.0.0",
+            hash: "abc123",
+        });
+    });
+
+    it("returns null for script content without the hash-comment block", () => {
+        const content = "#!/usr/bin/env bash\necho hi\n";
         expect(extractAstpMetadata(content)).toBeNull();
     });
 });
@@ -100,6 +139,42 @@ Body`;
         expect(descIdx).toBeLessThan(toolsIdx);
         expect(toolsIdx).toBeLessThan(astpIdx);
     });
+
+    it("inserts the hash-comment block after the shebang, leaving it on line 1", () => {
+        const content = "#!/usr/bin/env bash\necho hi\n";
+
+        const result = injectAstpFields(content, meta, hash, "hash-comment");
+        const lines = result.split("\n");
+
+        expect(lines[0]).toBe("#!/usr/bin/env bash");
+        expect(lines[1]).toBe("# astp-source: fozy-labs/astp");
+        expect(lines[2]).toBe("# astp-bundle: rdpi");
+        expect(lines[3]).toBe("# astp-version: 1.0.0");
+        expect(lines[4]).toBe("# astp-hash: hashvalue");
+        expect(lines[5]).toBe("echo hi");
+    });
+
+    it("inserts the hash-comment block at the top when there is no shebang", () => {
+        const content = "echo hi\n";
+
+        const result = injectAstpFields(content, meta, hash, "hash-comment");
+
+        expect(result).toBe(
+            "# astp-source: fozy-labs/astp\n# astp-bundle: rdpi\n# astp-version: 1.0.0\n# astp-hash: hashvalue\necho hi\n",
+        );
+    });
+
+    it("re-injecting hash-comment fields replaces the block instead of duplicating it", () => {
+        const content = "#!/usr/bin/env bash\necho hi\n";
+        const once = injectAstpFields(content, meta, hash, "hash-comment");
+
+        const twice = injectAstpFields(once, meta, "newhash", "hash-comment");
+
+        expect(twice.match(/# astp-source:/g)).toHaveLength(1);
+        expect(twice).toContain("# astp-hash: newhash");
+        expect(twice.split("\n")[0]).toBe("#!/usr/bin/env bash");
+        expect(twice).toContain("echo hi\n");
+    });
 });
 
 describe("stripAstpFields", () => {
@@ -139,6 +214,30 @@ astp-hash: abc123
     it("returns content unchanged when no frontmatter exists", () => {
         const content = "# No frontmatter\nJust content";
         expect(stripAstpFields(content)).toBe(content);
+    });
+
+    it("removes exactly the hash-comment block, keeping shebang and body", () => {
+        const content = `#!/usr/bin/env bash
+# astp-source: fozy-labs/astp
+# astp-bundle: matt
+# astp-version: 1.0.0
+# astp-hash: abc123
+set -euo pipefail
+echo hi
+`;
+
+        expect(stripAstpFields(content)).toBe("#!/usr/bin/env bash\nset -euo pipefail\necho hi\n");
+    });
+
+    it("removes a leading hash-comment block when there is no shebang", () => {
+        const content = `# astp-source: fozy-labs/astp
+# astp-bundle: matt
+# astp-version: 1.0.0
+# astp-hash: abc123
+echo hi
+`;
+
+        expect(stripAstpFields(content)).toBe("echo hi\n");
     });
 });
 
@@ -185,5 +284,37 @@ Content here`;
         const stripped = stripAstpFields(injected);
 
         expect(stripped).toBe(original);
+    });
+
+    it("inject then strip returns original content (hash-comment, with shebang)", () => {
+        const original = "#!/usr/bin/env bash\nset -euo pipefail\necho hi\n";
+
+        const injected = injectAstpFields(original, meta, "somehash", "hash-comment");
+
+        expect(stripAstpFields(injected)).toBe(original);
+        expect(computeHash(stripAstpFields(injected))).toBe(computeHash(original));
+    });
+
+    it("inject then strip returns original content (hash-comment, no shebang)", () => {
+        const original = "echo hi\n";
+
+        const injected = injectAstpFields(original, meta, "somehash", "hash-comment");
+
+        expect(stripAstpFields(injected)).toBe(original);
+    });
+
+    it("inject then strip returns original content (hash-comment, CRLF)", () => {
+        const original = "#!/usr/bin/env bash\r\nset -euo pipefail\r\necho hi\r\n";
+
+        const injected = injectAstpFields(original, meta, "somehash", "hash-comment");
+
+        expect(injected.startsWith("#!/usr/bin/env bash\r\n# astp-source:")).toBe(true);
+        expect(extractAstpMetadata(injected)).toEqual({
+            source: "fozy-labs/astp",
+            bundle: "test",
+            version: "1.0.0",
+            hash: "somehash",
+        });
+        expect(stripAstpFields(injected)).toBe(original);
     });
 });

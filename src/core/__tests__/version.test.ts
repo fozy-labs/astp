@@ -5,7 +5,7 @@ import path from "node:path";
 import type { InstalledBundle, Manifest } from "@/types/index.js";
 
 import { computeHash, injectAstpFields } from "../frontmatter.js";
-import { compareVersions, detectModified, scanInstalled } from "../version.js";
+import { compareVersions, detectModified, removeBundle, scanInstalled } from "../version.js";
 
 describe("compareVersions", () => {
     const createManifest = (bundleVersion: string): Manifest => ({
@@ -207,6 +207,91 @@ Body`;
         const result = await detectModified(bundle, tempDir);
         expect(result[0].state).toBe("modified");
     });
+
+    it("reports unmodified for an untouched .sh and modified after appending a line", async () => {
+        const original = "#!/usr/bin/env bash\necho hi\n";
+        const hash = computeHash(original);
+        const content = injectAstpFields(
+            original,
+            { source: "fozy-labs/astp", bundle: "matt", version: "1.0.0" },
+            hash,
+            "hash-comment",
+        );
+
+        const filePath = path.join(tempDir, "run.sh");
+        await fs.writeFile(filePath, content);
+
+        const makeBundle = (): InstalledBundle => ({
+            bundleName: "matt",
+            version: "1.0.0",
+            files: [
+                {
+                    filePath,
+                    relativePath: "run.sh",
+                    metadata: {
+                        source: "fozy-labs/astp",
+                        bundle: "matt",
+                        version: "1.0.0",
+                        hash,
+                    },
+                },
+            ],
+        });
+
+        expect((await detectModified(makeBundle(), tempDir))[0].state).toBe("unmodified");
+
+        await fs.appendFile(filePath, "echo more\n");
+        expect((await detectModified(makeBundle(), tempDir))[0].state).toBe("modified");
+    });
+});
+
+describe("removeBundle", () => {
+    let tempDir: string;
+
+    beforeEach(async () => {
+        tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "astp-remove-"));
+    });
+
+    afterEach(async () => {
+        await fs.rm(tempDir, { recursive: true, force: true });
+    });
+
+    it("removes a .sh file carrying the hash-comment block", async () => {
+        const original = "#!/usr/bin/env bash\necho hi\n";
+        const hash = computeHash(original);
+        const content = injectAstpFields(
+            original,
+            { source: "fozy-labs/astp", bundle: "matt", version: "1.0.0" },
+            hash,
+            "hash-comment",
+        );
+
+        await fs.mkdir(path.join(tempDir, "scripts"), { recursive: true });
+        const filePath = path.join(tempDir, "scripts", "run.sh");
+        await fs.writeFile(filePath, content);
+
+        const bundle: InstalledBundle = {
+            bundleName: "matt",
+            version: "1.0.0",
+            files: [
+                {
+                    filePath,
+                    relativePath: "scripts/run.sh",
+                    metadata: {
+                        source: "fozy-labs/astp",
+                        bundle: "matt",
+                        version: "1.0.0",
+                        hash,
+                    },
+                },
+            ],
+        };
+
+        const result = await removeBundle(bundle, tempDir);
+        expect(result.removed).toEqual(["scripts/run.sh"]);
+        await expect(fs.access(filePath)).rejects.toThrow();
+        await expect(fs.access(path.join(tempDir, "scripts"))).rejects.toThrow();
+    });
 });
 
 describe("scanInstalled", () => {
@@ -253,6 +338,36 @@ My custom content`;
         expect(result).toHaveLength(1);
         expect(result[0].bundleName).toBe("rdpi");
         expect(result[0].files).toHaveLength(2);
+    });
+
+    it("finds a .sh carrying the hash-comment block and groups it with the bundle's .md files", async () => {
+        const script = `#!/usr/bin/env bash
+# astp-source: fozy-labs/astp
+# astp-bundle: matt
+# astp-version: 1.0.0
+# astp-hash: abc123
+echo hi
+`;
+        const md = `---
+astp-source: fozy-labs/astp
+astp-bundle: matt
+astp-version: 1.0.0
+astp-hash: def456
+---
+Doc`;
+
+        await fs.mkdir(path.join(tempDir, "skills", "wizard"), { recursive: true });
+        await fs.writeFile(path.join(tempDir, "skills", "wizard", "template.sh"), script);
+        await fs.writeFile(path.join(tempDir, "skills", "wizard", "SKILL.md"), md);
+        await fs.writeFile(path.join(tempDir, "skills", "wizard", "notes.json"), "{}");
+
+        const result = await scanInstalled(tempDir);
+        expect(result).toHaveLength(1);
+        expect(result[0].bundleName).toBe("matt");
+        expect(result[0].files.map((f) => f.relativePath).sort()).toEqual([
+            "skills/wizard/SKILL.md",
+            "skills/wizard/template.sh",
+        ]);
     });
 
     // T27: Update detection with mixed file states
