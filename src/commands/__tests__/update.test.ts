@@ -6,22 +6,28 @@ import {
     downloadBundle,
     fetchManifest,
     installFile,
+    installSkill,
     scanInstalled,
 } from "@/core/index.js";
 import type { Bundle, InstalledBundle, InstallTarget, Manifest, TemplateItem, UpdateReport } from "@/types/index.js";
-import { selectPlatform, selectTarget, showInfo, showSuccess, warnModified } from "@/ui/prompts.js";
+import { selectPlatform, selectTarget, showInfo, showSuccess, warnLegacySkills, warnModified } from "@/ui/prompts.js";
 
 import { executeUpdate } from "../update.js";
 
 // Mock core modules
-vi.mock("@/core/index.js", () => ({
-    fetchManifest: vi.fn(),
-    scanInstalled: vi.fn(),
-    compareVersions: vi.fn(),
-    detectModified: vi.fn(),
-    downloadBundle: vi.fn(),
-    installFile: vi.fn(),
-}));
+vi.mock("@/core/index.js", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("@/core/index.js")>();
+    return {
+        ...actual,
+        fetchManifest: vi.fn(),
+        scanInstalled: vi.fn(),
+        compareVersions: vi.fn(),
+        detectModified: vi.fn(),
+        downloadBundle: vi.fn(),
+        installFile: vi.fn(),
+        installSkill: vi.fn(),
+    };
+});
 
 // Mock prompts
 vi.mock("@/ui/prompts.js", () => ({
@@ -30,6 +36,7 @@ vi.mock("@/ui/prompts.js", () => ({
     showInfo: vi.fn(),
     showSuccess: vi.fn(),
     showUpdateReport: vi.fn(),
+    warnLegacySkills: vi.fn(),
     warnModified: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
@@ -40,10 +47,12 @@ const mockCompareVersions = vi.mocked(compareVersions);
 const mockDetectModified = vi.mocked(detectModified);
 const mockDownloadBundle = vi.mocked(downloadBundle);
 const mockInstallFile = vi.mocked(installFile);
+const mockInstallSkill = vi.mocked(installSkill);
 const mockSelectPlatform = vi.mocked(selectPlatform);
 const mockSelectTarget = vi.mocked(selectTarget);
 const mockShowInfo = vi.mocked(showInfo);
 const mockShowSuccess = vi.mocked(showSuccess);
+const mockWarnLegacySkills = vi.mocked(warnLegacySkills);
 const mockWarnModified = vi.mocked(warnModified);
 
 const testTarget: InstallTarget = {
@@ -76,8 +85,9 @@ const testManifest: Manifest = {
 const testInstalledBundle: InstalledBundle = {
     bundleName: "pipeline",
     version: "1.0.0",
-    files: [
+    units: [
         {
+            kind: "file",
             filePath: "/project/.claude/agents/pipeline-approve.agent.md",
             relativePath: "agents/pipeline-approve.agent.md",
             metadata: {
@@ -90,10 +100,70 @@ const testInstalledBundle: InstalledBundle = {
     ],
 };
 
+const legacyBundle: InstalledBundle = {
+    ...testInstalledBundle,
+    version: "1.0.0",
+    units: [
+        ...testInstalledBundle.units,
+        {
+            kind: "skill",
+            dirPath: "/project/.claude/skills/sample",
+            skillFilePath: "/project/.claude/skills/sample/SKILL.md",
+            relativePath: "skills/sample",
+            metadata: {
+                source: "fozy-labs/astp",
+                bundle: "pipeline",
+                version: "1.0.0",
+                hash: "legacy-hash",
+            },
+            legacy: true,
+        },
+    ],
+};
+
+const legacyBundleWithRemovedSkill: InstalledBundle = {
+    ...legacyBundle,
+    units: [
+        ...legacyBundle.units,
+        {
+            kind: "skill",
+            dirPath: "/project/.claude/skills/removed",
+            skillFilePath: "/project/.claude/skills/removed/SKILL.md",
+            relativePath: "skills/removed",
+            metadata: {
+                source: "fozy-labs/astp",
+                bundle: "pipeline",
+                version: "1.0.0",
+                hash: "legacy-hash",
+            },
+            legacy: true,
+        },
+    ],
+};
+
+const legacyManifest: Manifest = {
+    ...testManifest,
+    bundles: {
+        pipeline: {
+            ...testBundle,
+            version: "1.0.0",
+            items: [
+                testItem,
+                {
+                    source: "pipeline/skills/sample/SKILL.md",
+                    target: "skills/sample/SKILL.md",
+                    category: "skill",
+                },
+            ],
+        },
+    },
+};
+
 const noUpdatesReport: UpdateReport = {
     updates: [],
     upToDate: [testInstalledBundle],
     notInManifest: [],
+    legacySkills: [],
 };
 
 const updatesReport: UpdateReport = {
@@ -102,11 +172,12 @@ const updatesReport: UpdateReport = {
             bundleName: "pipeline",
             installedVersion: "1.0.0",
             availableVersion: "1.1.0",
-            files: [{ targetPath: "agents/pipeline-approve.agent.md", state: "unmodified" }],
+            units: [{ targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "unmodified" }],
         },
     ],
     upToDate: [],
     notInManifest: [],
+    legacySkills: [],
 };
 
 beforeEach(() => {
@@ -119,7 +190,9 @@ describe("executeUpdate", () => {
         mockScanInstalled.mockResolvedValue([testInstalledBundle]);
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(updatesReport);
-        mockDetectModified.mockResolvedValue([{ targetPath: "agents/pipeline-approve.agent.md", state: "modified" }]);
+        mockDetectModified.mockResolvedValue([
+            { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
+        ]);
         mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
         mockInstallFile.mockResolvedValue(undefined);
 
@@ -127,6 +200,7 @@ describe("executeUpdate", () => {
 
         // With --force, modified files should still be installed
         expect(mockInstallFile).toHaveBeenCalledTimes(1);
+        expect(mockInstallSkill).not.toHaveBeenCalled();
         expect(mockWarnModified).not.toHaveBeenCalled();
     });
 
@@ -150,11 +224,62 @@ describe("executeUpdate", () => {
         expect(mockDownloadBundle).not.toHaveBeenCalled();
     });
 
+    it("migrates only legacy skills when the bundle version is current", async () => {
+        mockScanInstalled.mockResolvedValue([legacyBundle]);
+        mockFetchManifest.mockResolvedValue(legacyManifest);
+        mockCompareVersions.mockReturnValue({
+            updates: [],
+            upToDate: [legacyBundle],
+            notInManifest: [],
+            legacySkills: [{ bundleName: "pipeline", targetPath: "skills/sample", inManifest: true }],
+        });
+        mockDetectModified.mockResolvedValue([
+            { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "unmodified" },
+            { targetPath: "skills/sample", kind: "skill", state: "legacy" },
+        ]);
+        mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
+        mockInstallFile.mockResolvedValue(undefined);
+        mockInstallSkill.mockResolvedValue(undefined);
+
+        await executeUpdate({ force: true, platform: "claude-code", target: "project" });
+
+        expect(mockInstallSkill).toHaveBeenCalledTimes(1);
+        expect(mockInstallFile).not.toHaveBeenCalled();
+    });
+
+    it("distinguishes legacy skills missing from the manifest", async () => {
+        mockScanInstalled.mockResolvedValue([legacyBundleWithRemovedSkill]);
+        mockFetchManifest.mockResolvedValue(legacyManifest);
+        mockCompareVersions.mockReturnValue({
+            updates: [],
+            upToDate: [legacyBundleWithRemovedSkill],
+            notInManifest: [],
+            legacySkills: [
+                { bundleName: "pipeline", targetPath: "skills/sample", inManifest: true },
+                { bundleName: "pipeline", targetPath: "skills/removed", inManifest: false },
+            ],
+        });
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(mockWarnLegacySkills).toHaveBeenCalledWith([
+            { bundleName: "pipeline", targetPath: "skills/sample", inManifest: true },
+        ]);
+        expect(mockWarnLegacySkills).toHaveBeenCalledWith(
+            [{ bundleName: "pipeline", targetPath: "skills/removed", inManifest: false }],
+            false,
+        );
+        expect(mockDownloadBundle).not.toHaveBeenCalled();
+        expect(mockShowInfo).not.toHaveBeenCalledWith("All bundles up to date.");
+    });
+
     it("skips modified files without --force", async () => {
         mockScanInstalled.mockResolvedValue([testInstalledBundle]);
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(updatesReport);
-        mockDetectModified.mockResolvedValue([{ targetPath: "agents/pipeline-approve.agent.md", state: "modified" }]);
+        mockDetectModified.mockResolvedValue([
+            { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
+        ]);
         mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
 
         await executeUpdate({ platform: "claude-code", target: "project" });
@@ -167,7 +292,9 @@ describe("executeUpdate", () => {
         mockScanInstalled.mockResolvedValue([testInstalledBundle]);
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(updatesReport);
-        mockDetectModified.mockResolvedValue([{ targetPath: "agents/pipeline-approve.agent.md", state: "modified" }]);
+        mockDetectModified.mockResolvedValue([
+            { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
+        ]);
         mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
         mockInstallFile.mockResolvedValue(undefined);
 

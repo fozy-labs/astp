@@ -77,12 +77,13 @@ export interface InstalledFileMetadata {
     bundle: string;
     /** Bundle version at install/update time ("1.0.0"). Maps to `astp-version` field. */
     version: string;
-    /** SHA-256 hash of template content (without astp-* fields). Maps to `astp-hash` field. */
+    /** SHA-256 of file content or the skill tree, excluding root astp-* fields. Maps to `astp-hash`. */
     hash: string;
 }
 
-/** An installed file with its metadata and filesystem location. */
-export interface InstalledFile {
+/** An installed file item with its metadata and filesystem location. */
+export interface InstalledFileUnit {
+    kind: "file";
     /** Absolute path to the installed file. */
     filePath: string;
     /** Path relative to install root (matches manifest item.target). */
@@ -91,11 +92,28 @@ export interface InstalledFile {
     metadata: InstalledFileMetadata;
 }
 
-/** Files grouped by bundle after scanning the install target. */
+/** An installed skill directory and its SKILL.md metadata. */
+export interface InstalledSkillUnit {
+    kind: "skill";
+    /** Absolute path to the installed skill directory. */
+    dirPath: string;
+    /** Absolute path to the skill's SKILL.md file. */
+    skillFilePath: string;
+    /** Skill directory path relative to install root. */
+    relativePath: string;
+    /** Parsed astp-* metadata from SKILL.md frontmatter. */
+    metadata: InstalledFileMetadata;
+    /** Whether this directory uses the old per-file skill metadata format. */
+    legacy: boolean;
+}
+
+export type InstalledUnit = InstalledFileUnit | InstalledSkillUnit;
+
+/** Files and skill directories grouped by bundle after scanning the install target. */
 export interface InstalledBundle {
     bundleName: string;
     version: string;
-    files: InstalledFile[];
+    units: InstalledUnit[];
 }
 
 // ── Version Comparison Types (§3.4) ──────────────────────────────────
@@ -108,6 +126,8 @@ export interface UpdateReport {
     upToDate: InstalledBundle[];
     /** Installed bundles not found in remote manifest (removed upstream). */
     notInManifest: InstalledBundle[];
+    /** Skill directories still using per-file metadata from older installs. */
+    legacySkills: Array<{ bundleName: string; targetPath: string; inManifest: boolean }>;
 }
 
 /** Details about an available update for a single bundle. */
@@ -115,17 +135,18 @@ export interface BundleUpdate {
     bundleName: string;
     installedVersion: string;
     availableVersion: string;
-    /** Per-file status (modified, unmodified, new, removed). */
-    files: FileStatus[];
+    /** Per-unit status (modified, unmodified, new, removed). */
+    units: FileStatus[];
 }
 
 export interface FileStatus {
     /** Path relative to install root. */
     targetPath: string;
+    kind: "file" | "skill";
     state: FileState;
 }
 
-export type FileState = "unmodified" | "modified" | "new" | "removed";
+export type FileState = "unmodified" | "modified" | "legacy" | "new" | "removed";
 
 // ── Re-exports ───────────────────────────────────────────────────────
 

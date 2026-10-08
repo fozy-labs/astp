@@ -1,5 +1,6 @@
 import * as p from "@clack/prompts";
 
+import { groupTemplateItems } from "@/core/index.js";
 import type {
     Bundle,
     FileStatus,
@@ -11,6 +12,8 @@ import type {
     UpdateReport,
 } from "@/types/index.js";
 import { ALL_PLATFORMS, describeTarget, filterBundlesByPlatform, resolveTarget } from "@/types/index.js";
+
+import { describeUnitCounts } from "./format.js";
 
 // Re-export intro/outro for wizard usage
 export const intro = p.intro;
@@ -85,10 +88,16 @@ export async function selectBundles(manifest: Manifest, platform: Platform): Pro
         process.exit(0);
     }
 
-    const options = available.map((bundle) => ({
-        value: bundle.name,
-        label: `${bundle.name} — ${bundle.description} (${bundle.items.length} file${bundle.items.length === 1 ? "" : "s"})`,
-    }));
+    const options = available.map((bundle) => {
+        const units = groupTemplateItems(bundle.items);
+        return {
+            value: bundle.name,
+            label: `${bundle.name} — ${bundle.description} (${describeUnitCounts(
+                units.filter((unit) => unit.kind === "file").length,
+                units.filter((unit) => unit.kind === "skill").length,
+            )})`,
+        };
+    });
 
     const initialValues = available.filter((b) => b.default).map((b) => b.name);
 
@@ -108,11 +117,13 @@ export async function selectBundles(manifest: Manifest, platform: Platform): Pro
 }
 
 export async function confirmInstall(bundles: Bundle[], target: InstallTarget): Promise<boolean> {
-    const totalFiles = bundles.reduce((sum, b) => sum + b.items.length, 0);
+    const units = bundles.flatMap((bundle) => groupTemplateItems(bundle.items));
+    const fileCount = units.filter((unit) => unit.kind === "file").length;
+    const skillCount = units.filter((unit) => unit.kind === "skill").length;
     const targetLabel = describeTarget(target);
 
     const confirmed = await p.confirm({
-        message: `Install ${bundles.length} bundle${bundles.length === 1 ? "" : "s"} (${totalFiles} file${totalFiles === 1 ? "" : "s"}) to ${targetLabel}?`,
+        message: `Install ${bundles.length} bundle${bundles.length === 1 ? "" : "s"} (${describeUnitCounts(fileCount, skillCount)}) to ${targetLabel}?`,
     });
 
     if (p.isCancel(confirmed)) {
@@ -128,7 +139,10 @@ export async function selectInstalledBundles(installed: InstalledBundle[]): Prom
         message: "Select bundles to delete:\n(Space = toggle, Enter = confirm)",
         options: installed.map((bundle) => ({
             value: bundle.bundleName,
-            label: `${bundle.bundleName} (${bundle.files.length} file${bundle.files.length === 1 ? "" : "s"})`,
+            label: `${bundle.bundleName} (${describeUnitCounts(
+                bundle.units.filter((unit) => unit.kind === "file").length,
+                bundle.units.filter((unit) => unit.kind === "skill").length,
+            )})`,
         })),
         required: true,
     });
@@ -147,11 +161,18 @@ export async function confirmDelete(
     target: InstallTarget,
     force: boolean,
 ): Promise<boolean> {
-    const totalFiles = bundles.reduce((sum, bundle) => sum + bundle.files.length, 0);
+    const fileCount = bundles.reduce(
+        (sum, bundle) => sum + bundle.units.filter((unit) => unit.kind === "file").length,
+        0,
+    );
+    const skillCount = bundles.reduce(
+        (sum, bundle) => sum + bundle.units.filter((unit) => unit.kind === "skill").length,
+        0,
+    );
     const targetLabel = describeTarget(target);
 
     const confirmed = await p.confirm({
-        message: `Delete ${bundles.length} bundle${bundles.length === 1 ? "" : "s"} (${totalFiles} file${totalFiles === 1 ? "" : "s"}) from ${targetLabel}${force ? " with --force" : ""}?`,
+        message: `Delete ${bundles.length} bundle${bundles.length === 1 ? "" : "s"} (${describeUnitCounts(fileCount, skillCount)}) from ${targetLabel}${force ? " with --force" : ""}?`,
     });
 
     if (p.isCancel(confirmed)) {
@@ -182,6 +203,16 @@ export function showCheckReport(report: UpdateReport): void {
         lines.push(`${bundle.bundleName.padEnd(15)}${bundle.version.padEnd(12)}${"—".padEnd(12)}? Not in manifest`);
     }
 
+    if (report.legacySkills.length > 0) {
+        lines.push("");
+        for (const skill of report.legacySkills) {
+            const guidance = skill.inManifest
+                ? "run `astp update --force` to migrate."
+                : "not in the current manifest, left in place.";
+            lines.push(`${skill.bundleName}: legacy skill ${skill.targetPath} — ${guidance}`);
+        }
+    }
+
     p.log.info(lines.join("\n"));
 }
 
@@ -189,8 +220,10 @@ export function showUpdateReport(report: UpdateReport): void {
     const lines: string[] = [];
 
     for (const update of report.updates) {
+        const skillCount = update.units.filter((unit) => unit.kind === "skill").length;
+        const fileCount = update.units.filter((unit) => unit.kind === "file").length;
         lines.push(
-            `${update.bundleName}: ${update.installedVersion} → ${update.availableVersion} (${update.files.length} file${update.files.length === 1 ? "" : "s"})`,
+            `${update.bundleName}: ${update.installedVersion} → ${update.availableVersion} (${describeUnitCounts(fileCount, skillCount)})`,
         );
     }
 
@@ -199,9 +232,19 @@ export function showUpdateReport(report: UpdateReport): void {
 
 export function warnModified(files: FileStatus[]): void {
     const paths = files.map((f) => `  • ${f.targetPath}`).join("\n");
+    const skillCount = files.filter((file) => file.kind === "skill").length;
+    const fileCount = files.filter((file) => file.kind === "file").length;
     p.log.warn(
-        `${files.length} file${files.length === 1 ? "" : "s"} modified locally — skipped:\n${paths}\nUse --force to overwrite.`,
+        `${describeUnitCounts(fileCount, skillCount)} modified locally — skipped:\n${paths}\nUse --force to overwrite.`,
     );
+}
+
+export function warnLegacySkills(skills: Array<{ bundleName: string; targetPath: string }>, canMigrate = true): void {
+    const paths = skills.map((skill) => `  • ${skill.bundleName}: ${skill.targetPath}`).join("\n");
+    const guidance = canMigrate
+        ? "Run `astp update --force` to migrate."
+        : "These skills are not in the current manifest and were left in place.";
+    p.log.warn(`Legacy skills skipped:\n${paths}\n${guidance}`);
 }
 
 export function showSuccess(message: string): void {

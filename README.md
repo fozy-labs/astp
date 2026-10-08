@@ -125,7 +125,7 @@ astp install fozy-labs --platform claude-code --target project
 
 `astp` fetches template files from the [`fozy-labs/astp`](https://github.com/fozy-labs/astp) GitHub repository using [giget](https://github.com/unjs/giget). A `manifest.json` file in the repository defines available bundles, their versions, and file mappings.
 
-When files are installed, `astp` injects `astp-*` frontmatter fields into each file:
+Agent and instruction files receive `astp-*` frontmatter. Skills store it only in the root `SKILL.md`, whose `astp-hash` covers every regular file in the skill directory. Legacy installs are reported by `astp check`; run `astp update --force` to migrate them.
 
 ```yaml
 ---

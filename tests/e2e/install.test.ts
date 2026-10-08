@@ -77,7 +77,7 @@ describe("E2E: install", () => {
     });
 
     // T31: astp install pipeline --target project
-    it("T31: installs pipeline bundle — 22 files with astp frontmatter", async () => {
+    it("T31: installs 22 pipeline files and skills with astp metadata", async () => {
         const tplDir = await setupTemplateDir(manifest, "pipeline");
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);
@@ -102,7 +102,7 @@ describe("E2E: install", () => {
     });
 
     // T32: astp install core --target project
-    it("T32: installs core bundle — 1 file at skills/orchestrate/SKILL.md", async () => {
+    it("T32: installs core bundle — 1 skill at skills/orchestrate/", async () => {
         const tplDir = await setupTemplateDir(manifest, "core");
         templateDirs.push(tplDir);
         mockDownloadBundle.mockResolvedValue(tplDir);

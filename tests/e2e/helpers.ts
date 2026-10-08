@@ -25,6 +25,45 @@ export function createFixtureManifest(version = "1.0.0"): Manifest {
                     },
                 ],
             },
+            skillpack: {
+                name: "skillpack",
+                version,
+                description: "Multi-file skill fixture",
+                default: false,
+                platforms: ["claude-code"],
+                items: [
+                    {
+                        source: "skillpack/skills/sample/references/touch.md",
+                        target: "skills/sample/references/touch.md",
+                        category: "skill",
+                    },
+                    {
+                        source: "skillpack/skills/sample/scripts/push.sh",
+                        target: "skills/sample/scripts/push.sh",
+                        category: "skill",
+                    },
+                    {
+                        source: "skillpack/skills/sample/examples/sub/SKILL.md",
+                        target: "skills/sample/examples/sub/SKILL.md",
+                        category: "skill",
+                    },
+                    {
+                        source: "skillpack/skills/sample/examples/sub/deeper/data.bin",
+                        target: "skills/sample/examples/sub/deeper/data.bin",
+                        category: "skill",
+                    },
+                    {
+                        source: "skillpack/skills/sample/CONFLICTS.md",
+                        target: "skills/sample/CONFLICTS.md",
+                        category: "skill",
+                    },
+                    {
+                        source: "skillpack/skills/sample/SKILL.md",
+                        target: "skills/sample/SKILL.md",
+                        category: "skill",
+                    },
+                ],
+            },
             pipeline: {
                 name: "pipeline",
                 version,
@@ -171,13 +210,17 @@ export async function setupTemplateDir(manifest: Manifest, bundleName: string): 
     for (const item of bundle.items) {
         const filePath = path.join(dir, item.target);
         await fs.mkdir(path.dirname(filePath), { recursive: true });
-        await fs.writeFile(filePath, generateTemplateContent(item, bundle.version), "utf8");
+        const content = generateTemplateContent(item, bundle.version);
+        await fs.writeFile(filePath, content, typeof content === "string" ? "utf8" : undefined);
     }
 
     return dir;
 }
 
-function generateTemplateContent(item: TemplateItem, version: string): string {
+function generateTemplateContent(item: TemplateItem, version: string): string | Buffer {
+    if (item.target.endsWith(".bin")) return Buffer.from([0, 255, 17, 0, 42]);
+    if (item.target.endsWith(".sh")) return "#!/bin/sh\nprintf 'template script\\n'\n";
+
     const name = path.basename(item.target, path.extname(item.target));
 
     switch (item.category) {
