@@ -59,6 +59,8 @@ Publish the approved tickets.
 
 **A real issue tracker (GitHub, Linear, …)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking / sub-issue relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues.
 
+**No tracker** → write one Markdown file per ticket in a directory the user names (ask if unclear), using the template below; the "Blocked by" section lists the blocking tickets' filenames, so the edges live as text.
+
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 
 Do NOT close or modify any parent issue.

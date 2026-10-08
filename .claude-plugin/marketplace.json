@@ -42,12 +42,41 @@
         {
             "name": "matt",
             "source": "./templates/matt",
-            "description": "Matt Pocock's agent-flow skills — ask-matt router, session retro, writing-for-agents (Claude Code)",
+            "description": "Matt Pocock's agent-flow skills — ask-matt router, spec/ticket/implement flow, TDD, reviews, writing (Claude Code)",
             "version": "1.0.0",
             "skills": [
                 "./skills/ask-matt",
+                "./skills/chief-of-staff",
+                "./skills/claude-handoff",
+                "./skills/code-review",
+                "./skills/codebase-design",
+                "./skills/diagnosing-bugs",
+                "./skills/domain-modeling",
+                "./skills/grill-me",
+                "./skills/grill-with-docs",
+                "./skills/grilling",
+                "./skills/handoff",
+                "./skills/implement",
+                "./skills/implement-spec",
+                "./skills/improve-codebase-architecture",
+                "./skills/loop-me",
+                "./skills/pr",
+                "./skills/prototype",
+                "./skills/research",
                 "./skills/retro",
-                "./skills/writing-for-agents"
+                "./skills/setup-pre-commit",
+                "./skills/tdd",
+                "./skills/teach",
+                "./skills/to-questionnaire",
+                "./skills/to-spec",
+                "./skills/to-tickets",
+                "./skills/wait-what",
+                "./skills/wayfinder",
+                "./skills/wizard",
+                "./skills/writing-beats",
+                "./skills/writing-for-agents",
+                "./skills/writing-fragments",
+                "./skills/writing-shape"
             ]
         }
     ]

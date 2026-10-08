@@ -31,8 +31,37 @@ templates/
 └── matt/                  ← bundle: matt (claude-code only)
     └── skills/
         ├── ask-matt/
+        ├── chief-of-staff/
+        ├── claude-handoff/
+        ├── code-review/
+        ├── codebase-design/
+        ├── diagnosing-bugs/
+        ├── domain-modeling/
+        ├── grill-me/
+        ├── grill-with-docs/
+        ├── grilling/
+        ├── handoff/
+        ├── implement/
+        ├── implement-spec/
+        ├── improve-codebase-architecture/
+        ├── loop-me/
+        ├── pr/
+        ├── prototype/
+        ├── research/
         ├── retro/
-        └── writing-for-agents/
+        ├── setup-pre-commit/
+        ├── tdd/
+        ├── teach/
+        ├── to-questionnaire/
+        ├── to-spec/
+        ├── to-tickets/
+        ├── wait-what/
+        ├── wayfinder/
+        ├── wizard/
+        ├── writing-beats/
+        ├── writing-for-agents/
+        ├── writing-fragments/
+        └── writing-shape/
 ```
 
 Each bundle directory's internal structure mirrors the install target structure. For example, `rdpi/agents/rdpi-approve.agent.md` installs to `<install-root>/agents/rdpi-approve.agent.md`.
@@ -115,5 +144,7 @@ During installation, the CLI injects four `astp-*` fields into each installed fi
 | `astp-bundle` | Identifies the bundle (e.g., `rdpi`). |
 | `astp-version` | Bundle version at install/update time (e.g., `1.0.0`). |
 | `astp-hash` | SHA-256 hash of template content for modification detection. |
+
+For `.sh` files the same four fields go into a `# astp-*` comment block right after the shebang line. Bundles may contain only `.md` and `.sh` files; the manifest is rejected for anything else.
 
 These fields are managed by the CLI — do not add them to template source files.

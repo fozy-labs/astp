@@ -468,7 +468,7 @@
         "matt": {
             "name": "matt",
             "version": "1.0.0",
-            "description": "Matt Pocock's agent-flow skills — ask-matt router, session retro, writing-for-agents (Claude Code)",
+            "description": "Matt Pocock's agent-flow skills — ask-matt router, spec/ticket/implement flow, TDD, reviews, writing (Claude Code)",
             "default": false,
             "platforms": [
                 "claude-code"
@@ -485,8 +485,223 @@
                     "category": "skill"
                 },
                 {
+                    "source": "matt/skills/chief-of-staff/SKILL.md",
+                    "target": "skills/chief-of-staff/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/claude-handoff/SKILL.md",
+                    "target": "skills/claude-handoff/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/code-review/SKILL.md",
+                    "target": "skills/code-review/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/codebase-design/SKILL.md",
+                    "target": "skills/codebase-design/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/codebase-design/DEEPENING.md",
+                    "target": "skills/codebase-design/DEEPENING.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/codebase-design/DESIGN-IT-TWICE.md",
+                    "target": "skills/codebase-design/DESIGN-IT-TWICE.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/diagnosing-bugs/SKILL.md",
+                    "target": "skills/diagnosing-bugs/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/diagnosing-bugs/scripts/hitl-loop.template.sh",
+                    "target": "skills/diagnosing-bugs/scripts/hitl-loop.template.sh",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/domain-modeling/SKILL.md",
+                    "target": "skills/domain-modeling/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/domain-modeling/ADR-FORMAT.md",
+                    "target": "skills/domain-modeling/ADR-FORMAT.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/domain-modeling/GLOSSARY-FORMAT.md",
+                    "target": "skills/domain-modeling/GLOSSARY-FORMAT.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/grill-me/SKILL.md",
+                    "target": "skills/grill-me/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/grill-with-docs/SKILL.md",
+                    "target": "skills/grill-with-docs/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/grilling/SKILL.md",
+                    "target": "skills/grilling/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/handoff/SKILL.md",
+                    "target": "skills/handoff/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/implement-spec/SKILL.md",
+                    "target": "skills/implement-spec/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/implement/SKILL.md",
+                    "target": "skills/implement/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/improve-codebase-architecture/SKILL.md",
+                    "target": "skills/improve-codebase-architecture/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/improve-codebase-architecture/HTML-REPORT.md",
+                    "target": "skills/improve-codebase-architecture/HTML-REPORT.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/loop-me/SKILL.md",
+                    "target": "skills/loop-me/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/pr/SKILL.md",
+                    "target": "skills/pr/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/pr/CREDITS.md",
+                    "target": "skills/pr/CREDITS.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/prototype/SKILL.md",
+                    "target": "skills/prototype/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/prototype/LOGIC.md",
+                    "target": "skills/prototype/LOGIC.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/prototype/UI.md",
+                    "target": "skills/prototype/UI.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/research/SKILL.md",
+                    "target": "skills/research/SKILL.md",
+                    "category": "skill"
+                },
+                {
                     "source": "matt/skills/retro/SKILL.md",
                     "target": "skills/retro/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/setup-pre-commit/SKILL.md",
+                    "target": "skills/setup-pre-commit/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/tdd/SKILL.md",
+                    "target": "skills/tdd/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/tdd/mocking.md",
+                    "target": "skills/tdd/mocking.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/tdd/tests.md",
+                    "target": "skills/tdd/tests.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/teach/SKILL.md",
+                    "target": "skills/teach/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/teach/GLOSSARY-FORMAT.md",
+                    "target": "skills/teach/GLOSSARY-FORMAT.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/teach/LEARNING-RECORD-FORMAT.md",
+                    "target": "skills/teach/LEARNING-RECORD-FORMAT.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/teach/MISSION-FORMAT.md",
+                    "target": "skills/teach/MISSION-FORMAT.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/teach/RESOURCES-FORMAT.md",
+                    "target": "skills/teach/RESOURCES-FORMAT.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/to-questionnaire/SKILL.md",
+                    "target": "skills/to-questionnaire/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/to-spec/SKILL.md",
+                    "target": "skills/to-spec/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/to-tickets/SKILL.md",
+                    "target": "skills/to-tickets/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/wait-what/SKILL.md",
+                    "target": "skills/wait-what/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/wayfinder/SKILL.md",
+                    "target": "skills/wayfinder/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/wizard/SKILL.md",
+                    "target": "skills/wizard/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/wizard/template.sh",
+                    "target": "skills/wizard/template.sh",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/writing-beats/SKILL.md",
+                    "target": "skills/writing-beats/SKILL.md",
                     "category": "skill"
                 },
                 {
@@ -497,6 +712,16 @@
                 {
                     "source": "matt/skills/writing-for-agents/SKILL-MECHANICS.md",
                     "target": "skills/writing-for-agents/SKILL-MECHANICS.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/writing-fragments/SKILL.md",
+                    "target": "skills/writing-fragments/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "matt/skills/writing-shape/SKILL.md",
+                    "target": "skills/writing-shape/SKILL.md",
                     "category": "skill"
                 }
             ]
