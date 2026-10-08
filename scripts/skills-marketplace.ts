@@ -69,15 +69,14 @@ export interface SkillFrontmatter {
 
 /**
  * A bundle ships to the marketplace when it supports Claude Code *and* contains
- * at least one skill. Bundles built around VS Code agents and instructions
- * (`base`, `rdpi`) are excluded: the `skills` CLI installs skills only, so a
- * partial install would hand the user a pipeline with its agents missing.
+ * at least one skill: the `skills` CLI installs skills only, so a bundle built
+ * around agents and instructions would lose them in a partial install.
  *
  * Mirrors the default in `src/types/platform.ts`: a bundle without `platforms`
- * predates platform support and is VS Code–only.
+ * supports every platform.
  */
 export function supportsClaudeCode(bundle: Bundle): boolean {
-    return (bundle.platforms ?? []).includes("claude-code");
+    return !bundle.platforms || bundle.platforms.includes("claude-code");
 }
 
 export function selectBundles(manifest: Manifest): Bundle[] {

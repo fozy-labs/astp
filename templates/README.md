@@ -8,27 +8,20 @@ This directory contains the canonical template files for the `astp` CLI tool. Te
 templates/
 ├── manifest.json          ← central manifest (source of truth)
 ├── README.md              ← this file
-├── base/                  ← bundle: base (vscode only)
-│   └── skills/
-│       └── orchestrate/
-│           └── SKILL.md
-├── rdpi/                  ← bundle: rdpi (vscode only)
-│   ├── agents/
-│   ├── instructions/
-│   └── skills/
-├── fozy-labs/             ← bundle: fozy-labs (vscode + claude-code)
+├── fozy-labs/             ← bundle: fozy-labs (claude-code)
 │   └── skills/
 │       ├── fozy-labs-di/
 │       ├── fozy-labs-fsd/
 │       ├── fozy-labs-rx-api/
 │       └── fozy-labs-signals/
-├── docs/                  ← bundle: docs (vscode + claude-code)
+├── docs/                  ← bundle: docs (claude-code)
 │   └── skills/
-│       └── markdown-craft/
-├── design/                ← bundle: design (vscode + claude-code)
+│       ├── markdown-craft/
+│       └── statechart-craft/
+├── design/                ← bundle: design (claude-code)
 │   └── skills/
 │       └── design-derivation/
-└── matt/                  ← bundle: matt (claude-code only)
+└── matt/                  ← bundle: matt (claude-code)
     └── skills/
         ├── ask-matt/
         ├── chief-of-staff/
@@ -64,7 +57,7 @@ templates/
         └── writing-shape/
 ```
 
-Each bundle directory's internal structure mirrors the install target structure. For example, `rdpi/agents/rdpi-approve.agent.md` installs to `<install-root>/agents/rdpi-approve.agent.md`.
+Each bundle directory's internal structure mirrors the install target structure. For example, `fozy-labs/skills/fozy-labs-di/SKILL.md` installs to `<install-root>/skills/fozy-labs-di/SKILL.md`.
 
 ## Manifest Schema
 
@@ -86,24 +79,23 @@ The `manifest.json` file defines all available bundles and their contents. It is
 | `version` | `string` | Semver version string (e.g., `"1.0.0"`). |
 | `description` | `string` | Human-readable description for display in prompts. |
 | `default` | `boolean` | Whether this bundle is pre-selected by default in the interactive wizard. |
-| `platforms` | `Platform[]` *(optional)* | Coding agents this bundle supports — `"vscode"` and/or `"claude-code"`. Defaults to `["vscode"]` when omitted (legacy compatibility). |
+| `platforms` | `Platform[]` *(optional)* | Coding agents this bundle supports — `"claude-code"` is the only value today. Defaults to all platforms when omitted. |
 | `items` | `TemplateItem[]` | Files included in this bundle. |
 
 ### Platform values
 
 | Value | Project root | User root |
 |-------|--------------|-----------|
-| `vscode` | `./.github/` | `~/.copilot/` |
 | `claude-code` | `./.claude/` | `$CLAUDE_CONFIG_DIR`, else `~/.claude/` |
 
-A bundle listed with both platforms is selectable in either install flow; the same `target` path lands under the platform's own root, so write bundle items as if they live directly under `skills/<name>/SKILL.md`, `agents/...`, etc.
+The same `target` path lands under the platform's own root, so write bundle items as if they live directly under `skills/<name>/SKILL.md`, `agents/...`, etc.
 
 ### TemplateItem fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `source` | `string` | Path relative to `templates/` (e.g., `rdpi/agents/rdpi-approve.agent.md`). |
-| `target` | `string` | Path relative to install root (e.g., `agents/rdpi-approve.agent.md`). |
+| `source` | `string` | Path relative to `templates/` (e.g., `fozy-labs/skills/fozy-labs-di/SKILL.md`). |
+| `target` | `string` | Path relative to install root (e.g., `skills/fozy-labs-di/SKILL.md`). |
 | `category` | `string` | MDA file category: `agent`, `skill`, or `instruction`. |
 
 ### Path conventions
@@ -118,7 +110,7 @@ A bundle listed with both platforms is selectable in either install flow; the sa
 3. Add a bundle entry to `manifest.json` with `name`, `version`, `description`, `default`, `platforms`, and `items`.
 4. Each item needs `source` (relative to `templates/`), `target` (relative to install root), and `category`.
 5. Set the initial version to `"1.0.0"`.
-6. Declare the supported `platforms`. Use `["vscode"]` for Copilot-only bundles, `["claude-code"]` for Claude Code–only bundles, or both when the content is portable across agents.
+6. Declare the supported `platforms`, e.g. `["claude-code"]`.
 
 ## How to Add a File to an Existing Bundle
 
@@ -141,7 +133,7 @@ During installation, the CLI injects four `astp-*` fields into each installed fi
 | Field | Purpose |
 |-------|---------|
 | `astp-source` | Identifies the source repository (e.g., `fozy-labs/astp`). |
-| `astp-bundle` | Identifies the bundle (e.g., `rdpi`). |
+| `astp-bundle` | Identifies the bundle (e.g., `docs`). |
 | `astp-version` | Bundle version at install/update time (e.g., `1.0.0`). |
 | `astp-hash` | SHA-256 hash of template content for modification detection. |
 

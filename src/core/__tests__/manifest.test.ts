@@ -6,28 +6,28 @@ const validManifestData = {
     schemaVersion: 1,
     repository: "fozy-labs/astp",
     bundles: {
-        base: {
-            name: "base",
+        core: {
+            name: "core",
             version: "1.0.0",
-            description: "Base bundle",
+            description: "Core bundle",
             default: true,
             items: [
                 {
-                    source: "base/skills/orchestrate/SKILL.md",
+                    source: "core/skills/orchestrate/SKILL.md",
                     target: "skills/orchestrate/SKILL.md",
                     category: "skill",
                 },
             ],
         },
-        rdpi: {
-            name: "rdpi",
+        pipeline: {
+            name: "pipeline",
             version: "1.0.0",
-            description: "RDPI bundle",
+            description: "Pipeline bundle",
             default: false,
             items: [
                 {
-                    source: "rdpi/agents/rdpi-approve.agent.md",
-                    target: "agents/rdpi-approve.agent.md",
+                    source: "pipeline/agents/pipeline-approve.agent.md",
+                    target: "agents/pipeline-approve.agent.md",
                     category: "agent",
                 },
             ],
@@ -41,8 +41,8 @@ describe("validateManifest", () => {
         const result = validateManifest(validManifestData);
         expect(result.schemaVersion).toBe(1);
         expect(result.repository).toBe("fozy-labs/astp");
-        expect(Object.keys(result.bundles)).toEqual(["base", "rdpi"]);
-        expect(result.bundles.base.items).toHaveLength(1);
+        expect(Object.keys(result.bundles)).toEqual(["core", "pipeline"]);
+        expect(result.bundles.core.items).toHaveLength(1);
     });
 
     // T13: Missing required fields
@@ -134,7 +134,7 @@ describe("platform validation", () => {
                     version: "1.0.0",
                     description: "Cross-platform",
                     default: false,
-                    platforms: ["vscode", "claude-code"],
+                    platforms: ["claude-code"],
                     items: [
                         {
                             source: "fozy-labs/skills/x/SKILL.md",
@@ -146,10 +146,10 @@ describe("platform validation", () => {
             },
         };
         const result = validateManifest(data);
-        expect(result.bundles["fozy-labs"].platforms).toEqual(["vscode", "claude-code"]);
+        expect(result.bundles["fozy-labs"].platforms).toEqual(["claude-code"]);
     });
 
-    it("accepts bundle without platforms (legacy default vscode)", () => {
+    it("accepts bundle without platforms (defaults to all platforms)", () => {
         const data = {
             ...validManifestData,
             bundles: {
@@ -199,6 +199,23 @@ describe("platform validation", () => {
         };
         expect(() => validateManifest(data)).toThrow(/unknown platform 'jetbrains'/);
     });
+
+    it("rejects the removed vscode platform", () => {
+        const data = {
+            ...validManifestData,
+            bundles: {
+                broken: {
+                    name: "broken",
+                    version: "1.0.0",
+                    description: "x",
+                    default: false,
+                    platforms: ["vscode"],
+                    items: [{ source: "broken/x.md", target: "x.md", category: "skill" }],
+                },
+            },
+        };
+        expect(() => validateManifest(data)).toThrow(/unknown platform 'vscode'/);
+    });
 });
 
 describe("resolveBundle", () => {
@@ -206,8 +223,8 @@ describe("resolveBundle", () => {
 
     // T18: Resolve existing bundle
     it("T18: resolves existing bundle by name", () => {
-        const bundle = resolveBundle(manifest, "rdpi");
-        expect(bundle.name).toBe("rdpi");
+        const bundle = resolveBundle(manifest, "pipeline");
+        expect(bundle.name).toBe("pipeline");
         expect(bundle.version).toBe("1.0.0");
         expect(bundle.items).toHaveLength(1);
     });
@@ -215,7 +232,7 @@ describe("resolveBundle", () => {
     // T19: Unknown bundle
     it("T19: throws for unknown bundle with available names", () => {
         expect(() => resolveBundle(manifest, "nonexistent")).toThrow(
-            "Bundle 'nonexistent' not found. Available: base, rdpi",
+            "Bundle 'nonexistent' not found. Available: core, pipeline",
         );
     });
 });
@@ -238,7 +255,7 @@ describe("fetchManifest", () => {
 
         const result = await fetchManifest();
         expect(result.schemaVersion).toBe(1);
-        expect(result.bundles.base).toBeDefined();
+        expect(result.bundles.core).toBeDefined();
     });
 
     // T29: Network error

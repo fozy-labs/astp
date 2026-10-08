@@ -2,12 +2,11 @@
 
 /**
  * Coding agent platform a bundle targets.
- * - `vscode` — GitHub Copilot in VS Code (installs under `.github/` or `~/.copilot/`).
- * - `claude-code` — Anthropic Claude Code CLI (installs under `.claude/` or `$CLAUDE_CONFIG_DIR`, else `~/.claude/`).
+ * `claude-code` — Anthropic Claude Code CLI (installs under `.claude/` or `$CLAUDE_CONFIG_DIR`, else `~/.claude/`).
  */
-export type Platform = "vscode" | "claude-code";
+export type Platform = "claude-code";
 
-export const ALL_PLATFORMS: readonly Platform[] = ["vscode", "claude-code"] as const;
+export const ALL_PLATFORMS = ["claude-code"] as const satisfies readonly Platform[];
 
 // ── Remote Manifest Types (§3.1) ──────────────────────────────────────
 
@@ -32,8 +31,7 @@ export interface Bundle {
     /** Whether this bundle is pre-selected by default in the interactive wizard. */
     default: boolean;
     /**
-     * Platforms this bundle can be installed on. Defaults to `["vscode"]` when omitted
-     * for backwards compatibility with manifests authored before platform support.
+     * Platforms this bundle can be installed on. Defaults to all platforms when omitted.
      */
     platforms?: Platform[];
     /** Files included in this bundle. */
@@ -42,9 +40,9 @@ export interface Bundle {
 
 /** A single template file within a bundle. */
 export interface TemplateItem {
-    /** Path relative to templates/ (e.g., "rdpi/agents/rdpi-approve.agent.md"). */
+    /** Path relative to templates/ (e.g., "docs/skills/markdown-craft/SKILL.md"). */
     source: string;
-    /** Path relative to install root (e.g., "agents/rdpi-approve.agent.md"). */
+    /** Path relative to install root (e.g., "skills/markdown-craft/SKILL.md"). */
     target: string;
     /** MDA file category for display grouping. */
     category: ItemCategory;
@@ -75,7 +73,7 @@ export interface InstallTarget {
 export interface InstalledFileMetadata {
     /** Source repository ("fozy-labs/astp"). Maps to `astp-source` frontmatter field. */
     source: string;
-    /** Bundle name ("rdpi", "base"). Maps to `astp-bundle` field. */
+    /** Bundle name ("docs", "fozy-labs"). Maps to `astp-bundle` field. */
     bundle: string;
     /** Bundle version at install/update time ("1.0.0"). Maps to `astp-version` field. */
     version: string;

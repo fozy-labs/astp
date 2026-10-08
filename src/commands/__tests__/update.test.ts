@@ -47,42 +47,42 @@ const mockShowSuccess = vi.mocked(showSuccess);
 const mockWarnModified = vi.mocked(warnModified);
 
 const testTarget: InstallTarget = {
-    platform: "vscode",
+    platform: "claude-code",
     type: "project",
-    rootDir: "/project/.github",
+    rootDir: "/project/.claude",
 };
 
 const testItem: TemplateItem = {
-    source: "rdpi/agents/rdpi-approve.agent.md",
-    target: "agents/rdpi-approve.agent.md",
+    source: "pipeline/agents/pipeline-approve.agent.md",
+    target: "agents/pipeline-approve.agent.md",
     category: "agent",
 };
 
 const testBundle: Bundle = {
-    name: "rdpi",
+    name: "pipeline",
     version: "1.1.0",
-    description: "RDPI pipeline",
+    description: "Pipeline",
     default: false,
-    platforms: ["vscode"],
+    platforms: ["claude-code"],
     items: [testItem],
 };
 
 const testManifest: Manifest = {
     schemaVersion: 1,
     repository: "fozy-labs/astp",
-    bundles: { rdpi: testBundle },
+    bundles: { pipeline: testBundle },
 };
 
 const testInstalledBundle: InstalledBundle = {
-    bundleName: "rdpi",
+    bundleName: "pipeline",
     version: "1.0.0",
     files: [
         {
-            filePath: "/project/.github/agents/rdpi-approve.agent.md",
-            relativePath: "agents/rdpi-approve.agent.md",
+            filePath: "/project/.claude/agents/pipeline-approve.agent.md",
+            relativePath: "agents/pipeline-approve.agent.md",
             metadata: {
                 source: "fozy-labs/astp",
-                bundle: "rdpi",
+                bundle: "pipeline",
                 version: "1.0.0",
                 hash: "abc123",
             },
@@ -99,10 +99,10 @@ const noUpdatesReport: UpdateReport = {
 const updatesReport: UpdateReport = {
     updates: [
         {
-            bundleName: "rdpi",
+            bundleName: "pipeline",
             installedVersion: "1.0.0",
             availableVersion: "1.1.0",
-            files: [{ targetPath: "agents/rdpi-approve.agent.md", state: "unmodified" }],
+            files: [{ targetPath: "agents/pipeline-approve.agent.md", state: "unmodified" }],
         },
     ],
     upToDate: [],
@@ -119,11 +119,11 @@ describe("executeUpdate", () => {
         mockScanInstalled.mockResolvedValue([testInstalledBundle]);
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(updatesReport);
-        mockDetectModified.mockResolvedValue([{ targetPath: "agents/rdpi-approve.agent.md", state: "modified" }]);
-        mockDownloadBundle.mockResolvedValue("/tmp/astp-rdpi");
+        mockDetectModified.mockResolvedValue([{ targetPath: "agents/pipeline-approve.agent.md", state: "modified" }]);
+        mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
         mockInstallFile.mockResolvedValue(undefined);
 
-        await executeUpdate({ force: true, platform: "vscode", target: "project" });
+        await executeUpdate({ force: true, platform: "claude-code", target: "project" });
 
         // With --force, modified files should still be installed
         expect(mockInstallFile).toHaveBeenCalledTimes(1);
@@ -133,7 +133,7 @@ describe("executeUpdate", () => {
     it("shows info when no installed files found", async () => {
         mockScanInstalled.mockResolvedValue([]);
 
-        await executeUpdate({ platform: "vscode", target: "project" });
+        await executeUpdate({ platform: "claude-code", target: "project" });
 
         expect(mockShowInfo).toHaveBeenCalledWith("No astp-managed files found.");
         expect(mockFetchManifest).not.toHaveBeenCalled();
@@ -144,7 +144,7 @@ describe("executeUpdate", () => {
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(noUpdatesReport);
 
-        await executeUpdate({ platform: "vscode", target: "project" });
+        await executeUpdate({ platform: "claude-code", target: "project" });
 
         expect(mockShowInfo).toHaveBeenCalledWith("All bundles up to date.");
         expect(mockDownloadBundle).not.toHaveBeenCalled();
@@ -154,10 +154,10 @@ describe("executeUpdate", () => {
         mockScanInstalled.mockResolvedValue([testInstalledBundle]);
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(updatesReport);
-        mockDetectModified.mockResolvedValue([{ targetPath: "agents/rdpi-approve.agent.md", state: "modified" }]);
-        mockDownloadBundle.mockResolvedValue("/tmp/astp-rdpi");
+        mockDetectModified.mockResolvedValue([{ targetPath: "agents/pipeline-approve.agent.md", state: "modified" }]);
+        mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
 
-        await executeUpdate({ platform: "vscode", target: "project" });
+        await executeUpdate({ platform: "claude-code", target: "project" });
 
         expect(mockWarnModified).toHaveBeenCalled();
         expect(mockInstallFile).not.toHaveBeenCalled();
@@ -167,24 +167,24 @@ describe("executeUpdate", () => {
         mockScanInstalled.mockResolvedValue([testInstalledBundle]);
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(updatesReport);
-        mockDetectModified.mockResolvedValue([{ targetPath: "agents/rdpi-approve.agent.md", state: "modified" }]);
-        mockDownloadBundle.mockResolvedValue("/tmp/astp-rdpi");
+        mockDetectModified.mockResolvedValue([{ targetPath: "agents/pipeline-approve.agent.md", state: "modified" }]);
+        mockDownloadBundle.mockResolvedValue("/tmp/astp-pipeline");
         mockInstallFile.mockResolvedValue(undefined);
 
-        await executeUpdate({ force: true, platform: "vscode", target: "project" });
+        await executeUpdate({ force: true, platform: "claude-code", target: "project" });
 
         expect(mockInstallFile).toHaveBeenCalledTimes(1);
         expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining("1 file"));
     });
 
     it("prompts for platform and target when not provided", async () => {
-        mockSelectPlatform.mockResolvedValue("vscode");
+        mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockResolvedValue(testTarget);
         mockScanInstalled.mockResolvedValue([]);
 
         await executeUpdate({});
 
         expect(mockSelectPlatform).toHaveBeenCalled();
-        expect(mockSelectTarget).toHaveBeenCalledWith("vscode");
+        expect(mockSelectTarget).toHaveBeenCalledWith("claude-code");
     });
 });

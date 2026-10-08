@@ -12,19 +12,19 @@ describe("compareVersions", () => {
         schemaVersion: 1,
         repository: "fozy-labs/astp",
         bundles: {
-            rdpi: {
-                name: "rdpi",
+            pipeline: {
+                name: "pipeline",
                 version: bundleVersion,
-                description: "RDPI",
+                description: "Pipeline",
                 default: false,
-                items: [{ source: "rdpi/agents/a.md", target: "agents/a.md", category: "agent" }],
+                items: [{ source: "pipeline/agents/a.md", target: "agents/a.md", category: "agent" }],
             },
         },
     });
 
     const createInstalled = (version: string): InstalledBundle[] => [
         {
-            bundleName: "rdpi",
+            bundleName: "pipeline",
             version,
             files: [
                 {
@@ -32,7 +32,7 @@ describe("compareVersions", () => {
                     relativePath: "agents/a.md",
                     metadata: {
                         source: "fozy-labs/astp",
-                        bundle: "rdpi",
+                        bundle: "pipeline",
                         version,
                         hash: "abc",
                     },
@@ -74,10 +74,10 @@ describe("compareVersions", () => {
             schemaVersion: 1,
             repository: "fozy-labs/astp",
             bundles: {
-                base: {
-                    name: "base",
+                core: {
+                    name: "core",
                     version: "1.0.0",
-                    description: "Base",
+                    description: "Core",
                     default: true,
                     items: [],
                 },
@@ -86,7 +86,7 @@ describe("compareVersions", () => {
 
         const report = compareVersions(createInstalled("1.0.0"), manifest);
         expect(report.notInManifest).toHaveLength(1);
-        expect(report.notInManifest[0].bundleName).toBe("rdpi");
+        expect(report.notInManifest[0].bundleName).toBe("pipeline");
     });
 });
 
@@ -310,7 +310,7 @@ describe("scanInstalled", () => {
         const managed1 = `---
 name: agent1
 astp-source: fozy-labs/astp
-astp-bundle: rdpi
+astp-bundle: pipeline
 astp-version: 1.0.0
 astp-hash: abc123
 ---
@@ -318,7 +318,7 @@ Content 1`;
 
         const managed2 = `---
 astp-source: fozy-labs/astp
-astp-bundle: rdpi
+astp-bundle: pipeline
 astp-version: 1.0.0
 astp-hash: def456
 ---
@@ -336,7 +336,7 @@ My custom content`;
 
         const result = await scanInstalled(tempDir);
         expect(result).toHaveLength(1);
-        expect(result[0].bundleName).toBe("rdpi");
+        expect(result[0].bundleName).toBe("pipeline");
         expect(result[0].files).toHaveLength(2);
     });
 
@@ -374,7 +374,7 @@ Doc`;
     it("T27: update detection with mixed file states", async () => {
         const managedContent = `---
 astp-source: fozy-labs/astp
-astp-bundle: rdpi
+astp-bundle: pipeline
 astp-version: 1.0.0
 astp-hash: somehash
 ---
@@ -389,19 +389,19 @@ Content`;
             schemaVersion: 1,
             repository: "fozy-labs/astp",
             bundles: {
-                rdpi: {
-                    name: "rdpi",
+                pipeline: {
+                    name: "pipeline",
                     version: "2.0.0",
-                    description: "RDPI",
+                    description: "Pipeline",
                     default: false,
                     items: [
                         {
-                            source: "rdpi/agents/a.md",
+                            source: "pipeline/agents/a.md",
                             target: "agents/a.md",
                             category: "agent",
                         },
                         {
-                            source: "rdpi/agents/new.md",
+                            source: "pipeline/agents/new.md",
                             target: "agents/new.md",
                             category: "agent",
                         },

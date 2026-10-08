@@ -21,10 +21,10 @@ describe("extractAstpMetadata", () => {
     // T01: Parse frontmatter with existing fields + astp fields
     it("T01: extracts InstalledFileMetadata from frontmatter with existing + astp fields", () => {
         const content = `---
-name: rdpi-approve
-description: "ONLY for RDPI pipeline."
+name: pipeline-approve
+description: "ONLY for pipeline."
 astp-source: fozy-labs/astp
-astp-bundle: rdpi
+astp-bundle: pipeline
 astp-version: 1.0.0
 astp-hash: abc123def456
 ---
@@ -33,7 +33,7 @@ Content here`;
         const result = extractAstpMetadata(content);
         expect(result).toEqual({
             source: "fozy-labs/astp",
-            bundle: "rdpi",
+            bundle: "pipeline",
             version: "1.0.0",
             hash: "abc123def456",
         });
@@ -78,22 +78,22 @@ set -euo pipefail
 });
 
 describe("injectAstpFields", () => {
-    const meta = { source: "fozy-labs/astp", bundle: "rdpi", version: "1.0.0" };
+    const meta = { source: "fozy-labs/astp", bundle: "pipeline", version: "1.0.0" };
     const hash = "hashvalue";
 
     // T03: Inject into existing frontmatter
     it("T03: appends astp fields to existing frontmatter, preserving existing fields", () => {
         const content = `---
-name: rdpi-approve
+name: pipeline-approve
 ---
 Content`;
 
         const result = injectAstpFields(content, meta, hash);
 
         expect(result).toBe(`---
-name: rdpi-approve
+name: pipeline-approve
 astp-source: fozy-labs/astp
-astp-bundle: rdpi
+astp-bundle: pipeline
 astp-version: 1.0.0
 astp-hash: hashvalue
 ---
@@ -109,7 +109,7 @@ content`;
 
         expect(result).toBe(`---
 astp-source: fozy-labs/astp
-astp-bundle: rdpi
+astp-bundle: pipeline
 astp-version: 1.0.0
 astp-hash: hashvalue
 ---
@@ -120,7 +120,7 @@ content`);
     // T42: Preserve existing frontmatter field order on injection
     it("T42: preserves existing frontmatter field order on injection", () => {
         const content = `---
-name: rdpi-approve
+name: pipeline-approve
 description: "desc"
 tools: [search, read]
 ---
@@ -130,7 +130,7 @@ Body`;
 
         // Existing fields in original order, astp-* appended at end
         const lines = result.split("\n");
-        const nameIdx = lines.indexOf("name: rdpi-approve");
+        const nameIdx = lines.indexOf("name: pipeline-approve");
         const descIdx = lines.indexOf('description: "desc"');
         const toolsIdx = lines.indexOf("tools: [search, read]");
         const astpIdx = lines.indexOf("astp-source: fozy-labs/astp");
@@ -148,7 +148,7 @@ Body`;
 
         expect(lines[0]).toBe("#!/usr/bin/env bash");
         expect(lines[1]).toBe("# astp-source: fozy-labs/astp");
-        expect(lines[2]).toBe("# astp-bundle: rdpi");
+        expect(lines[2]).toBe("# astp-bundle: pipeline");
         expect(lines[3]).toBe("# astp-version: 1.0.0");
         expect(lines[4]).toBe("# astp-hash: hashvalue");
         expect(lines[5]).toBe("echo hi");
@@ -160,7 +160,7 @@ Body`;
         const result = injectAstpFields(content, meta, hash, "hash-comment");
 
         expect(result).toBe(
-            "# astp-source: fozy-labs/astp\n# astp-bundle: rdpi\n# astp-version: 1.0.0\n# astp-hash: hashvalue\necho hi\n",
+            "# astp-source: fozy-labs/astp\n# astp-bundle: pipeline\n# astp-version: 1.0.0\n# astp-hash: hashvalue\necho hi\n",
         );
     });
 
@@ -181,9 +181,9 @@ describe("stripAstpFields", () => {
     // T05: Strip astp fields, preserve other fields
     it("T05: removes only astp fields from mixed frontmatter", () => {
         const content = `---
-name: rdpi-approve
+name: pipeline-approve
 astp-source: fozy-labs/astp
-astp-bundle: rdpi
+astp-bundle: pipeline
 astp-version: 1.0.0
 astp-hash: abc123
 ---
@@ -192,7 +192,7 @@ Body`;
         const result = stripAstpFields(content);
 
         expect(result).toBe(`---
-name: rdpi-approve
+name: pipeline-approve
 ---
 Body`);
     });
@@ -201,7 +201,7 @@ Body`);
     it("T06: removes entire frontmatter block when only astp fields existed", () => {
         const content = `---
 astp-source: fozy-labs/astp
-astp-bundle: rdpi
+astp-bundle: pipeline
 astp-version: 1.0.0
 astp-hash: abc123
 ---

@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 
 import { downloadBundle, fetchManifest, installFile, resolveBundle } from "@/core/index.js";
-import type { Bundle, InstallTarget, Manifest, TemplateItem } from "@/types/index.js";
+import type { Bundle, InstallTarget, Manifest, Platform, TemplateItem } from "@/types/index.js";
 import { confirmInstall, selectBundles, selectPlatform, selectTarget, showSuccess } from "@/ui/prompts.js";
 
 import { executeInstall } from "../install.js";
@@ -35,17 +35,17 @@ const mockConfirmInstall = vi.mocked(confirmInstall);
 const mockShowSuccess = vi.mocked(showSuccess);
 
 const testItem: TemplateItem = {
-    source: "base/skills/orchestrate/SKILL.md",
+    source: "core/skills/orchestrate/SKILL.md",
     target: "skills/orchestrate/SKILL.md",
     category: "skill",
 };
 
 const testBundle: Bundle = {
-    name: "base",
+    name: "core",
     version: "1.0.0",
-    description: "Base skill",
+    description: "Core skill",
     default: true,
-    platforms: ["vscode"],
+    platforms: ["claude-code"],
     items: [testItem],
 };
 
@@ -54,7 +54,7 @@ const fozyLabsBundle: Bundle = {
     version: "1.0.0",
     description: "Fozy Labs stack skills",
     default: false,
-    platforms: ["vscode", "claude-code"],
+    platforms: ["claude-code"],
     items: [
         {
             source: "fozy-labs/skills/fozy-labs-di/SKILL.md",
@@ -67,13 +67,13 @@ const fozyLabsBundle: Bundle = {
 const testManifest: Manifest = {
     schemaVersion: 1,
     repository: "fozy-labs/astp",
-    bundles: { base: testBundle, "fozy-labs": fozyLabsBundle },
+    bundles: { core: testBundle, "fozy-labs": fozyLabsBundle },
 };
 
 const testTarget: InstallTarget = {
-    platform: "vscode",
+    platform: "claude-code",
     type: "project",
-    rootDir: "/project/.github",
+    rootDir: "/project/.claude",
 };
 
 beforeEach(() => {
@@ -89,45 +89,47 @@ describe("executeInstall", () => {
     it("T40: uses provided bundle, platform, and target without prompts", async () => {
         mockResolveBundle.mockReturnValue(testBundle);
 
-        await executeInstall({ bundle: "base", platform: "vscode", target: "project" });
+        await executeInstall({ bundle: "core", platform: "claude-code", target: "project" });
 
         expect(mockSelectPlatform).not.toHaveBeenCalled();
         expect(mockSelectTarget).not.toHaveBeenCalled();
         expect(mockSelectBundles).not.toHaveBeenCalled();
-        expect(mockResolveBundle).toHaveBeenCalledWith(testManifest, "base");
-        expect(mockDownloadBundle).toHaveBeenCalledWith("fozy-labs/astp", "base");
+        expect(mockResolveBundle).toHaveBeenCalledWith(testManifest, "core");
+        expect(mockDownloadBundle).toHaveBeenCalledWith("fozy-labs/astp", "core");
         expect(mockInstallFile).toHaveBeenCalledTimes(1);
         expect(mockInstallFile).toHaveBeenCalledWith(
             "/tmp/astp-base",
             testItem,
-            expect.objectContaining({ type: "project", platform: "vscode" }),
-            { source: "fozy-labs/astp", bundle: "base", version: "1.0.0" },
+            expect.objectContaining({ type: "project", platform: "claude-code" }),
+            { source: "fozy-labs/astp", bundle: "core", version: "1.0.0" },
         );
     });
 
     it("prompts for platform, target, and bundles when no arguments provided", async () => {
-        mockSelectPlatform.mockResolvedValue("vscode");
+        mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockResolvedValue(testTarget);
         mockSelectBundles.mockResolvedValue([testBundle]);
 
         await executeInstall({});
 
         expect(mockSelectPlatform).toHaveBeenCalled();
-        expect(mockSelectTarget).toHaveBeenCalledWith("vscode");
-        expect(mockSelectBundles).toHaveBeenCalledWith(testManifest, "vscode");
+        expect(mockSelectTarget).toHaveBeenCalledWith("claude-code");
+        expect(mockSelectBundles).toHaveBeenCalledWith(testManifest, "claude-code");
         expect(mockConfirmInstall).toHaveBeenCalledWith([testBundle], testTarget);
     });
 
     it("rejects bundle that does not support requested platform", async () => {
-        mockResolveBundle.mockReturnValue(testBundle);
+        // A bundle authored for a platform the CLI no longer supports.
+        const legacyBundle: Bundle = { ...testBundle, platforms: ["vscode" as Platform] };
+        mockResolveBundle.mockReturnValue(legacyBundle);
 
-        await expect(executeInstall({ bundle: "base", platform: "claude-code", target: "project" })).rejects.toThrow(
+        await expect(executeInstall({ bundle: "core", platform: "claude-code", target: "project" })).rejects.toThrow(
             /does not support platform 'claude-code'/,
         );
         expect(mockDownloadBundle).not.toHaveBeenCalled();
     });
 
-    it("accepts cross-platform bundle when installing to claude-code", async () => {
+    it("accepts bundle supporting claude-code", async () => {
         mockResolveBundle.mockReturnValue(fozyLabsBundle);
 
         await executeInstall({ bundle: "fozy-labs", platform: "claude-code", target: "project" });
@@ -141,7 +143,7 @@ describe("executeInstall", () => {
     });
 
     it("aborts when user declines confirmation", async () => {
-        mockSelectPlatform.mockResolvedValue("vscode");
+        mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockResolvedValue(testTarget);
         mockSelectBundles.mockResolvedValue([testBundle]);
         mockConfirmInstall.mockResolvedValue(false);
@@ -154,16 +156,16 @@ describe("executeInstall", () => {
 
     it("propagates error for unknown bundle", async () => {
         mockResolveBundle.mockImplementation(() => {
-            throw new Error("Bundle 'foo' not found. Available: base");
+            throw new Error("Bundle 'foo' not found. Available: core");
         });
 
-        await expect(executeInstall({ bundle: "foo", platform: "vscode", target: "project" })).rejects.toThrow(
+        await expect(executeInstall({ bundle: "foo", platform: "claude-code", target: "project" })).rejects.toThrow(
             "Bundle 'foo' not found",
         );
     });
 
     it("shows success with correct file count", async () => {
-        mockSelectPlatform.mockResolvedValue("vscode");
+        mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockResolvedValue(testTarget);
         mockSelectBundles.mockResolvedValue([testBundle]);
 

@@ -1,6 +1,6 @@
 import { downloadBundle, fetchManifest, installFile, resolveBundle } from "@/core/index.js";
 import type { Bundle, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
-import { bundleSupportsPlatform, resolveTarget } from "@/types/index.js";
+import { bundleSupportsPlatform, getBundlePlatforms, resolveTarget } from "@/types/index.js";
 import { confirmInstall, selectBundles, selectPlatform, selectTarget, showSuccess, spinner } from "@/ui/prompts.js";
 
 export interface InstallOptions {
@@ -25,7 +25,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
         const bundle = resolveBundle(manifest, options.bundle);
         if (!bundleSupportsPlatform(bundle, platform)) {
             throw new Error(
-                `Bundle '${bundle.name}' does not support platform '${platform}'. Supported: ${(bundle.platforms ?? ["vscode"]).join(", ")}`,
+                `Bundle '${bundle.name}' does not support platform '${platform}'. Supported: ${getBundlePlatforms(bundle).join(", ")}`,
             );
         }
         selectedBundles = [bundle];

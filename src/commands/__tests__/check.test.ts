@@ -31,21 +31,21 @@ const mockShowCheckReport = vi.mocked(showCheckReport);
 const mockShowInfo = vi.mocked(showInfo);
 
 const testTarget: InstallTarget = {
-    platform: "vscode",
+    platform: "claude-code",
     type: "project",
-    rootDir: "/project/.github",
+    rootDir: "/project/.claude",
 };
 
 const testInstalledBundle: InstalledBundle = {
-    bundleName: "rdpi",
+    bundleName: "pipeline",
     version: "1.0.0",
     files: [
         {
-            filePath: "/project/.github/agents/rdpi-approve.agent.md",
-            relativePath: "agents/rdpi-approve.agent.md",
+            filePath: "/project/.claude/agents/pipeline-approve.agent.md",
+            relativePath: "agents/pipeline-approve.agent.md",
             metadata: {
                 source: "fozy-labs/astp",
-                bundle: "rdpi",
+                bundle: "pipeline",
                 version: "1.0.0",
                 hash: "abc123",
             },
@@ -57,16 +57,16 @@ const testManifest: Manifest = {
     schemaVersion: 1,
     repository: "fozy-labs/astp",
     bundles: {
-        rdpi: {
-            name: "rdpi",
+        pipeline: {
+            name: "pipeline",
             version: "1.2.0",
-            description: "RDPI pipeline",
+            description: "Pipeline",
             default: false,
-            platforms: ["vscode"],
+            platforms: ["claude-code"],
             items: [
                 {
-                    source: "rdpi/agents/rdpi-approve.agent.md",
-                    target: "agents/rdpi-approve.agent.md",
+                    source: "pipeline/agents/pipeline-approve.agent.md",
+                    target: "agents/pipeline-approve.agent.md",
                     category: "agent",
                 },
             ],
@@ -77,10 +77,10 @@ const testManifest: Manifest = {
 const mixedReport: UpdateReport = {
     updates: [
         {
-            bundleName: "rdpi",
+            bundleName: "pipeline",
             installedVersion: "1.0.0",
             availableVersion: "1.2.0",
-            files: [{ targetPath: "agents/rdpi-approve.agent.md", state: "unmodified" }],
+            files: [{ targetPath: "agents/pipeline-approve.agent.md", state: "unmodified" }],
         },
     ],
     upToDate: [],
@@ -95,7 +95,7 @@ describe("executeCheck", () => {
     it("shows info when no installed files found", async () => {
         mockScanInstalled.mockResolvedValue([]);
 
-        await executeCheck({ platform: "vscode", target: "project" });
+        await executeCheck({ platform: "claude-code", target: "project" });
 
         expect(mockShowInfo).toHaveBeenCalledWith("No astp-managed files found.");
         expect(mockFetchManifest).not.toHaveBeenCalled();
@@ -107,7 +107,7 @@ describe("executeCheck", () => {
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(mixedReport);
 
-        await executeCheck({ platform: "vscode", target: "project" });
+        await executeCheck({ platform: "claude-code", target: "project" });
 
         expect(mockFetchManifest).toHaveBeenCalled();
         expect(mockCompareVersions).toHaveBeenCalledWith([testInstalledBundle], testManifest);
@@ -116,7 +116,7 @@ describe("executeCheck", () => {
 
     it("displays mixed states correctly", async () => {
         const upToDateBundle: InstalledBundle = {
-            bundleName: "base",
+            bundleName: "core",
             version: "1.0.0",
             files: [],
         };
@@ -124,7 +124,7 @@ describe("executeCheck", () => {
         const report: UpdateReport = {
             updates: [
                 {
-                    bundleName: "rdpi",
+                    bundleName: "pipeline",
                     installedVersion: "1.0.0",
                     availableVersion: "1.2.0",
                     files: [],
@@ -138,7 +138,7 @@ describe("executeCheck", () => {
         mockFetchManifest.mockResolvedValue(testManifest);
         mockCompareVersions.mockReturnValue(report);
 
-        await executeCheck({ platform: "vscode", target: "project" });
+        await executeCheck({ platform: "claude-code", target: "project" });
 
         expect(mockShowCheckReport).toHaveBeenCalledWith(report);
     });
