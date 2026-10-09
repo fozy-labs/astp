@@ -6,6 +6,7 @@ export {
     intro,
     isInteractive,
     outro,
+    requireTerminal,
     selectAction,
     selectBlocks,
     selectBundles,

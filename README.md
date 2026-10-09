@@ -127,7 +127,7 @@ Discovery is driven by `.claude-plugin/marketplace.json`, generated from `templa
 
 ## CI/CD
 
-For CI environments or scripted usage, pass `--platform` and `--target` to avoid interactive prompts:
+For CI environments or scripted usage, pass `--platform` and `--target` to avoid interactive prompts. Without a terminal astp never prompts: a missing `--target`, or a missing bundle name for `install` and `delete`, exits with code 1 and an error.
 
 ```bash
 # Install Fozy Labs skills
