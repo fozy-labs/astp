@@ -22,6 +22,7 @@ import { describeUnitCounts } from "@/ui/format.js";
 import {
     confirmDelete,
     isInteractive,
+    requireTerminal,
     selectInstalledBundles,
     selectPlatform,
     selectTarget,
@@ -41,6 +42,7 @@ export interface DeleteOptions {
 
 export async function executeDelete(options: DeleteOptions): Promise<void> {
     if (options.skills?.length && !options.bundle) throw new Error("--skill requires a bundle name");
+    if (!options.bundle) requireTerminal("delete needs a bundle name without a terminal");
     const platform: Platform = options.platform ?? (await selectPlatform());
     const target: InstallTarget = options.target
         ? resolveTarget(platform, options.target)

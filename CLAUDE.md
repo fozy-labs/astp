@@ -38,7 +38,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `<bundle>/` - fozy-labs, docs, design
 - `scripts/` - marketplace generator (run by Node type stripping, own `tsconfig.json`)
 - `tests/`
-  - `e2e/` - command flows with `fetchManifest` / `downloadBundle` mocked, no network
+  - `e2e/` - command flows with `fetchManifest` / `downloadBundle` mocked, no network, plus a real-CLI no-terminal test
   - `scripts/` - marketplace generator tests
 - `.claude-plugin/marketplace.json` - generated for `npx skills`; never edit by hand
 - `.claude/skills/markdown-craft/` - this repo's own astp-installed copy; edit `templates/docs/...` instead

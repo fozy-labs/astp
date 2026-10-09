@@ -45,6 +45,7 @@ vi.mock("@/types/index.js", async (importOriginal) => {
 
 vi.mock("@/ui/prompts.js", () => ({
     isInteractive: vi.fn(() => false),
+    requireTerminal: vi.fn(),
     selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     selectBundles: vi.fn(),

@@ -36,15 +36,16 @@ saw the diff, cannot see the internals, and know only the public API.
 knowing the codebase; the last one tells them what the upgrade buys. A symptom without the
 `Now` clause reads as a known open bug.
 
-`Added` / `Changed` name the symbol, give one clause of what the consumer gets, and link the
-docs page that carries the rest.
+`Added` / `Changed` name the symbol, linked to the docs page that carries the rest, and give
+one clause of what the consumer gets.
 
 - **The mechanism never ships.** Which comparison was wrong, which internal structure replaced
   which, why a guard did not hold — the reader cannot act on any of it. Its home is the PR.
   This is the single most common thing to cut.
 - **Cap entries at ~300 characters in `Fixed`, ~350 elsewhere.** Over the cap the entry is
   carrying documentation: cut it back to the symptom and link.
-- **A list of names is a docs table.** Give one or two examples and link the table.
+- **Weight follows value.** A minor change is one plain clause: no name lists, no examples, no
+  bold; link the docs that carry the rest.
 
 ## 3. A feature is one entry and a link
 
@@ -100,7 +101,7 @@ Six types, and the set never grows: `Added`, `Changed`, `Deprecated`, `Removed`,
 
 Every pair below is an agent's version and the maintainer's rewrite of it.
 
-**Per-API bullets → one entry** ([3](#3-a-feature-is-one-entry-and-a-link)). Four more bullets
+**Per-API bullets → one entry** ([A feature is one entry and a link](#3-a-feature-is-one-entry-and-a-link)). Four more bullets
 in the same shape were cut together with these two:
 
 ```markdown
@@ -113,19 +114,19 @@ in the same shape were cut together with these two:
 ```
 
 ```markdown
-- **Statechart** — state machines on an own runtime over signals, with no external
-  dependencies. See [docs/statechart](./statechart/README.md).
+- **[Statechart](./statechart/README.md)** — state machines on an own runtime over signals,
+  with no external dependencies.
 ```
 
-**Inline documentation → link** ([2](#2-entry-shape)). The original ran to 800 characters of
+**Inline documentation → link** ([Entry shape](#2-entry-shape)). The original ran to 800 characters of
 subscription semantics, GC behaviour and the internal structure it replaced:
 
 ```markdown
-- **`unstable_KeyedSignal` (experimental)** — a reactive keyed collection with per-key
-  subscription. See [RxSignals](./signals/README.md#unstable_keyedsignal).
+- **[`unstable_KeyedSignal`](./signals/README.md#unstable_keyedsignal)** — a reactive keyed
+  collection with per-key subscription.
 ```
 
-**Mechanism → symptom** ([2](#2-entry-shape)):
+**Mechanism → symptom** ([Entry shape](#2-entry-shape)):
 
 ```markdown
 - Relative imports in `dist/` now carry the `.js` extension (`tsc-alias --resolve-full-paths`):
@@ -139,10 +140,10 @@ subscription semantics, GC behaviour and the internal structure it replaced:
 
 ```markdown
 - Fixed relative imports in `dist` that caused an `ERR_UNSUPPORTED_DIR_IMPORT` error in Node.js.
-- A late cleanup of an old signal erased the record of a new one with the same key.
+- A late cleanup of an old signal erased the record of a new one with the same key. Now the new record survives.
 ```
 
-**Diagnosis cut, formula kept** ([2](#2-entry-shape)) — symptom, conditions and `Now` all
+**Diagnosis cut, formula kept** ([Entry shape](#2-entry-shape)) — symptom, conditions and `Now` all
 survive, only the internal cause goes:
 
 ```markdown
@@ -157,7 +158,7 @@ survive, only the internal cause goes:
   regardless of its value.
 ```
 
-**Name list → table link** ([2](#2-entry-shape)):
+**Minor change → one clause** ([Entry shape](#2-entry-shape)):
 
 ```markdown
 - Resource and command state transitions are labelled with the action name in devtools:
@@ -167,7 +168,6 @@ survive, only the internal cause goes:
 ```
 
 ```markdown
-- Resource and command state transitions are labelled with the action name in devtools:
-  `UPDATE: success`, `UPDATE: error` and etc. The table of names is in
-  [docs/devtools](./devtools/README.md#action-names-of-resources-and-commands).
+- Resource and command state transitions are
+  [labelled](./devtools/README.md#action-names-of-resources-and-commands) in devtools.
 ```

@@ -73,8 +73,8 @@ restored:
   print `@guard` / `@action` / `@delay` / `@context type` directives. To feed the output to the converter or to viz
   `source` mode, write those directives in by hand — the parser rejects undeclared names.
 - **Non-JSON `context`** (factory, `Date`, …) — no `@context initial` directive.
-- **Everything in [§2](#2-outside-the-subset)** — rendered, not parsed.
+- **Everything in [Outside the subset](#2-outside-the-subset)** — rendered, not parsed.
 
-State ids in the diagram are the config keys per the [§1](#1-output-rules) rule: a repeated or non-`[A-Za-z0-9_]` key
+State ids in the diagram are the config keys per the [Output rules](#1-output-rules): a repeated or non-`[A-Za-z0-9_]` key
 gets an id different from the key, and viz `machine` mode cannot highlight such a state — keep keys globally unique
 when the diagram matters.
