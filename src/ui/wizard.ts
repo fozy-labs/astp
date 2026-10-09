@@ -6,7 +6,7 @@ import { executeUpdate } from "@/commands/update.js";
 import { intro, outro, selectAction } from "./prompts.js";
 
 export async function launchWizard(): Promise<void> {
-    intro("astp — MDA Manager");
+    intro("astp");
 
     const action = await selectAction();
 

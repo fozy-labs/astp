@@ -11,7 +11,7 @@ interface PlatformRoots {
 }
 
 /**
- * Where each platform stores its MDA files. Project paths are repo-relative;
+ * Where each platform stores installed files. Project paths are repo-relative;
  * user paths are absolute (resolved against the home directory at runtime).
  */
 const PLATFORM_ROOTS: Record<Platform, PlatformRoots> = {

@@ -44,7 +44,7 @@ export interface TemplateItem {
     source: string;
     /** Path relative to install root (e.g., "skills/markdown-craft/SKILL.md"). */
     target: string;
-    /** MDA file category for display grouping. */
+    /** Category for display grouping. */
     category: ItemCategory;
 }
 

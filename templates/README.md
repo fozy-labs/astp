@@ -1,6 +1,6 @@
 # Template Author Guide
 
-This directory contains the canonical template files for the `astp` CLI tool. Templates are organized into **bundles** — named, versioned collections of MDA (Markdown Agent) files.
+This directory contains the canonical template files for the `astp` CLI tool. Templates are organized into **bundles** — named, versioned collections of skills, agents and rules.
 
 ## Directory Structure
 
@@ -65,7 +65,7 @@ The same `target` path lands under the platform's own root, so write bundle item
 |-------|------|-------------|
 | `source` | `string` | Path relative to `templates/` (e.g., `fozy-labs/skills/fozy-labs-di/SKILL.md`). |
 | `target` | `string` | Path relative to install root (e.g., `skills/fozy-labs-di/SKILL.md`). |
-| `category` | `string` | MDA file category: `agent`, `skill`, or `rule`. |
+| `category` | `string` | Category: `agent`, `skill`, or `rule`. |
 
 ### Path conventions
 
