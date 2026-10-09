@@ -35,7 +35,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `ui/` - `@clack/prompts` wizard and prompts
 - `templates/` - shipped bundles; author guide in [templates/README.md](templates/README.md)
   - `manifest.json` - source of truth: bundles, versions, platforms, `source` → `target` items
-  - `<bundle>/` - fozy-labs, docs, design
+  - `<bundle>/` - astp, fozy-labs, docs, design, agreement
 - `scripts/` - marketplace generator (run by Node type stripping, own `tsconfig.json`)
 - `tests/`
   - `e2e/` - command flows with `fetchManifest` / `downloadBundle` mocked, no network, plus a real-CLI no-terminal test
