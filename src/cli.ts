@@ -67,7 +67,7 @@ program
     .option("--target <type>", TARGET_HELP)
     .addHelpText(
         "after",
-        "\nWithout --skill or --block: a terminal asks which units to install; without one, every unit and non-optional block is selected, clearing earlier declines.\n--skill and --block add to the current selection.",
+        "\nWithout --skill or --block: a terminal asks which units to install; without one,\nevery unit and non-optional block is selected, clearing earlier declines.\n--skill and --block add to the current selection.",
     )
     .action(
         async (
@@ -101,7 +101,7 @@ program
     .option("--target <type>", TARGET_HELP)
     .addHelpText(
         "after",
-        "\nNew units are installed (a terminal asks first). Units dropped upstream are removed; locally changed ones stay in place and leave astp.lock.",
+        "\nNew units are installed (a terminal asks first). Units dropped upstream are\nremoved; locally changed ones stay in place and leave astp.lock.",
     )
     .action(async (options: { force?: boolean; platform?: string; target?: string }) => {
         await executeUpdate({
@@ -125,9 +125,9 @@ program
 
 program
     .command("list")
+    .description("List bundles, or the units and blocks of one bundle")
     .argument("[bundle]", "Bundle name to list")
     .option("--source <spec>", SOURCE_HELP)
-    .description("List bundles, or the units and blocks of one bundle")
     .option("--json", "Print JSON only; requires --target. Block keys are values for install --block")
     .option("--platform <name>", PLATFORM_HELP)
     .option("--target <type>", TARGET_HELP)
