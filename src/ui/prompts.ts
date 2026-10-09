@@ -271,11 +271,6 @@ export function cancelNoBundles(platform: Platform): never {
 }
 
 export async function selectBundleItems(entries: BundleEntry[]): Promise<Map<string, string[]>> {
-    if (entries.length === 0) {
-        p.cancel("No bundles available.");
-        process.exit(0);
-    }
-
     const message = "Select bundles and items:\n(Space = toggle, → = expand, ← = collapse, Enter = confirm)";
 
     const prompt = new BundleTreePrompt({
