@@ -46,12 +46,14 @@ function treeEntry(
         defaults = unitPaths,
         preselected = false,
         blocks = {},
+        optionalBlocks = [],
         blockDefaults = [],
     }: {
         defaults?: string[];
         preselected?: boolean;
         /** Unit path → block names, all in the unit's own file. */
         blocks?: Record<string, string[]>;
+        optionalBlocks?: string[];
         blockDefaults?: string[];
     } = {},
 ): BundleEntry {
@@ -67,7 +69,12 @@ function treeEntry(
         blocks: new Map(
             Object.entries(blocks).map(([unitPath, names]) => [
                 unitPath,
-                names.map((name) => ({ key: `${unitPath}#${name}`, name, file: unitPath })),
+                names.map((name) => ({
+                    key: `${unitPath}#${name}`,
+                    name,
+                    file: unitPath,
+                    optional: optionalBlocks.includes(name),
+                })),
             ]),
         ),
         blockDefaults,
@@ -103,12 +110,17 @@ describe("BundleTreePrompt", () => {
         expect(prompt.cursor).toBe(1);
     });
 
-    it("expands with right, toggles items, and shows the partial count on the bundle row", async () => {
+    it("expands with right, toggles items, and shows the partial count under the collapsed bundle", async () => {
         const entry = treeEntry("one", ["agents/a.md", "agents/b.md"], { preselected: true });
-        const { prompt, result } = drivePrompt([entry, treeEntry("two", ["agents/c.md"])], [RIGHT, DOWN, SPACE, ENTER]);
+        const two = treeEntry("two", ["agents/c.md"]);
+        const { prompt, input, result } = drivePrompt([entry, two], [RIGHT, DOWN, SPACE]);
 
+        await vi.waitFor(() => expect(prompt.chosen.get("one")?.size).toBe(1));
+        expect(prompt.renderRow({ entry }, false)).not.toContain("└");
+        for (const key of [LEFT, ENTER]) input.write(key);
         await expect(result).resolves.toEqual(new Map([["one", { units: ["agents/b.md"], blocks: [] }]]));
-        expect(prompt.renderRow({ entry }, false)).toContain("1/2");
+        expect(prompt.renderRow({ entry }, false)).toContain("└ 1/2* agents");
+        expect(prompt.renderRow({ entry: two }, false)).toContain("└ 1 agent");
     });
 
     it("left on an item collapses and puts the cursor on the bundle row", async () => {
@@ -190,10 +202,33 @@ describe("BundleTreePrompt blocks", () => {
         for (const key of [DOWN, DOWN, SPACE, LEFT]) input.write(key);
         await vi.waitFor(() => expect(prompt.rows).toHaveLength(3));
         expect(prompt.cursor).toBe(1);
-        expect(prompt.renderRow(prompt.rows[1]!, false)).toContain("1/2 blocks");
+        expect(prompt.renderRow(prompt.rows[1]!, false)).toContain("└ 1/2* blocks");
         input.write(ENTER);
         await expect(result).resolves.toEqual(
             new Map([["one", { units: [RULE, "agents/a.md"], blocks: [`${RULE}#x`] }]]),
+        );
+    });
+
+    it("marks blocks that differ from the template's defaults with *", async () => {
+        const entry = treeEntry("one", [RULE], {
+            preselected: true,
+            blocks: { [RULE]: ["x", "y"] },
+            optionalBlocks: ["y"],
+            blockDefaults: [`${RULE}#x`],
+        });
+        const { prompt, input, result } = drivePrompt([entry], []);
+
+        const itemRow = () => prompt.renderRow(prompt.rows[1]!, false);
+        await vi.waitFor(() => expect(prompt.rows).toHaveLength(2));
+        expect(itemRow()).toContain("└ 1/2 blocks");
+        expect(prompt.renderRow({ entry }, false)).not.toContain("└");
+        for (const key of [DOWN, RIGHT, DOWN, DOWN, SPACE, LEFT]) input.write(key);
+        await vi.waitFor(() => expect(itemRow()).toContain("└ 2* blocks"));
+        input.write(LEFT);
+        await vi.waitFor(() => expect(prompt.renderRow({ entry }, false)).toContain("└ 1* rule"));
+        input.write(ENTER);
+        await expect(result).resolves.toEqual(
+            new Map([["one", { units: [RULE], blocks: [`${RULE}#x`, `${RULE}#y`] }]]),
         );
     });
 

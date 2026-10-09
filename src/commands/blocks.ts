@@ -3,7 +3,6 @@ import type { BlockOption } from "@/ui/prompts.js";
 import { isInteractive, selectBlocks } from "@/ui/prompts.js";
 
 interface BlockEntry extends BlockOption {
-    optional: boolean;
     required: boolean;
 }
 
@@ -73,7 +72,7 @@ export function resolveBlockKeys(
 export function installBlockOptions(blockFiles: Map<string, UnitBlockFile>): BlockOption[] {
     return unitBlockEntries(blockFiles)
         .filter((entry) => !entry.required)
-        .map(({ key, name, file }) => ({ key, name, file }));
+        .map(({ key, name, file, optional }) => ({ key, name, file, optional }));
 }
 
 /**

@@ -17,7 +17,7 @@ import type {
 } from "@/types/index.js";
 import { ALL_PLATFORMS, describeTarget, resolveTarget } from "@/types/index.js";
 
-import { describeUnitCounts } from "./format.js";
+import { describeUnitCounts, formatCount, UNIT_COUNT_KINDS, unitCountKind } from "./format.js";
 
 // Re-export intro/outro for wizard usage
 export const intro = p.intro;
@@ -102,6 +102,8 @@ export interface BlockOption {
     key: string;
     name: string;
     file: string;
+    /** Unchecked in a fresh install. */
+    optional: boolean;
 }
 
 export interface BundleEntry {
@@ -229,27 +231,50 @@ export class BundleTreePrompt extends Prompt<Map<string, BundleChoice>> {
         if (row.unit) {
             const selected = set.has(row.unit.relativePath);
             const blocks = row.entry.blocks.get(row.unit.relativePath) ?? [];
-            const checked = blocks.filter((block) => blockSet.has(block.key)).length;
             const option = {
                 value: row.unit.relativePath,
                 label: pathLabel(row.unit.relativePath),
-                hint:
-                    selected && checked < blocks.length
-                        ? `${row.unit.relativePath}, ${checked}/${blocks.length} blocks`
-                        : row.unit.relativePath,
+                hint: row.unit.relativePath,
             };
-            return `  ${renderBundleOption(option, rowState(active, selected))}`;
+            const line = `  ${renderBundleOption(option, rowState(active, selected))}`;
+            if (blocks.length === 0 || this.expandedUnits.has(unitKey(row.entry, row.unit))) return line;
+            const checked = selected ? blocks.filter((block) => blockSet.has(block.key)).length : blocks.length;
+            const customized = selected && this.blocksCustomized(row.entry, row.unit);
+            return `${line}\n    ${summaryLine(formatCount("block", checked, blocks.length, customizedMark(customized)))}`;
         }
         const { bundle } = row.entry;
-        const option = {
-            value: bundle.name,
-            label: `${bundle.name} — ${bundle.description} (${describeUnitCounts(
-                row.entry.units.map((unit) => ({ kind: unit.kind, path: unit.relativePath })),
-            )})`,
-            hint:
-                set.size > 0 && set.size < row.entry.units.length ? `${set.size}/${row.entry.units.length}` : undefined,
-        };
-        return renderBundleOption(option, rowState(active, set.size > 0));
+        const option = { value: bundle.name, label: `${bundle.name} — ${bundle.description}` };
+        const line = renderBundleOption(option, rowState(active, set.size > 0));
+        if (this.expanded.has(bundle.name)) return line;
+        return `${line}\n  ${summaryLine(this.bundleCounts(row.entry))}`;
+    }
+
+    /** Per kind: `4 skills`; `3/4* skills` when an item is unchecked; `1* rule` when its blocks differ from the template's. */
+    private bundleCounts(entry: BundleEntry): string {
+        const set = this.chosen.get(entry.bundle.name)!;
+        const picked = set.size > 0;
+        const groups = new Map<string, { chosen: number; total: number; customized: boolean }>();
+        for (const unit of entry.units) {
+            const kind = unitCountKind({ kind: unit.kind, path: unit.relativePath });
+            const group = groups.get(kind) ?? { chosen: 0, total: 0, customized: false };
+            group.total += 1;
+            const unitChosen = !picked || set.has(unit.relativePath);
+            if (unitChosen) group.chosen += 1;
+            if (picked && (!unitChosen || this.blocksCustomized(entry, unit))) group.customized = true;
+            groups.set(kind, group);
+        }
+        return (
+            UNIT_COUNT_KINDS.flatMap((kind) => {
+                const group = groups.get(kind);
+                return group ? [formatCount(kind, group.chosen, group.total, customizedMark(group.customized))] : [];
+            }).join(", ") || describeUnitCounts([])
+        );
+    }
+
+    /** A checked optional or an unchecked non-optional block. */
+    private blocksCustomized(entry: BundleEntry, unit: TemplateUnit): boolean {
+        const blockSet = this.chosenBlocks.get(entry.bundle.name)!;
+        return (entry.blocks.get(unit.relativePath) ?? []).some((block) => blockSet.has(block.key) === block.optional);
     }
 
     private refreshValue(): void {
@@ -328,6 +353,14 @@ export class BundleTreePrompt extends Prompt<Map<string, BundleChoice>> {
         }
         this.refreshValue();
     }
+}
+
+function summaryLine(text: string): string {
+    return styleText("dim", `└ ${text}`);
+}
+
+function customizedMark(customized: boolean): string {
+    return customized ? styleText("yellow", "*") : "";
 }
 
 function unitKey(entry: BundleEntry, unit: TemplateUnit): string {

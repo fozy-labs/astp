@@ -4,19 +4,24 @@
  */
 export function describeUnitCounts(units: ReadonlyArray<{ kind: "file" | "skill"; path: string }>): string {
     const counts = { skill: 0, agent: 0, rule: 0, file: 0 };
-    for (const unit of units) {
-        if (unit.kind === "skill") counts.skill += 1;
-        else if (unit.path.startsWith("agents/")) counts.agent += 1;
-        else if (unit.path.startsWith("rules/")) counts.rule += 1;
-        else counts.file += 1;
-    }
-    const parts: string[] = [];
-    const push = (count: number, label: string) => {
-        if (count > 0) parts.push(`${count} ${label}${count === 1 ? "" : "s"}`);
-    };
-    push(counts.skill, "skill");
-    push(counts.agent, "agent");
-    push(counts.rule, "rule");
-    push(counts.file, "file");
-    return parts.join(", ") || "0 files";
+    for (const unit of units) counts[unitCountKind(unit)] += 1;
+    return (
+        UNIT_COUNT_KINDS.filter((kind) => counts[kind] > 0)
+            .map((kind) => formatCount(kind, counts[kind], counts[kind]))
+            .join(", ") || "0 files"
+    );
+}
+
+export const UNIT_COUNT_KINDS = ["skill", "agent", "rule", "file"] as const;
+
+export function unitCountKind(unit: { kind: "file" | "skill"; path: string }): (typeof UNIT_COUNT_KINDS)[number] {
+    if (unit.kind === "skill") return "skill";
+    if (unit.path.startsWith("agents/")) return "agent";
+    if (unit.path.startsWith("rules/")) return "rule";
+    return "file";
+}
+
+/** `9 blocks`, or `8/9 blocks` when only part is chosen; `mark` follows the number. */
+export function formatCount(label: string, chosen: number, total: number, mark = ""): string {
+    return `${chosen < total ? `${chosen}/${total}` : total}${mark} ${label}${total === 1 ? "" : "s"}`;
 }
