@@ -238,9 +238,10 @@ describe("executeUpdate", () => {
 
         await executeUpdate({ platform: "claude-code", target: "project" });
 
-        expect(mockWarnModified).toHaveBeenCalledWith([
-            { targetPath: testItem.target, kind: "file", state: "modified" },
-        ]);
+        expect(mockWarnModified).toHaveBeenCalledWith(
+            [{ targetPath: testItem.target, kind: "file", state: "modified" }],
+            "astp update --force",
+        );
         expect(mockWarnLegacyModified).toHaveBeenCalledWith([
             { targetPath: "skills/old", kind: "skill", state: "legacy" },
         ]);
@@ -329,9 +330,10 @@ describe("executeUpdate", () => {
         await executeUpdate({ platform: "claude-code", target: "project" });
 
         expect(mockSyncBundle).toHaveBeenCalled();
-        expect(mockWarnModified).toHaveBeenCalledWith([
-            { targetPath: testItem.target, kind: "file", state: "modified" },
-        ]);
+        expect(mockWarnModified).toHaveBeenCalledWith(
+            [{ targetPath: testItem.target, kind: "file", state: "modified" }],
+            "astp update --force",
+        );
         expect(mockWarnKeptRemoved).toHaveBeenCalledWith([
             { targetPath: keptUnit.relativePath, kind: "file", state: "modified" },
         ]);
@@ -396,9 +398,10 @@ describe("executeUpdate", () => {
 
         await executeUpdate({ platform: "claude-code", target: "project" });
 
-        expect(mockWarnModified).toHaveBeenCalledWith([
-            { targetPath: testItem.target, kind: "file", state: "modified" },
-        ]);
+        expect(mockWarnModified).toHaveBeenCalledWith(
+            [{ targetPath: testItem.target, kind: "file", state: "modified" }],
+            "astp update --force",
+        );
         expect(mockSyncBundle).toHaveBeenCalledWith(expect.objectContaining({ force: false }));
     });
 

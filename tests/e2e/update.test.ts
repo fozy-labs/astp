@@ -169,7 +169,7 @@ describe("E2E: update", () => {
         await executeUpdate({ platform: "claude-code", target: "project" });
 
         // Verify modified file was skipped
-        expect(mockWarnModified).toHaveBeenCalled();
+        expect(mockWarnModified).toHaveBeenCalledWith(expect.any(Array), "astp update --force");
         const warnedFiles = mockWarnModified.mock.calls[0][0];
         expect(warnedFiles.some((f: { targetPath: string }) => f.targetPath.includes("pipeline-approve"))).toBe(true);
 

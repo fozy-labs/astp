@@ -75,7 +75,7 @@ describe("legacy migration prompts", () => {
 
     it("shows the force-update command when modified units are skipped", () => {
         vi.mocked(p.log.warn).mockClear();
-        warnModified([{ targetPath: "agents/example.md", kind: "file", state: "modified" }]);
+        warnModified([{ targetPath: "agents/example.md", kind: "file", state: "modified" }], "astp update --force");
 
         expect(p.log.warn).toHaveBeenCalledWith(
             expect.stringContaining("Run `astp update --force` to overwrite them."),

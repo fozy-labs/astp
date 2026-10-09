@@ -204,7 +204,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             totals.kept.push(...result.kept);
             const legacy = result.skipped.filter((status) => status.state === "legacy");
             const modified = result.skipped.filter((status) => status.state !== "legacy");
-            if (modified.length > 0) warnModified(modified);
+            if (modified.length > 0) warnModified(modified, `astp install ${plan.bundle.name} --force`);
             if (legacy.length > 0) warnLegacyModified(legacy);
             if (result.kept.length > 0) warnKeptRemoved(result.kept);
             if (result.keptBlocks.length > 0) warnKeptBlocks(result.keptBlocks);

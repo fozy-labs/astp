@@ -310,12 +310,12 @@ export function showUpdateReport(report: UpdateReport): void {
     if (lines.length > 0) p.log.info(lines.join("\n"));
 }
 
-export function warnModified(files: FileStatus[]): void {
+export function warnModified(files: FileStatus[], command: string): void {
     const paths = files.map((f) => `  • ${f.targetPath}`).join("\n");
     const skillCount = files.filter((file) => file.kind === "skill").length;
     const fileCount = files.filter((file) => file.kind === "file").length;
     p.log.warn(
-        `${describeUnitCounts(fileCount, skillCount)} modified locally — skipped:\n${paths}\nRun \`astp update --force\` to overwrite them.`,
+        `${describeUnitCounts(fileCount, skillCount)} modified locally — skipped:\n${paths}\nRun \`${command}\` to overwrite them.`,
     );
 }
 
