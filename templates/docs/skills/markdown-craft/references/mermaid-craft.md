@@ -54,8 +54,8 @@ Review invariant: walk every request — it has a response; every response eithe
 ## 5. Diagrams in specs — placement
 
 Document-level placement rules — diagram-first for flows, one home per fact, the
-complement test — live in the parent skill:
-[SKILL.md § One home per fact](../SKILL.md#1-one-home-per-fact). This file governs the
+complement test — live in the parent skill's
+[One home per fact](../SKILL.md#1-one-home-per-fact). This file governs the
 diagram itself; that section governs where a diagram sits in a document and what the
 surrounding prose may repeat.
 

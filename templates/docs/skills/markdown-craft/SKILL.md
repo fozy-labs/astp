@@ -100,7 +100,8 @@ limits, "only in dev builds" stay.
 - Every link target must exist at write time — the file AND the `#anchor`. Anchors
   derive from heading text, so a heading rename is an API break: 
   found inbound links and fix referrers.
-- "see above/below" — must be links.
+- **Link the words, not a pointer to them.** A link on a term or phrase is the light default;
+  a sentence that only points somewhere adds weight, so it must earn it.
 
 ## 6. Maintenance
 
