@@ -18,6 +18,7 @@ import {
     validateBlockSources,
     validateManifestSources,
     validateSkillFile,
+    type MarketplaceManifest,
 } from "../../scripts/skills-marketplace.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../..");
@@ -28,7 +29,7 @@ function skillItem(bundle: string, target: string) {
     return { source: `${bundle}/${target}`, target, category: "skill" as const };
 }
 
-function createManifest(): Manifest {
+function createManifest(): MarketplaceManifest {
     return {
         schemaVersion: 1,
         repository: "fozy-labs/astp",
@@ -373,7 +374,7 @@ describe("parseSkillFrontmatter", () => {
 // ── Repository State ─────────────────────────────────────────────────
 
 describe("committed marketplace", () => {
-    async function readRepoManifest(): Promise<Manifest> {
+    async function readRepoManifest(): Promise<MarketplaceManifest> {
         return parseManifest(await fs.readFile(path.join(REPO_ROOT, TEMPLATES_DIR, "manifest.json"), "utf8"));
     }
 
