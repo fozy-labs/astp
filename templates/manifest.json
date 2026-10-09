@@ -340,6 +340,22 @@
                     "category": "skill"
                 }
             ]
+        },
+        "agreement": {
+            "name": "agreement",
+            "version": "1.0.0",
+            "description": "Working agreement rule — how the agent decides, asks, scopes changes and writes for the user",
+            "default": false,
+            "platforms": [
+                "claude-code"
+            ],
+            "items": [
+                {
+                    "source": "agreement/rules/working-agreement.md",
+                    "target": "rules/working-agreement.md",
+                    "category": "rule"
+                }
+            ]
         }
     }
 }
