@@ -167,7 +167,7 @@ survive, only the internal cause goes:
 ```
 
 ```markdown
-- Resource and command state transitions are labelled with the action name in devtools:
-  `UPDATE: success`, `UPDATE: error` and etc. The table of names is in
-  [docs/devtools](./devtools/README.md#action-names-of-resources-and-commands).
+- Resource and command state transitions are labelled with
+  [the action name](./devtools/README.md#action-names-of-resources-and-commands) in devtools:
+  `UPDATE: success`, `UPDATE: error` and etc.
 ```
