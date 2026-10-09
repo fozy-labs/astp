@@ -45,7 +45,7 @@ export class Sources {
                 const names = group.map((bundle) => bundle.bundleName);
                 throw new Error(
                     `Cannot read source '${spec}' of ${names.join(", ")}: ${message}\n` +
-                        `To switch source: astp install ${names[0]} --source <spec>`,
+                        `To switch source: astp install ${names[0]} --source <spec> --target ${this.target.type}`,
                 );
             }
             for (const bundle of group) result.set(bundle.bundleName, opened);

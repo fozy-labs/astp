@@ -261,7 +261,7 @@ export async function confirmDelete(
     return confirmed;
 }
 
-export function showCheckReport(report: UpdateReport): void {
+export function showCheckReport(report: UpdateReport, target: InstallTargetType): void {
     const lines: string[] = [];
     lines.push("Bundle         Installed   Available   Status");
 
@@ -288,8 +288,8 @@ export function showCheckReport(report: UpdateReport): void {
             const guidance = !unit.inManifest
                 ? "not in the current manifest, left in place."
                 : unit.clean
-                  ? "run `astp update` to migrate."
-                  : "modified locally — `astp update --force` replaces it.";
+                  ? `run \`astp update --target ${target}\` to migrate.`
+                  : `modified locally — \`astp update --force --target ${target}\` replaces it.`;
             lines.push(`${unit.bundleName}: legacy ${unit.kind} ${unit.targetPath} — ${guidance}`);
         }
     }
@@ -341,11 +341,16 @@ export function warnReleased(units: FileStatus[], blockKeys: string[]): void {
     p.log.warn(`Removed upstream but changed locally — left in place, no longer managed by astp:\n${list}`);
 }
 
-export function warnForeign(bundleName: string, units: FileStatus[], blockKeys: string[]): void {
+export function warnForeign(
+    bundleName: string,
+    units: FileStatus[],
+    blockKeys: string[],
+    target: InstallTargetType,
+): void {
     const list = [...units.map((unit) => unit.targetPath), ...blockKeys].map((entry) => `  • ${entry}`).join("\n");
     const commands = [
-        ...units.map((unit) => `  astp install ${bundleName} --skill ${unit.targetPath} --force`),
-        ...blockKeys.map((key) => `  astp install ${bundleName} --block ${key} --force`),
+        ...units.map((unit) => `  astp install ${bundleName} --skill ${unit.targetPath} --force --target ${target}`),
+        ...blockKeys.map((key) => `  astp install ${bundleName} --block ${key} --force --target ${target}`),
     ].join("\n");
     p.log.warn(
         `Already present with other content — left untouched, recorded as declined:\n${list}\nTo overwrite, run:\n${commands}`,
@@ -366,9 +371,11 @@ export function warnBlockConflicts(keys: string[]): void {
     );
 }
 
-export function warnLegacyModified(files: FileStatus[]): void {
+export function warnLegacyModified(files: FileStatus[], target: InstallTargetType): void {
     const paths = files.map((file) => `  • ${file.targetPath}`).join("\n");
-    p.log.warn(`Legacy units modified locally — skipped:\n${paths}\nRun \`astp update --force\` to replace them.`);
+    p.log.warn(
+        `Legacy units modified locally — skipped:\n${paths}\nRun \`astp update --force --target ${target}\` to replace them.`,
+    );
 }
 
 export function showSuccess(message: string): void {

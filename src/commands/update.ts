@@ -96,8 +96,9 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                         (unit.origin === "legacy" ? modifiedLegacyUnits : modifiedLockUnits).push(status);
                     }
                 }
-                if (modifiedLockUnits.length > 0) warnModified(modifiedLockUnits, "astp update --force");
-                if (modifiedLegacyUnits.length > 0) warnLegacyModified(modifiedLegacyUnits);
+                if (modifiedLockUnits.length > 0)
+                    warnModified(modifiedLockUnits, `astp update --force --target ${target.type}`);
+                if (modifiedLegacyUnits.length > 0) warnLegacyModified(modifiedLegacyUnits, target.type);
             }
             return;
         }
@@ -172,15 +173,15 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                 totals.kept.push(...result.kept, ...result.released);
                 const legacy = result.skipped.filter((status) => status.state === "legacy");
                 const modified = result.skipped.filter((status) => status.state !== "legacy");
-                if (modified.length > 0) warnModified(modified, "astp update --force");
-                if (legacy.length > 0) warnLegacyModified(legacy);
+                if (modified.length > 0) warnModified(modified, `astp update --force --target ${target.type}`);
+                if (legacy.length > 0) warnLegacyModified(legacy, target.type);
                 if (result.kept.length > 0) warnKeptRemoved(result.kept);
                 if (result.keptBlocks.length > 0) warnKeptBlocks(result.keptBlocks);
                 if (result.released.length > 0 || result.releasedBlocks.length > 0) {
                     warnReleased(result.released, result.releasedBlocks);
                 }
                 if (result.foreign.length > 0 || result.foreignBlocks.length > 0) {
-                    warnForeign(bundleName, result.foreign, result.foreignBlocks);
+                    warnForeign(bundleName, result.foreign, result.foreignBlocks, target.type);
                 }
                 if (result.conflictBlocks.length > 0) warnBlockConflicts(result.conflictBlocks);
                 s.stop(`Updated ${bundleName}.`);

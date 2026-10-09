@@ -118,7 +118,7 @@ describe("executeCheck", () => {
 
         expect(mockFetchManifest).toHaveBeenCalled();
         expect(mockCompareVersions).toHaveBeenCalledWith([testInstalledBundle], testManifest);
-        expect(mockShowCheckReport).toHaveBeenCalledWith(mixedReport);
+        expect(mockShowCheckReport).toHaveBeenCalledWith(mixedReport, "project");
     });
 
     it("displays mixed states correctly", async () => {
@@ -149,7 +149,7 @@ describe("executeCheck", () => {
 
         await executeCheck({ platform: "claude-code", target: "project" });
 
-        expect(mockShowCheckReport).toHaveBeenCalledWith(report);
+        expect(mockShowCheckReport).toHaveBeenCalledWith(report, "project");
     });
 
     it("prompts for platform and target when not provided", async () => {

@@ -156,7 +156,7 @@ describe("E2E: manifest sources", () => {
         await executeInstall({ ...opts, bundle: "core", source: "./a" });
         await fs.rm(path.join(projectDir, "a"), { recursive: true });
         await expect(executeUpdate(opts)).rejects.toThrow(
-            /Cannot read source '\.\.\/a' of core: .*\nTo switch source: astp install core --source <spec>/s,
+            /Cannot read source '\.\.\/a' of core: .*\nTo switch source: astp install core --source <spec> --target project/s,
         );
     });
 });

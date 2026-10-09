@@ -627,7 +627,7 @@ describe("E2E: blocks", () => {
             const unit = await lockUnit();
             expect(unit!.blocks).not.toHaveProperty(`${RULES_FILE}#extra`);
             expect(unit!.declinedBlocks).toContain(`${RULES_FILE}#extra`);
-            expect(vi.mocked(warnForeign)).toHaveBeenCalledWith("blocks", [], [`${RULES_FILE}#extra`]);
+            expect(vi.mocked(warnForeign)).toHaveBeenCalledWith("blocks", [], [`${RULES_FILE}#extra`], "project");
             expect(await checkUpdates()).toEqual([]);
 
             clearWarnings();

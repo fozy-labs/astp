@@ -8,6 +8,7 @@ import {
     selectPlatform,
     showCheckReport,
     showUpdateReport,
+    warnForeign,
     warnLegacyModified,
     warnModified,
 } from "../prompts.js";
@@ -59,18 +60,30 @@ describe("legacy migration prompts", () => {
         };
 
         vi.mocked(p.log.info).mockClear();
-        showCheckReport(report);
+        showCheckReport(report, "user");
 
         const reportText = String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0]);
         expect(reportText).toContain("core: legacy skill skills/current");
+        expect(reportText).toContain("run `astp update --target user` to migrate.");
         expect(reportText).toContain("skills/removed — not in the current manifest, left in place.");
         expect(reportText).not.toContain("skills/removed — run `astp update --force` to migrate.");
     });
 
     it("shows the force-migration hint when modified legacy units are skipped", () => {
-        warnLegacyModified([{ targetPath: "skills/example", kind: "skill", state: "legacy" }]);
+        warnLegacyModified([{ targetPath: "skills/example", kind: "skill", state: "legacy" }], "user");
 
-        expect(p.log.warn).toHaveBeenCalledWith(expect.stringContaining("Run `astp update --force` to replace them."));
+        expect(p.log.warn).toHaveBeenCalledWith(
+            expect.stringContaining("Run `astp update --force --target user` to replace them."),
+        );
+    });
+
+    it("prints overwrite commands with the run's target for foreign units", () => {
+        vi.mocked(p.log.warn).mockClear();
+        warnForeign("core", [{ targetPath: "skills/sample", kind: "skill", state: "modified" }], [], "user");
+
+        expect(p.log.warn).toHaveBeenCalledWith(
+            expect.stringContaining("astp install core --skill skills/sample --force --target user"),
+        );
     });
 
     it("shows the force-update command when modified units are skipped", () => {
@@ -100,7 +113,7 @@ describe("out-of-sync update prompts", () => {
         };
 
         vi.mocked(p.log.info).mockClear();
-        showCheckReport(report);
+        showCheckReport(report, "project");
         expect(String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0])).toContain("↻ Out of sync");
 
         vi.mocked(p.log.info).mockClear();
