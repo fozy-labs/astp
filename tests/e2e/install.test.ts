@@ -263,9 +263,8 @@ describe("E2E: install", () => {
     });
 
     it("installs all bundles selected in the interactive wizard", async () => {
-        const pipeline = manifest.bundles.pipeline;
         mockIsInteractive.mockReturnValue(true);
-        mockSelectBundles.mockResolvedValue([manifest.bundles.core!, pipeline]);
+        mockSelectBundles.mockResolvedValue({ selected: ["core", "pipeline"] });
         mockSelectUnits.mockImplementation(async (_bundle, units) => units.map((unit) => unit.relativePath));
         mockDownloadBundle.mockImplementation(async (_source, { name: bundleName }) => {
             const dir = await setupTemplateDir(manifest, bundleName);

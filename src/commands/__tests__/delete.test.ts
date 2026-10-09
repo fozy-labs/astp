@@ -118,7 +118,7 @@ describe("executeDelete", () => {
         expect(mockSelectInstalledBundles).not.toHaveBeenCalled();
         expect(mockConfirmDelete).not.toHaveBeenCalled();
         expect(mockWriteLock).toHaveBeenCalledWith("/project/.claude", expect.any(Object));
-        expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining("Deleted 1 file"));
+        expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining("Deleted 1 agent"));
     });
 
     it("aborts when an interactive user declines confirmation", async () => {
@@ -157,7 +157,7 @@ describe("executeDelete", () => {
         expect(mockWarnKeptRemoved).toHaveBeenCalledWith([
             { targetPath: "agents/pipeline-approve.agent.md", kind: "file", state: "modified" },
         ]);
-        expect(mockShowInfo).toHaveBeenCalledWith("No files or skills deleted, kept 1 file.");
+        expect(mockShowInfo).toHaveBeenCalledWith("No files or skills deleted, kept 1 agent.");
     });
 
     it("deletes modified files with force", async () => {

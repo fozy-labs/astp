@@ -15,7 +15,7 @@ import {
     writeLock,
 } from "@/core/index.js";
 import type { BlockSelections } from "@/core/index.js";
-import type { Bundle, FileStatus, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
+import type { Bundle, FileStatus, InstalledBundle, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { bundleSupportsPlatform, getBundlePlatforms, resolveTarget } from "@/types/index.js";
 import { describeUnitCounts } from "@/ui/format.js";
 import {
@@ -87,13 +87,40 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
         s.stop("Manifest fetched.");
 
         const selectedBundles: Array<{ bundle: Bundle; source: OpenedSource }> = [];
+        const customized = new Map<string, string[]>();
         if (options.bundle) {
             selectedBundles.push({ bundle: resolveBundle(primary.manifest, options.bundle), source: primary });
         } else {
-            for (const picked of await selectBundles(primary.manifest, platform)) {
-                const source = await openFor(picked.name);
-                const bundle = source === primary ? picked : resolveBundle(source.manifest, picked.name);
-                selectedBundles.push({ bundle, source });
+            let pick = await selectBundles(primary.manifest, platform);
+            while (pick.customize) {
+                const name = pick.customize;
+                const customizeSource = await openFor(name);
+                const customizeBundle = resolveBundle(customizeSource.manifest, name);
+                const customizeUnits = groupTemplateItems(customizeBundle.items);
+                const customizeInstalled = installedState.bundles.find((entry) => entry.bundleName === name);
+                customized.set(
+                    name,
+                    await selectUnits(
+                        customizeBundle,
+                        customizeUnits,
+                        customized.get(name) ?? defaultSelection(customizeUnits, customizeInstalled),
+                    ),
+                );
+                const notes = new Map(
+                    [...customized].map(([bundleName, chosen]) => {
+                        const total = groupTemplateItems(resolveBundle(primary.manifest, bundleName).items).length;
+                        return [bundleName, `customized: ${chosen.length}/${total}`];
+                    }),
+                );
+                pick = await selectBundles(primary.manifest, platform, {
+                    selected: pick.selected,
+                    cursor: name,
+                    notes,
+                });
+            }
+            for (const name of pick.selected) {
+                const source = await openFor(name);
+                selectedBundles.push({ bundle: resolveBundle(source.manifest, name), source });
             }
         }
         for (const { bundle } of selectedBundles) {
@@ -123,9 +150,12 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 declined = previouslyTracked
                     ? new Set([...oldDeclined].filter((unitPath) => !matched.has(unitPath)))
                     : new Set([...paths].filter((unitPath) => !matched.has(unitPath)));
-            } else if (isInteractive()) {
-                const initial = installed ? [...paths].filter((unitPath) => !oldDeclined.has(unitPath)) : [...paths];
-                selected = new Set(await selectUnits(bundle, units, initial));
+            } else if (options.bundle && isInteractive()) {
+                selected = new Set(await selectUnits(bundle, units, defaultSelection(units, installed)));
+                declined = new Set([...paths].filter((unitPath) => !selected.has(unitPath)));
+            } else if (!options.bundle && isInteractive()) {
+                const chosen = customized.get(bundle.name) ?? defaultSelection(units, installed);
+                selected = new Set(chosen.filter((unitPath) => paths.has(unitPath)));
                 declined = new Set([...paths].filter((unitPath) => !selected.has(unitPath)));
             } else {
                 selected = paths;
@@ -237,9 +267,12 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
     }
 }
 
+/** Units a bundle installs without customization: everything minus the lock's declines. */
+function defaultSelection(units: Array<{ relativePath: string }>, installed?: InstalledBundle): string[] {
+    const declined = new Set(installed?.declined ?? []);
+    return units.map((unit) => unit.relativePath).filter((unitPath) => !declined.has(unitPath));
+}
+
 function countStatuses(statuses: FileStatus[]): string {
-    return describeUnitCounts(
-        statuses.filter((status) => status.kind === "file").length,
-        statuses.filter((status) => status.kind === "skill").length,
-    );
+    return describeUnitCounts(statuses.map((status) => ({ kind: status.kind, path: status.targetPath })));
 }

@@ -122,7 +122,9 @@ describe("lock-file command flows", () => {
         mockConfirmInstall.mockResolvedValue(true);
         mockConfirmDelete.mockResolvedValue(true);
         mockIsInteractive.mockReturnValue(false);
-        mockSelectBundles.mockImplementation(async (currentManifest) => Object.values(currentManifest.bundles));
+        mockSelectBundles.mockImplementation(async (currentManifest) => ({
+            selected: Object.keys(currentManifest.bundles),
+        }));
         mockSelectUnits.mockImplementation(async (_bundle, units) => units.map((unit) => unit.relativePath));
         mockSelectNewUnits.mockImplementation(async (_name, units) => units.map((unit) => unit.relativePath));
     });

@@ -144,8 +144,5 @@ function toStatus(unit: InstalledUnit): FileStatus {
 }
 
 function countStatuses(statuses: FileStatus[]): string {
-    return describeUnitCounts(
-        statuses.filter((status) => status.kind === "file").length,
-        statuses.filter((status) => status.kind === "skill").length,
-    );
+    return describeUnitCounts(statuses.map((status) => ({ kind: status.kind, path: status.targetPath })));
 }

@@ -1,9 +1,12 @@
+import { PassThrough } from "node:stream";
+
 import * as p from "@clack/prompts";
 
 import type { Bundle, InstallTarget, UpdateReport } from "@/types/index.js";
 import { ALL_PLATFORMS } from "@/types/index.js";
 
 import {
+    BundleSelectPrompt,
     confirmInstall,
     selectPlatform,
     showCheckReport,
@@ -25,6 +28,58 @@ vi.mock("@clack/prompts", () => ({
 }));
 
 const mockSelect = vi.mocked(p.select);
+
+const DOWN = "\x1b[B";
+const RIGHT = "\x1b[C";
+const ENTER = "\r";
+const SPACE = " ";
+
+function drivePrompt(keys: string[], initialValues: string[] = []) {
+    const input = new PassThrough();
+    const prompt = new BundleSelectPrompt({
+        options: [{ value: "one" }, { value: "two" }, { value: "three" }],
+        initialValues,
+        input,
+        output: new PassThrough(),
+        required: true,
+        validate: (value) =>
+            value === undefined || value.length === 0 ? "Please select at least one option." : undefined,
+        render: () => "",
+    });
+    const result = prompt.prompt();
+    for (const key of keys) input.write(key);
+    return { prompt, input, result };
+}
+
+describe("BundleSelectPrompt", () => {
+    it("right arrow submits with the cursor bundle as customize", async () => {
+        const { prompt, result } = drivePrompt([DOWN, SPACE, DOWN, RIGHT]);
+
+        await expect(result).resolves.toEqual(["two", "three"]);
+        expect(prompt.customize).toBe("three");
+    });
+
+    it("enter submits without customize", async () => {
+        const { prompt, result } = drivePrompt([DOWN, SPACE, ENTER]);
+
+        await expect(result).resolves.toEqual(["two"]);
+        expect(prompt.customize).toBeUndefined();
+    });
+
+    it("right arrow on an unselected bundle selects it", async () => {
+        const { result } = drivePrompt([DOWN, DOWN, RIGHT]);
+
+        await expect(result).resolves.toEqual(["three"]);
+    });
+
+    it("enter with nothing selected shows the required error and stays open", async () => {
+        const { prompt, input, result } = drivePrompt([ENTER]);
+
+        await vi.waitFor(() => expect(prompt.state).toBe("error"));
+        for (const key of [SPACE, ENTER]) input.write(key);
+        await expect(result).resolves.toEqual(["one"]);
+    });
+});
 
 describe("selectPlatform", () => {
     it("skips the prompt when only one platform is supported", async () => {
@@ -118,7 +173,7 @@ describe("out-of-sync update prompts", () => {
 
         vi.mocked(p.log.info).mockClear();
         showUpdateReport(report);
-        expect(String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0])).toContain("core: 1.0.0 out of sync (1 file)");
+        expect(String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0])).toContain("core: 1.0.0 out of sync (1 agent)");
     });
 
     it("reports bundles that are no longer in the current manifest", () => {
