@@ -34,6 +34,6 @@ astp skips files the user changed and files it does not own. When the output rep
 
 ## Filling blocks
 
-A file that starts with `<SETUP_REQUIRED>` needs filling: replace each `<FILL_INSTRUCTION>…</FILL_INSTRUCTION>` with the content it asks for, taken from the real project, then remove the `<SETUP_REQUIRED>` block. Keep the surrounding `<block_name>…</block_name>` tags: astp tracks blocks by them.
+A file with a `<SETUP_REQUIRED>` block right after its frontmatter needs filling: replace each `<FILL_INSTRUCTION>…</FILL_INSTRUCTION>` with the content it asks for, taken from the real project, then remove the `<SETUP_REQUIRED>` block. Keep the surrounding `<block_name>…</block_name>` tags: astp tracks blocks by them.
 
 After `update`, a `<FILL_INSTRUCTION>` can hold the new template of a block the user changed: merge it into the block, keep the project-specific content, then remove the instruction.
