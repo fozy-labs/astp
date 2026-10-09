@@ -1,7 +1,9 @@
-import { compareVersions, fetchManifest, loadInstalled } from "@/core/index.js";
+import { compareVersions, loadInstalled } from "@/core/index.js";
 import type { InstallTargetType, Platform } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { selectPlatform, selectTarget, showCheckReport, showInfo, spinner } from "@/ui/prompts.js";
+
+import { mergeReports, Sources } from "./sources.js";
 
 export interface CheckOptions {
     platform?: Platform;
@@ -22,10 +24,20 @@ export async function executeCheck(options: CheckOptions): Promise<void> {
         return;
     }
 
-    s.start("Fetching remote manifest...");
-    const manifest = await fetchManifest();
-    s.stop("Manifest fetched.");
+    const sources = new Sources(target);
+    try {
+        s.start("Fetching manifests...");
+        const opened = await sources.openInstalled(installed.bundles, installed.lock);
+        s.stop("Manifests fetched.");
 
-    const report = compareVersions(installed.bundles, manifest);
-    showCheckReport(report);
+        const reports = [...new Set(opened.values())].map((entry) =>
+            compareVersions(
+                installed.bundles.filter((bundle) => opened.get(bundle.bundleName) === entry),
+                entry.manifest,
+            ),
+        );
+        showCheckReport(mergeReports(reports));
+    } finally {
+        await sources.close();
+    }
 }

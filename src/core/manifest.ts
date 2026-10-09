@@ -4,35 +4,6 @@ import { ALL_PLATFORMS } from "@/types/index.js";
 const SUPPORTED_SCHEMA_VERSION = 1;
 const VALID_PLATFORMS: ReadonlySet<Platform> = new Set(ALL_PLATFORMS);
 
-export async function fetchManifest(repository?: string, ref?: string): Promise<Manifest> {
-    const repo = repository ?? "fozy-labs/astp";
-    const branch = ref ?? "main";
-    const url = `https://raw.githubusercontent.com/${encodeURIComponent(repo.split("/")[0])}/${encodeURIComponent(repo.split("/")[1])}/${encodeURIComponent(branch)}/templates/manifest.json`;
-
-    let response: Response;
-    try {
-        response = await fetch(url);
-    } catch {
-        throw new Error("Failed to fetch manifest: network error. Check your internet connection.");
-    }
-
-    if (!response.ok) {
-        if (response.status === 404) {
-            throw new Error(`Manifest not found at ref ${branch}`);
-        }
-        throw new Error(`Failed to fetch manifest: HTTP ${response.status}`);
-    }
-
-    let data: unknown;
-    try {
-        data = await response.json();
-    } catch {
-        throw new Error("Failed to fetch manifest: invalid JSON response");
-    }
-
-    return validateManifest(data);
-}
-
 export function validateManifest(data: unknown): Manifest {
     if (typeof data !== "object" || data === null) {
         throw new Error("Invalid manifest: expected an object");
@@ -50,10 +21,6 @@ export function validateManifest(data: unknown): Manifest {
 
     if (obj.schemaVersion > SUPPORTED_SCHEMA_VERSION) {
         throw new Error(`Unsupported manifest schema version ${obj.schemaVersion}. Update astp CLI.`);
-    }
-
-    if (!("repository" in obj) || typeof obj.repository !== "string") {
-        throw new Error("Invalid manifest: missing or invalid repository");
     }
 
     if (!("bundles" in obj) || typeof obj.bundles !== "object" || obj.bundles === null) {
@@ -79,7 +46,7 @@ function validateBundle(key: string, data: unknown): void {
 
     const bundle = data as Record<string, unknown>;
 
-    if (!("name" in bundle) || typeof bundle.name !== "string") {
+    if (typeof bundle.name !== "string" || !/^[^/\\]+$/.test(bundle.name) || /^\.+$/.test(bundle.name)) {
         throw new Error(`Invalid bundle '${key}': missing or invalid name`);
     }
 

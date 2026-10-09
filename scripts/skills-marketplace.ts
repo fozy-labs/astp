@@ -129,7 +129,13 @@ export function collectSkillLocations(
 
 // ── Marketplace Construction ─────────────────────────────────────────
 
-export function buildMarketplace(manifest: Manifest, excludedSkills: ReadonlySet<string> = new Set()): Marketplace {
+/** The marketplace is published from `repository`, so it is required here. */
+export type MarketplaceManifest = Manifest & { repository: string };
+
+export function buildMarketplace(
+    manifest: MarketplaceManifest,
+    excludedSkills: ReadonlySet<string> = new Set(),
+): Marketplace {
     const { owner, repo } = splitRepository(manifest.repository);
     return {
         name: repo,
@@ -179,7 +185,7 @@ export function normalizeLineEndings(content: string): string {
  * Deliberately narrower than `validateManifest()` in `src/core`: that one guards
  * a CLI against a hostile remote, this one guards a maintainer against a typo.
  */
-export function parseManifest(raw: string): Manifest {
+export function parseManifest(raw: string): MarketplaceManifest {
     let data: unknown;
     try {
         data = JSON.parse(raw);
@@ -211,7 +217,7 @@ export function parseManifest(raw: string): Manifest {
         }
     }
 
-    return data as Manifest;
+    return data as MarketplaceManifest;
 }
 
 // ── Validation ───────────────────────────────────────────────────────

@@ -3,8 +3,8 @@ import fs from "node:fs/promises";
 import {
     assertBundleBlocks,
     assertBundleSources,
+    DEFAULT_SOURCE,
     downloadBundle,
-    fetchManifest,
     groupTemplateItems,
     loadInstalled,
     readUnitBlockFiles,
@@ -25,6 +25,7 @@ import {
     selectPlatform,
     selectTarget,
     selectUnits,
+    showInfo,
     showSuccess,
     spinner,
     warnBlockConflicts,
@@ -37,9 +38,12 @@ import {
 } from "@/ui/prompts.js";
 
 import { resolveBlockKeys, selectInstallBlocks } from "./blocks.js";
+import type { OpenedSource } from "./sources.js";
+import { Sources } from "./sources.js";
 
 export interface InstallOptions {
     bundle?: string;
+    source?: string;
     skills?: string[];
     blocks?: string[];
     force?: boolean;
@@ -49,6 +53,7 @@ export interface InstallOptions {
 
 interface BundlePlan {
     bundle: Bundle;
+    source: OpenedSource;
     selected: Set<string>;
     declined: Set<string>;
     tempDir?: string;
@@ -66,60 +71,72 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
     const installedState = await loadInstalled(target.rootDir);
 
     const s = spinner();
-    s.start("Fetching manifest...");
-    const manifest = await fetchManifest();
-    s.stop("Manifest fetched.");
-
-    let selectedBundles: Bundle[];
-    if (options.bundle) {
-        const bundle = resolveBundle(manifest, options.bundle);
-        if (!bundleSupportsPlatform(bundle, platform)) {
-            throw new Error(
-                `Bundle '${bundle.name}' does not support platform '${platform}'. Supported: ${getBundlePlatforms(bundle).join(", ")}`,
-            );
-        }
-        selectedBundles = [bundle];
-    } else {
-        selectedBundles = await selectBundles(manifest, platform);
-    }
-
+    const sources = new Sources(target);
     const plans: BundlePlan[] = [];
-    for (const bundle of selectedBundles) {
-        const units = groupTemplateItems(bundle.items);
-        const paths = new Set(units.map((unit) => unit.relativePath));
-        const installed = installedState.bundles.find((entry) => entry.bundleName === bundle.name);
-        const tracked = new Set(
-            installed?.units.filter((unit) => paths.has(unit.relativePath)).map((unit) => unit.relativePath) ?? [],
-        );
-        const oldDeclined = new Set(installed?.declined.filter((unitPath) => paths.has(unitPath)) ?? []);
-        let selected: Set<string>;
-        let declined: Set<string>;
-
-        if (additive) {
-            // Units of --block values are added after the download, once block files are known.
-            const matched = resolveUnitPaths(options.skills ?? [], units, bundle.name);
-            selected = new Set([...tracked, ...matched]);
-            const previouslyTracked = tracked.size > 0 || oldDeclined.size > 0;
-            declined = previouslyTracked
-                ? new Set([...oldDeclined].filter((unitPath) => !matched.has(unitPath)))
-                : new Set([...paths].filter((unitPath) => !matched.has(unitPath)));
-        } else if (isInteractive()) {
-            const initial = installed ? [...paths].filter((unitPath) => !oldDeclined.has(unitPath)) : [...paths];
-            selected = new Set(await selectUnits(bundle, units, initial));
-            declined = new Set([...paths].filter((unitPath) => !selected.has(unitPath)));
-        } else {
-            selected = paths;
-            declined = new Set();
-        }
-        plans.push({ bundle, selected, declined, blockSelections: new Map() });
-    }
-
     try {
+        const openFor = (bundleName: string): Promise<OpenedSource> => {
+            if (options.source !== undefined) return sources.open(options.source, "cli");
+            return sources.open(installedState.lock.bundles[bundleName]?.source ?? DEFAULT_SOURCE, "lock");
+        };
+        s.start("Fetching manifest...");
+        const primary = options.bundle
+            ? await openFor(options.bundle)
+            : await sources.open(options.source ?? DEFAULT_SOURCE, options.source !== undefined ? "cli" : "lock");
+        s.stop("Manifest fetched.");
+
+        const selectedBundles: Array<{ bundle: Bundle; source: OpenedSource }> = [];
+        if (options.bundle) {
+            selectedBundles.push({ bundle: resolveBundle(primary.manifest, options.bundle), source: primary });
+        } else {
+            for (const picked of await selectBundles(primary.manifest, platform)) {
+                const source = await openFor(picked.name);
+                const bundle = source === primary ? picked : resolveBundle(source.manifest, picked.name);
+                selectedBundles.push({ bundle, source });
+            }
+        }
+        for (const { bundle } of selectedBundles) {
+            if (!bundleSupportsPlatform(bundle, platform)) {
+                throw new Error(
+                    `Bundle '${bundle.name}' does not support platform '${platform}'. Supported: ${getBundlePlatforms(bundle).join(", ")}`,
+                );
+            }
+        }
+
+        for (const { bundle, source } of selectedBundles) {
+            const units = groupTemplateItems(bundle.items);
+            const paths = new Set(units.map((unit) => unit.relativePath));
+            const installed = installedState.bundles.find((entry) => entry.bundleName === bundle.name);
+            const tracked = new Set(
+                installed?.units.filter((unit) => paths.has(unit.relativePath)).map((unit) => unit.relativePath) ?? [],
+            );
+            const oldDeclined = new Set(installed?.declined.filter((unitPath) => paths.has(unitPath)) ?? []);
+            let selected: Set<string>;
+            let declined: Set<string>;
+
+            if (additive) {
+                // Units of --block values are added after the download, once block files are known.
+                const matched = resolveUnitPaths(options.skills ?? [], units, bundle.name);
+                selected = new Set([...tracked, ...matched]);
+                const previouslyTracked = tracked.size > 0 || oldDeclined.size > 0;
+                declined = previouslyTracked
+                    ? new Set([...oldDeclined].filter((unitPath) => !matched.has(unitPath)))
+                    : new Set([...paths].filter((unitPath) => !matched.has(unitPath)));
+            } else if (isInteractive()) {
+                const initial = installed ? [...paths].filter((unitPath) => !oldDeclined.has(unitPath)) : [...paths];
+                selected = new Set(await selectUnits(bundle, units, initial));
+                declined = new Set([...paths].filter((unitPath) => !selected.has(unitPath)));
+            } else {
+                selected = paths;
+                declined = new Set();
+            }
+            plans.push({ bundle, source, selected, declined, blockSelections: new Map() });
+        }
+
         // Block choices need the template content, so every bundle is downloaded
         // before the block prompts and the confirmation.
         for (const plan of plans) {
             s.start(`Downloading ${plan.bundle.name}...`);
-            plan.tempDir = await downloadBundle(manifest.repository, plan.bundle.name);
+            plan.tempDir = await downloadBundle(plan.source.source, plan.bundle);
             s.stop(`Downloaded ${plan.bundle.name}.`);
             const units = groupTemplateItems(plan.bundle.items);
             validateUnitTargets(target.rootDir, units);
@@ -152,14 +169,26 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
         const selectedUnits = plans.flatMap((plan) =>
             groupTemplateItems(plan.bundle.items).filter((unit) => plan.selected.has(unit.relativePath)),
         );
-        if (isInteractive() && !(await confirmInstall(selectedBundles, target, selectedUnits))) return;
+        if (
+            isInteractive() &&
+            !(await confirmInstall(
+                selectedBundles.map((entry) => entry.bundle),
+                target,
+                selectedUnits,
+            ))
+        )
+            return;
 
         const totals = { installed: [] as FileStatus[], skipped: [] as FileStatus[], kept: [] as FileStatus[] };
         for (const plan of plans) {
+            const previousSource = installedState.lock.bundles[plan.bundle.name]?.source;
+            if (options.source !== undefined && previousSource !== undefined && previousSource !== plan.source.spec) {
+                showInfo(`${plan.bundle.name} source: ${previousSource} → ${plan.source.spec}`);
+            }
             s.start(`Installing ${plan.bundle.name}...`);
             const result = await syncBundle({
                 target,
-                manifest,
+                source: plan.source.spec,
                 bundle: plan.bundle,
                 installed: installedState.bundles.find((entry) => entry.bundleName === plan.bundle.name),
                 lock: installedState.lock,
@@ -201,6 +230,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
         for (const plan of plans) {
             if (plan.tempDir) await fs.rm(plan.tempDir, { recursive: true, force: true });
         }
+        await sources.close();
     }
 }
 

@@ -1,109 +1,147 @@
 import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import { downloadTemplate } from "giget";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { downloadBundle } from "../fetcher.js";
+import type { Bundle } from "@/types/index.js";
 
-vi.mock("giget", () => ({
-    downloadTemplate: vi.fn(),
-}));
+import { closeSource, downloadBundle, fetchManifest } from "../fetcher.js";
+import { resolveSource } from "../source.js";
+
+vi.mock("giget", () => ({ downloadTemplate: vi.fn() }));
 
 const mockedDownloadTemplate = vi.mocked(downloadTemplate);
 
-describe("downloadBundle", () => {
-    beforeEach(() => {
+const bundle: Bundle = {
+    name: "docs",
+    version: "1.0.0",
+    description: "Docs",
+    default: true,
+    items: [{ source: "docs/rules/a.md", target: "rules/a.md", category: "rule" }],
+};
+const manifestJson = JSON.stringify({ schemaVersion: 1, bundles: { docs: bundle } });
+
+async function writeRoot(dir: string, manifestFile = "manifest.json"): Promise<void> {
+    await fs.mkdir(path.join(dir, "docs/rules"), { recursive: true });
+    await fs.writeFile(path.join(dir, manifestFile), manifestJson);
+    await fs.writeFile(path.join(dir, "docs/rules/a.md"), "# a\n");
+}
+
+describe("fetcher", () => {
+    let work: string;
+    const tempDirs: string[] = [];
+
+    beforeEach(async () => {
         vi.clearAllMocks();
+        work = await fs.mkdtemp(path.join(os.tmpdir(), "astp-fetcher-"));
     });
 
     afterEach(async () => {
-        const dirs = mockedDownloadTemplate.mock.calls
-            .map(([, options]) => options?.dir)
-            .filter((dir): dir is string => !!dir);
-        await Promise.all(dirs.map((dir) => fs.rm(dir, { recursive: true, force: true })));
+        vi.unstubAllGlobals();
+        vi.unstubAllEnvs();
+        await Promise.all([work, ...tempDirs.splice(0)].map((dir) => fs.rm(dir, { recursive: true, force: true })));
     });
 
-    it("composes correct giget source string with default ref", async () => {
-        mockedDownloadTemplate.mockResolvedValue({ source: "", dir: "/tmp/download" } as never);
-
-        await downloadBundle("fozy-labs/astp", "docs");
-
-        expect(mockedDownloadTemplate).toHaveBeenCalledWith(
-            "gh:fozy-labs/astp/templates/docs#main",
-            expect.objectContaining({
-                dir: expect.stringMatching(/astp-docs-/),
-            }),
-        );
+    it("reads a local manifest and copies the bundle next to it, leaving the source intact", async () => {
+        await writeRoot(path.join(work, "tests"), "test.manifest.json");
+        const source = await resolveSource("./tests/test.manifest.json", work);
+        expect(Object.keys((await fetchManifest(source)).bundles)).toEqual(["docs"]);
+        const dir = await downloadBundle(source, bundle);
+        tempDirs.push(dir);
+        expect(await fs.readFile(path.join(dir, "rules/a.md"), "utf8")).toBe("# a\n");
+        await fs.rm(dir, { recursive: true });
+        await expect(fs.stat(path.join(work, "tests/docs/rules/a.md"))).resolves.toBeTruthy();
     });
 
-    it("uses custom ref when provided", async () => {
-        mockedDownloadTemplate.mockResolvedValue({ source: "", dir: "/tmp/download" } as never);
-
-        await downloadBundle("fozy-labs/astp", "fozy-labs", "v1.0.0");
-
-        expect(mockedDownloadTemplate).toHaveBeenCalledWith(
-            "gh:fozy-labs/astp/templates/fozy-labs#v1.0.0",
-            expect.objectContaining({
-                dir: expect.stringMatching(/astp-fozy-labs-/),
-            }),
-        );
+    it("names the checked path when a local manifest is missing", async () => {
+        const source = await resolveSource("./nowhere", work);
+        await expect(fetchManifest(source)).rejects.toThrow(path.join(work, "nowhere/templates/manifest.json"));
     });
 
-    it("uses a unique destination directory for each download", async () => {
-        mockedDownloadTemplate.mockResolvedValue({ source: "", dir: "/tmp/download" } as never);
+    it("downloads an archive once, with an isolated giget cache and GIGET_AUTH only for gh", async () => {
+        vi.stubEnv("GIGET_AUTH", "secret");
+        const seen: Array<{ input: string; auth?: string; cache?: string }> = [];
+        mockedDownloadTemplate.mockImplementation(async (input, options) => {
+            seen.push({ input, auth: process.env.GIGET_AUTH, cache: process.env.XDG_CACHE_HOME });
+            await writeRoot(options!.dir!);
+            return { dir: options!.dir! } as never;
+        });
 
-        await downloadBundle("fozy-labs/astp", "fozy-labs");
-        await downloadBundle("fozy-labs/astp", "docs");
+        const gh = await resolveSource("o/r#v1", work);
+        await fetchManifest(gh);
+        tempDirs.push(await downloadBundle(gh, bundle));
+        const gitlab = await resolveSource("gitlab:o/r", work);
+        await fetchManifest(gitlab);
 
-        expect(mockedDownloadTemplate).toHaveBeenNthCalledWith(
-            1,
-            "gh:fozy-labs/astp/templates/fozy-labs#main",
-            expect.objectContaining({
-                dir: expect.stringMatching(/astp-fozy-labs-/),
-            }),
-        );
-        expect(mockedDownloadTemplate).toHaveBeenNthCalledWith(
-            2,
-            "gh:fozy-labs/astp/templates/docs#main",
-            expect.objectContaining({
-                dir: expect.stringMatching(/astp-docs-/),
-            }),
-        );
+        expect(seen.map(({ input, auth }) => [input, auth])).toEqual([
+            ["gh:o/r/templates#v1", "secret"],
+            ["gitlab:o/r/templates#HEAD", undefined],
+        ]);
+        expect(seen[0]!.cache).toMatch(/astp-giget-cache-/);
+        expect(process.env.GIGET_AUTH).toBe("secret");
+        await expect(fs.stat(seen[0]!.cache!)).rejects.toMatchObject({ code: "ENOENT" });
 
-        const firstCallOptions = mockedDownloadTemplate.mock.calls[0]?.[1];
-        const secondCallOptions = mockedDownloadTemplate.mock.calls[1]?.[1];
-
-        expect(firstCallOptions?.dir).not.toBe(secondCallOptions?.dir);
+        await closeSource(gh);
+        await closeSource(gitlab);
     });
 
-    it("returns the temp directory path", async () => {
-        mockedDownloadTemplate.mockResolvedValue({
-            source: "",
-            dir: "/tmp/my-download",
-        } as never);
-
-        const result = await downloadBundle("fozy-labs/astp", "docs");
-        expect(result).toBe("/tmp/my-download");
+    it("reports a manifest missing from the download", async () => {
+        mockedDownloadTemplate.mockImplementation(async (_input, options) => ({ dir: options!.dir! }) as never);
+        const source = await resolveSource("gh:o/r/missing", work);
+        await expect(fetchManifest(source)).rejects.toThrow("Manifest not found for source 'gh:o/r/missing'");
+        await closeSource(source);
     });
 
-    it("throws user-friendly error on giget failure", async () => {
-        mockedDownloadTemplate.mockRejectedValue(new Error("network timeout"));
-
-        await expect(downloadBundle("fozy-labs/astp", "docs")).rejects.toThrow(
-            "Failed to download bundle 'docs': network timeout",
+    it("resolves an npm package to its tarball", async () => {
+        const fetchMock = vi.fn(
+            async (_url: URL) =>
+                new Response(JSON.stringify({ dist: { tarball: "https://registry.npmjs.org/p/-/p-1.0.0.tgz" } })),
         );
+        vi.stubGlobal("fetch", fetchMock);
+        mockedDownloadTemplate.mockImplementation(async (_input, options) => {
+            await writeRoot(path.join(options!.dir!, "templates"));
+            return { dir: options!.dir! } as never;
+        });
+        const source = await resolveSource("npm:@s/p@1.0.0", work);
+        await fetchManifest(source);
+        expect(fetchMock.mock.calls[0]![0].toString()).toBe("https://registry.npmjs.org/@s%2fp/1.0.0");
+        expect(mockedDownloadTemplate.mock.calls[0]![0]).toBe("https://registry.npmjs.org/p/-/p-1.0.0.tgz");
+        await closeSource(source);
     });
 
-    it("removes the temp directory after a download failure", async () => {
-        mockedDownloadTemplate.mockRejectedValue(new Error("network timeout"));
-
-        await expect(downloadBundle("fozy-labs/astp", "docs")).rejects.toThrow(
-            "Failed to download bundle 'docs': network timeout",
+    it("fetches a URL manifest and each item relative to it", async () => {
+        const fetchMock = vi.fn(async (url: URL) =>
+            url.href.endsWith("manifest.json") ? new Response(manifestJson) : new Response(`file ${url.pathname}`),
         );
+        vi.stubGlobal("fetch", fetchMock);
+        const source = await resolveSource("https://host/m/manifest.json", work);
+        await fetchManifest(source);
+        const dir = await downloadBundle(source, bundle);
+        tempDirs.push(dir);
+        expect(await fs.readFile(path.join(dir, "rules/a.md"), "utf8")).toBe("file /m/docs/rules/a.md");
+    });
 
-        const dir = mockedDownloadTemplate.mock.calls[0]?.[1]?.dir;
-        expect(dir).toEqual(expect.stringMatching(/astp-docs-/));
-        if (!dir) throw new Error("Expected download temp directory");
-        await expect(fs.stat(dir)).rejects.toMatchObject({ code: "ENOENT" });
+    it("fetches a URL item whose name has URL syntax characters", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (url: URL) => new Response(`file ${url.pathname}`)),
+        );
+        const source = await resolveSource("https://host/m/manifest.json", work);
+        const odd = { ...bundle, items: [{ ...bundle.items[0]!, target: "rules/a#1?%.md" }] };
+        const dir = await downloadBundle(source, odd);
+        tempDirs.push(dir);
+        expect(await fs.readFile(path.join(dir, "rules/a#1?%.md"), "utf8")).toBe("file /m/docs/rules/a%231%3F%25.md");
+    });
+
+    it("rejects a URL item outside the manifest directory", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => new Response("x")),
+        );
+        const source = await resolveSource("https://host/m/manifest.json", work);
+        const escaping = { ...bundle, items: [{ ...bundle.items[0]!, target: "../../../x.md" }] };
+        await expect(downloadBundle(source, escaping)).rejects.toThrow("outside the manifest directory");
     });
 });

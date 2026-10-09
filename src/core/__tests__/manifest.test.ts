@@ -1,6 +1,6 @@
 import type { Manifest } from "@/types/index.js";
 
-import { fetchManifest, resolveBundle, validateManifest } from "../manifest.js";
+import { resolveBundle, validateManifest } from "../manifest.js";
 
 const validManifestData = {
     schemaVersion: 1,
@@ -36,6 +36,22 @@ const validManifestData = {
 };
 
 describe("validateManifest", () => {
+    it("rejects a bundle name that is not one path segment", () => {
+        for (const name of ["../core", "a/b", "a\\b", "..", ""]) {
+            const data = structuredClone(validManifestData);
+            data.bundles.core.name = name;
+            expect(() => validateManifest(data)).toThrow("invalid name");
+        }
+    });
+
+    it("accepts any other one-segment bundle name", () => {
+        for (const name of ["my+tools", "tools@2", "café"]) {
+            const data = structuredClone(validManifestData);
+            data.bundles.core.name = name;
+            expect(() => validateManifest(data)).not.toThrow();
+        }
+    });
+
     // T12: Valid manifest
     it("T12: parses valid manifest correctly", () => {
         const result = validateManifest(validManifestData);
@@ -50,8 +66,9 @@ describe("validateManifest", () => {
         expect(() => validateManifest({})).toThrow("schemaVersion");
     });
 
-    it("T13: throws on missing repository", () => {
-        expect(() => validateManifest({ schemaVersion: 1 })).toThrow("repository");
+    it("accepts a manifest without repository", () => {
+        const { repository: _, ...data } = validManifestData;
+        expect(validateManifest(data).bundles.core.name).toBe("core");
     });
 
     it("T13: throws on missing bundles", () => {
@@ -190,47 +207,5 @@ describe("resolveBundle", () => {
         expect(() => resolveBundle(manifest, "nonexistent")).toThrow(
             "Bundle 'nonexistent' not found. Available: core, pipeline",
         );
-    });
-});
-
-describe("fetchManifest", () => {
-    afterEach(() => {
-        vi.unstubAllGlobals();
-    });
-
-    // T28: Successful fetch
-    it("T28: parses manifest from mocked successful fetch", async () => {
-        vi.stubGlobal(
-            "fetch",
-            vi.fn().mockResolvedValue({
-                ok: true,
-                status: 200,
-                json: () => Promise.resolve(validManifestData),
-            }),
-        );
-
-        const result = await fetchManifest();
-        expect(result.schemaVersion).toBe(1);
-        expect(result.bundles.core).toBeDefined();
-    });
-
-    // T29: Network error
-    it("T29: throws user-friendly error on network error", async () => {
-        vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
-
-        await expect(fetchManifest()).rejects.toThrow("network error");
-    });
-
-    // T30: 404 response
-    it("T30: throws manifest not found on 404", async () => {
-        vi.stubGlobal(
-            "fetch",
-            vi.fn().mockResolvedValue({
-                ok: false,
-                status: 404,
-            }),
-        );
-
-        await expect(fetchManifest()).rejects.toThrow("Manifest not found at ref main");
     });
 });

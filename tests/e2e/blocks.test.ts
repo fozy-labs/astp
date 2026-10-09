@@ -181,7 +181,7 @@ describe("E2E: blocks", () => {
         mockSelectBlocks.mockReset();
         mockSelectUnits.mockImplementation(async (_bundle, units) => units.map((unit) => unit.relativePath));
         mockResolveTarget.mockReturnValue(makeProjectTarget(projectDir));
-        mockDownloadBundle.mockImplementation(async (_repository, bundleName) => {
+        mockDownloadBundle.mockImplementation(async (_source, { name: bundleName }) => {
             const dir = await setupTemplateDir(manifest, bundleName, contents);
             templateDirs.push(dir);
             return dir;

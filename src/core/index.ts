@@ -10,8 +10,10 @@ export {
 } from "./blocks.js";
 export type { InstalledBlocks, MergeBlockFileArgs, MergeBlockFileResult, TemplateBlock } from "./blocks.js";
 export { computeHash, extractAstpMetadata, readDescription, stripAstpFields } from "./frontmatter.js";
-export { fetchManifest, resolveBundle, validateManifest } from "./manifest.js";
-export { downloadBundle } from "./fetcher.js";
+export { resolveBundle, validateManifest } from "./manifest.js";
+export { closeSource, downloadBundle, fetchManifest } from "./fetcher.js";
+export { ACCEPTED_SOURCES, DEFAULT_SOURCE, formatSource, resolveSource } from "./source.js";
+export type { ManifestSource } from "./source.js";
 export { computeSkillTreeHash, computeTemplateUnitHash } from "./skill-tree.js";
 export { readLock, writeLock } from "./lock.js";
 export type { Lock, LockBundle, LockUnit } from "./lock.js";

@@ -161,12 +161,15 @@ describe("executeInstall", () => {
         expect(mockSelectBundles).not.toHaveBeenCalled();
         expect(mockConfirmInstall).not.toHaveBeenCalled();
         expect(mockResolveBundle).toHaveBeenCalledWith(testManifest, "core");
-        expect(mockDownloadBundle).toHaveBeenCalledWith("fozy-labs/astp", "core");
+        expect(mockDownloadBundle).toHaveBeenCalledWith(
+            expect.objectContaining({ spec: "gh:fozy-labs/astp" }),
+            expect.objectContaining({ name: "core" }),
+        );
         expect(mockSyncBundle).toHaveBeenCalledTimes(1);
         expect(mockSyncBundle).toHaveBeenCalledWith(
             expect.objectContaining({
                 target: testTarget,
-                manifest: testManifest,
+                source: "gh:fozy-labs/astp",
                 bundle: testBundle,
                 selected: new Set(["skills/orchestrate"]),
                 declined: new Set(),

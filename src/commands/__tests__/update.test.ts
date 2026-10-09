@@ -266,7 +266,10 @@ describe("executeUpdate", () => {
 
         await executeUpdate({ platform: "claude-code", target: "project" });
 
-        expect(mockDownloadBundle).toHaveBeenCalledWith("fozy-labs/astp", "pipeline");
+        expect(mockDownloadBundle).toHaveBeenCalledWith(
+            expect.objectContaining({ spec: "gh:fozy-labs/astp" }),
+            expect.objectContaining({ name: "pipeline" }),
+        );
         expect(mockSyncBundle).toHaveBeenCalledWith(expect.objectContaining({ bundle: emptyBundle }));
         expect(mockWriteLock).toHaveBeenCalled();
     });
