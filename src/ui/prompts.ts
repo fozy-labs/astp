@@ -97,6 +97,13 @@ export async function selectTarget(platform: Platform): Promise<InstallTarget> {
     return resolveTarget(platform, type as InstallTargetType);
 }
 
+export interface BlockOption {
+    /** `<file target>#<name>`. */
+    key: string;
+    name: string;
+    file: string;
+}
+
 export interface BundleEntry {
     /** Resolved bundle (items from its lock source). */
     bundle: Bundle;
@@ -106,12 +113,25 @@ export interface BundleEntry {
     defaults: string[];
     /** Initially selected with `defaults`. */
     preselected: boolean;
+    /** Unit path → its selectable blocks; units without blocks are absent. */
+    blocks: Map<string, BlockOption[]>;
+    /** Block keys checked at start: lock choices, else the non-optional blocks. */
+    blockDefaults: string[];
+}
+
+/** What the tree returns per chosen bundle. */
+export interface BundleChoice {
+    units: string[];
+    /** Chosen block keys of the chosen units. */
+    blocks: string[];
 }
 
 interface TreeRow {
     entry: BundleEntry;
-    /** Present on item rows, absent on bundle rows. */
+    /** Present on item and block rows, absent on bundle rows. */
     unit?: TemplateUnit;
+    /** Present on block rows. */
+    block?: BlockOption;
 }
 
 type OptionRenderState = "active" | "selected" | "cancelled" | "active-selected" | "submitted" | "inactive";
@@ -141,38 +161,52 @@ function renderBundleOption(
     }
 }
 
+function rowState(active: boolean, selected: boolean): OptionRenderState {
+    return active && selected ? "active-selected" : selected ? "selected" : active ? "active" : "inactive";
+}
+
 /**
- * Bundle + item selection on one screen: a collapsed tree of bundles whose
- * item rows appear under → and hide under ←. Extends the base Prompt — the
- * MultiSelect subclasses own the `cursor` event over a flat list, which
- * fights hidden rows.
+ * Bundle, item and block selection on one screen: a collapsed tree of
+ * bundles → items → blocks whose child rows appear under → and hide under ←.
+ * A single bundle starts expanded. Extends the base Prompt — the MultiSelect
+ * subclasses own the `cursor` event over a flat list, which fights hidden rows.
  */
-export class BundleTreePrompt extends Prompt<Map<string, string[]>> {
+export class BundleTreePrompt extends Prompt<Map<string, BundleChoice>> {
     /** Bundle names whose item rows are visible. */
     readonly expanded = new Set<string>();
+    /** `unitKey` of items whose block rows are visible. */
+    readonly expandedUnits = new Set<string>();
     /** Bundle name → chosen unit paths (every entry is present, possibly empty). */
     readonly chosen = new Map<string, Set<string>>();
+    /** Bundle name → checked block keys, kept while their item is deselected. */
+    readonly chosenBlocks = new Map<string, Set<string>>();
     cursor = 0;
 
     readonly entries: BundleEntry[];
 
-    constructor(opts: PromptOptions<Map<string, string[]>, BundleTreePrompt> & { entries: BundleEntry[] }) {
+    constructor(opts: PromptOptions<Map<string, BundleChoice>, BundleTreePrompt> & { entries: BundleEntry[] }) {
         super(opts, false);
         this.entries = opts.entries;
         for (const entry of this.entries) {
             this.chosen.set(entry.bundle.name, new Set(entry.preselected ? entry.defaults : []));
+            this.chosenBlocks.set(entry.bundle.name, new Set(entry.blockDefaults));
         }
+        const [only] = this.entries;
+        if (this.entries.length === 1 && only) this.expanded.add(only.bundle.name);
         this.refreshValue();
         this.on("cursor", (key) => this.move(key));
     }
 
-    /** Bundle rows plus the item rows of expanded bundles, in manifest order. */
+    /** Bundle rows plus the item and block rows of expanded ones, in manifest order. */
     get rows(): TreeRow[] {
         const rows: TreeRow[] = [];
         for (const entry of this.entries) {
             rows.push({ entry });
-            if (this.expanded.has(entry.bundle.name)) {
-                for (const unit of entry.units) rows.push({ entry, unit });
+            if (!this.expanded.has(entry.bundle.name)) continue;
+            for (const unit of entry.units) {
+                rows.push({ entry, unit });
+                if (!this.expandedUnits.has(unitKey(entry, unit))) continue;
+                for (const block of entry.blocks.get(unit.relativePath) ?? []) rows.push({ entry, unit, block });
             }
         }
         return rows;
@@ -180,16 +214,31 @@ export class BundleTreePrompt extends Prompt<Map<string, string[]>> {
 
     renderRow(row: TreeRow, active: boolean): string {
         const set = this.chosen.get(row.entry.bundle.name)!;
+        const blockSet = this.chosenBlocks.get(row.entry.bundle.name)!;
+        if (row.unit && row.block) {
+            const blocks = row.entry.blocks.get(row.unit.relativePath)!;
+            const severalFiles = new Set(blocks.map((block) => block.file)).size > 1;
+            const option = {
+                value: row.block.key,
+                label: row.block.name,
+                hint: severalFiles ? row.block.file : undefined,
+            };
+            const selected = set.has(row.unit.relativePath) && blockSet.has(row.block.key);
+            return `    ${renderBundleOption(option, rowState(active, selected))}`;
+        }
         if (row.unit) {
+            const selected = set.has(row.unit.relativePath);
+            const blocks = row.entry.blocks.get(row.unit.relativePath) ?? [];
+            const checked = blocks.filter((block) => blockSet.has(block.key)).length;
             const option = {
                 value: row.unit.relativePath,
                 label: pathLabel(row.unit.relativePath),
-                hint: row.unit.relativePath,
+                hint:
+                    selected && checked < blocks.length
+                        ? `${row.unit.relativePath}, ${checked}/${blocks.length} blocks`
+                        : row.unit.relativePath,
             };
-            const selected = set.has(row.unit.relativePath);
-            const state =
-                active && selected ? "active-selected" : selected ? "selected" : active ? "active" : "inactive";
-            return `  ${renderBundleOption(option, state)}`;
+            return `  ${renderBundleOption(option, rowState(active, selected))}`;
         }
         const { bundle } = row.entry;
         const option = {
@@ -200,21 +249,20 @@ export class BundleTreePrompt extends Prompt<Map<string, string[]>> {
             hint:
                 set.size > 0 && set.size < row.entry.units.length ? `${set.size}/${row.entry.units.length}` : undefined,
         };
-        const selected = set.size > 0;
-        const state = active && selected ? "active-selected" : selected ? "selected" : active ? "active" : "inactive";
-        return renderBundleOption(option, state);
+        return renderBundleOption(option, rowState(active, set.size > 0));
     }
 
     private refreshValue(): void {
-        const result = new Map<string, string[]>();
+        const result = new Map<string, BundleChoice>();
         for (const entry of this.entries) {
             const set = this.chosen.get(entry.bundle.name)!;
-            if (set.size > 0) {
-                result.set(
-                    entry.bundle.name,
-                    entry.units.filter((unit) => set.has(unit.relativePath)).map((unit) => unit.relativePath),
-                );
-            }
+            const blockSet = this.chosenBlocks.get(entry.bundle.name)!;
+            if (set.size === 0) continue;
+            const units = entry.units.filter((unit) => set.has(unit.relativePath)).map((unit) => unit.relativePath);
+            const blocks = units.flatMap((unitPath) =>
+                (entry.blocks.get(unitPath) ?? []).filter((block) => blockSet.has(block.key)).map((block) => block.key),
+            );
+            result.set(entry.bundle.name, { units, blocks });
         }
         this.value = result;
     }
@@ -230,39 +278,60 @@ export class BundleTreePrompt extends Prompt<Map<string, string[]>> {
                 this.cursor = (this.cursor + 1) % rows.length;
                 break;
             case "right":
-                if (row && !row.unit && row.entry.units.length > 0) this.expanded.add(row.entry.bundle.name);
+                if (!row || row.block) break;
+                if (row.unit) {
+                    if (row.entry.blocks.has(row.unit.relativePath))
+                        this.expandedUnits.add(unitKey(row.entry, row.unit));
+                } else if (row.entry.units.length > 0) {
+                    this.expanded.add(row.entry.bundle.name);
+                }
                 break;
             case "left":
                 if (!row) break;
-                if (row.unit) {
+                if (row.unit && row.block) {
+                    this.expandedUnits.delete(unitKey(row.entry, row.unit));
+                    this.cursor = this.rows.findIndex((r) => r.unit === row.unit && !r.block);
+                } else if (row.unit) {
                     this.expanded.delete(row.entry.bundle.name);
                     this.cursor = this.rows.findIndex((r) => r.entry === row.entry && !r.unit);
                 } else {
                     this.expanded.delete(row.entry.bundle.name);
                 }
                 break;
-            case "space":
+            case "space": {
                 if (!row) break;
-                if (row.unit) {
-                    const set = this.chosen.get(row.entry.bundle.name)!;
+                const set = this.chosen.get(row.entry.bundle.name)!;
+                if (row.unit && row.block) {
+                    const blockSet = this.chosenBlocks.get(row.entry.bundle.name)!;
+                    if (!set.has(row.unit.relativePath)) {
+                        set.add(row.unit.relativePath);
+                        blockSet.add(row.block.key);
+                    } else if (blockSet.has(row.block.key)) {
+                        blockSet.delete(row.block.key);
+                    } else {
+                        blockSet.add(row.block.key);
+                    }
+                } else if (row.unit) {
                     if (set.has(row.unit.relativePath)) set.delete(row.unit.relativePath);
                     else set.add(row.unit.relativePath);
+                } else if (set.size === 0) {
+                    const paths =
+                        row.entry.defaults.length > 0
+                            ? row.entry.defaults
+                            : row.entry.units.map((unit) => unit.relativePath);
+                    for (const unitPath of paths) set.add(unitPath);
                 } else {
-                    const set = this.chosen.get(row.entry.bundle.name)!;
-                    if (set.size === 0) {
-                        const paths =
-                            row.entry.defaults.length > 0
-                                ? row.entry.defaults
-                                : row.entry.units.map((unit) => unit.relativePath);
-                        for (const unitPath of paths) set.add(unitPath);
-                    } else {
-                        set.clear();
-                    }
+                    set.clear();
                 }
                 break;
+            }
         }
         this.refreshValue();
     }
+}
+
+function unitKey(entry: BundleEntry, unit: TemplateUnit): string {
+    return `${entry.bundle.name}\n${unit.relativePath}`;
 }
 
 export function cancelNoBundles(platform: Platform): never {
@@ -270,13 +339,13 @@ export function cancelNoBundles(platform: Platform): never {
     process.exit(0);
 }
 
-export async function selectBundleItems(entries: BundleEntry[]): Promise<Map<string, string[]>> {
+export async function selectBundleItems(entries: BundleEntry[]): Promise<Map<string, BundleChoice>> {
     const message = "Select bundles and items:\n(Space = toggle, → = expand, ← = collapse, Enter = confirm)";
 
     const prompt = new BundleTreePrompt({
         entries,
         validate: (value) => {
-            if (!value || [...value.values()].every((paths) => paths.length === 0)) {
+            if (!value || value.size === 0) {
                 return `Please select at least one option.\n${styleText(
                     "reset",
                     styleText(
@@ -367,7 +436,7 @@ export async function selectBundleItems(entries: BundleEntry[]): Promise<Map<str
         process.exit(0);
     }
 
-    return selected as Map<string, string[]>;
+    return selected as Map<string, BundleChoice>;
 }
 
 export async function confirmInstall(
@@ -392,25 +461,6 @@ export async function confirmInstall(
     return confirmed;
 }
 
-export async function selectUnits(bundle: Bundle, units: TemplateUnit[], initial: string[]): Promise<string[]> {
-    if (units.length === 0) return [];
-    const selected = await p.multiselect({
-        message: `Select items from ${bundle.name}:\n(Space = toggle, Enter = done)`,
-        options: units.map((unit) => ({
-            value: unit.relativePath,
-            label: pathLabel(unit.relativePath),
-            hint: unit.relativePath,
-        })),
-        initialValues: initial,
-        required: true,
-    });
-    if (p.isCancel(selected)) {
-        p.cancel("Cancelled.");
-        process.exit(0);
-    }
-    return selected as string[];
-}
-
 export async function selectNewUnits(bundleName: string, units: TemplateUnit[]): Promise<string[]> {
     const selected = await p.multiselect({
         message: `Select new items from ${bundleName}:\n(Space = toggle, Enter = confirm)`,
@@ -427,13 +477,6 @@ export async function selectNewUnits(bundleName: string, units: TemplateUnit[]):
         process.exit(0);
     }
     return selected as string[];
-}
-
-export interface BlockOption {
-    /** `<file target>#<name>`. */
-    key: string;
-    name: string;
-    file: string;
 }
 
 export async function selectBlocks(unitPath: string, blocks: BlockOption[], initial: string[]): Promise<string[]> {

@@ -14,11 +14,12 @@ import {
     validateUnitTargets,
     writeLock,
 } from "@/core/index.js";
-import type { BlockSelections } from "@/core/index.js";
+import type { BlockSelections, UnitBlockFile } from "@/core/index.js";
+import type { TemplateUnit } from "@/core/units.js";
 import type { Bundle, FileStatus, InstalledBundle, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { bundleSupportsPlatform, filterBundlesByPlatform, getBundlePlatforms, resolveTarget } from "@/types/index.js";
 import { describeUnitCounts } from "@/ui/format.js";
-import type { BundleEntry } from "@/ui/prompts.js";
+import type { BlockOption, BundleChoice } from "@/ui/prompts.js";
 import {
     cancelNoBundles,
     confirmInstall,
@@ -27,7 +28,6 @@ import {
     selectBundleItems,
     selectPlatform,
     selectTarget,
-    selectUnits,
     showInfo,
     showSuccess,
     spinner,
@@ -40,7 +40,7 @@ import {
     warnReleased,
 } from "@/ui/prompts.js";
 
-import { resolveBlockKeys, selectInstallBlocks } from "./blocks.js";
+import { initialInstallBlocks, installBlockOptions, resolveBlockKeys, selectInstallBlocks } from "./blocks.js";
 import type { OpenedSource } from "./sources.js";
 import { Sources } from "./sources.js";
 
@@ -59,8 +59,17 @@ interface BundlePlan {
     source: OpenedSource;
     selected: Set<string>;
     declined: Set<string>;
-    tempDir?: string;
+    tempDir: string;
     blockSelections: BlockSelections;
+}
+
+interface DownloadedBundle {
+    bundle: Bundle;
+    source: OpenedSource;
+    tempDir: string;
+    units: TemplateUnit[];
+    /** Unit path → its files with blocks. */
+    unitBlockFiles: Map<string, Map<string, UnitBlockFile>>;
 }
 
 export async function executeInstall(options: InstallOptions): Promise<void> {
@@ -77,6 +86,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
     const s = spinner();
     const sources = new Sources(target);
     const plans: BundlePlan[] = [];
+    const tempDirs: string[] = [];
     try {
         const openFor = (bundleName: string): Promise<OpenedSource> => {
             if (options.source !== undefined) return sources.open(options.source, "cli");
@@ -86,38 +96,20 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
         const primary = options.bundle
             ? await openFor(options.bundle)
             : await sources.open(options.source ?? DEFAULT_SOURCE, options.source !== undefined ? "cli" : "lock");
-        if (options.bundle) s.stop("Manifest fetched.");
 
-        const selectedBundles: Array<{ bundle: Bundle; source: OpenedSource }> = [];
-        let chosen: Map<string, string[]> | undefined;
+        const candidates: Array<{ bundle: Bundle; source: OpenedSource }> = [];
         if (options.bundle) {
-            selectedBundles.push({ bundle: resolveBundle(primary.manifest, options.bundle), source: primary });
+            candidates.push({ bundle: resolveBundle(primary.manifest, options.bundle), source: primary });
         } else {
             const manifestBundles = filterBundlesByPlatform(primary.manifest, platform);
             if (manifestBundles.length === 0) cancelNoBundles(platform);
-            const entries: BundleEntry[] = [];
-            const byName = new Map<string, { bundle: Bundle; source: OpenedSource }>();
-            for (const manifestBundle of manifestBundles) {
-                const name = manifestBundle.name;
+            for (const { name } of manifestBundles) {
                 const source = await openFor(name);
-                const bundle = resolveBundle(source.manifest, name);
-                const units = groupTemplateItems(bundle.items);
-                const installed = installedState.bundles.find((entry) => entry.bundleName === name);
-                entries.push({
-                    bundle,
-                    units,
-                    defaults: defaultSelection(units, installed),
-                    preselected: manifestBundle.default === true,
-                });
-                byName.set(name, { bundle, source });
-            }
-            s.stop("Manifest fetched.");
-            chosen = await selectBundleItems(entries);
-            for (const name of chosen.keys()) {
-                selectedBundles.push(byName.get(name)!);
+                candidates.push({ bundle: resolveBundle(source.manifest, name), source });
             }
         }
-        for (const { bundle } of selectedBundles) {
+        s.stop("Manifest fetched.");
+        for (const { bundle } of candidates) {
             if (!bundleSupportsPlatform(bundle, platform)) {
                 throw new Error(
                     `Bundle '${bundle.name}' does not support platform '${platform}'. Supported: ${getBundlePlatforms(bundle).join(", ")}`,
@@ -125,8 +117,54 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             }
         }
 
-        for (const { bundle, source } of selectedBundles) {
+        // Block choices need the template content, so every candidate is
+        // downloaded before the selection and the confirmation.
+        const [only] = candidates;
+        s.start(candidates.length === 1 && only ? `Downloading ${only.bundle.name}...` : "Downloading bundles...");
+        const downloaded: DownloadedBundle[] = [];
+        for (const { bundle, source } of candidates) {
+            const tempDir = await downloadBundle(source.source, bundle);
+            tempDirs.push(tempDir);
             const units = groupTemplateItems(bundle.items);
+            validateUnitTargets(target.rootDir, units);
+            await assertBundleSources(tempDir, bundle.name, units);
+            await assertBundleBlocks(tempDir, bundle.name, units);
+            const unitBlockFiles = new Map<string, Map<string, UnitBlockFile>>();
+            for (const unit of units) unitBlockFiles.set(unit.relativePath, await readUnitBlockFiles(tempDir, unit));
+            downloaded.push({ bundle, source, tempDir, units, unitBlockFiles });
+        }
+        s.stop(candidates.length === 1 && only ? `Downloaded ${only.bundle.name}.` : "Downloaded bundles.");
+
+        let chosen: Map<string, BundleChoice> | undefined;
+        if (isInteractive() && !additive) {
+            chosen = await selectBundleItems(
+                downloaded.map(({ bundle, units, unitBlockFiles }) => {
+                    const lockBundle = installedState.lock.bundles[bundle.name];
+                    const installed = installedState.bundles.find((entry) => entry.bundleName === bundle.name);
+                    const blocks = new Map<string, BlockOption[]>();
+                    const blockDefaults: string[] = [];
+                    for (const [unitPath, blockFiles] of unitBlockFiles) {
+                        const blockOptions = installBlockOptions(blockFiles);
+                        if (blockOptions.length === 0) continue;
+                        blocks.set(unitPath, blockOptions);
+                        blockDefaults.push(...initialInstallBlocks(blockFiles, lockBundle?.units[unitPath]));
+                    }
+                    return {
+                        bundle,
+                        units,
+                        defaults: defaultSelection(units, installed),
+                        preselected:
+                            options.bundle !== undefined || primary.manifest.bundles[bundle.name]?.default === true,
+                        blocks,
+                        blockDefaults,
+                    };
+                }),
+            );
+        }
+
+        for (const { bundle, source, tempDir, units, unitBlockFiles } of downloaded) {
+            const choice = chosen?.get(bundle.name);
+            if (chosen && !choice) continue;
             const paths = new Set(units.map((unit) => unit.relativePath));
             const installed = installedState.bundles.find((entry) => entry.bundleName === bundle.name);
             const tracked = new Set(
@@ -137,59 +175,40 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             let declined: Set<string>;
 
             if (additive) {
-                // Units of --block values are added after the download, once block files are known.
                 const matched = resolveUnitPaths(options.skills ?? [], units, bundle.name);
                 selected = new Set([...tracked, ...matched]);
                 const previouslyTracked = tracked.size > 0 || oldDeclined.size > 0;
                 declined = previouslyTracked
                     ? new Set([...oldDeclined].filter((unitPath) => !matched.has(unitPath)))
                     : new Set([...paths].filter((unitPath) => !matched.has(unitPath)));
-            } else if (options.bundle && isInteractive()) {
-                selected = new Set(await selectUnits(bundle, units, defaultSelection(units, installed)));
-                declined = new Set([...paths].filter((unitPath) => !selected.has(unitPath)));
-            } else if (!options.bundle && isInteractive()) {
-                const picked = (chosen?.get(bundle.name) ?? []).filter((unitPath) => paths.has(unitPath));
-                selected = new Set(picked);
+            } else if (choice) {
+                selected = new Set(choice.units);
                 declined = new Set([...paths].filter((unitPath) => !selected.has(unitPath)));
             } else {
                 selected = paths;
                 declined = new Set();
             }
-            plans.push({ bundle, source, selected, declined, blockSelections: new Map() });
-        }
 
-        // Block choices need the template content, so every bundle is downloaded
-        // before the block prompts and the confirmation.
-        for (const plan of plans) {
-            s.start(`Downloading ${plan.bundle.name}...`);
-            plan.tempDir = await downloadBundle(plan.source.source, plan.bundle);
-            s.stop(`Downloaded ${plan.bundle.name}.`);
-            const units = groupTemplateItems(plan.bundle.items);
-            validateUnitTargets(target.rootDir, units);
-            await assertBundleSources(plan.tempDir, plan.bundle.name, units);
-            await assertBundleBlocks(plan.tempDir, plan.bundle.name, units);
-
-            const lockBundle = installedState.lock.bundles[plan.bundle.name];
-            const unitBlockFiles = new Map<string, Awaited<ReturnType<typeof readUnitBlockFiles>>>();
-            for (const unit of units)
-                unitBlockFiles.set(unit.relativePath, await readUnitBlockFiles(plan.tempDir, unit));
-            const requested = resolveBlockKeys(options.blocks ?? [], unitBlockFiles, plan.bundle.name);
+            const requested = resolveBlockKeys(options.blocks ?? [], unitBlockFiles, bundle.name);
             for (const unitPath of requested.keys()) {
-                plan.selected.add(unitPath);
-                plan.declined.delete(unitPath);
+                selected.add(unitPath);
+                declined.delete(unitPath);
             }
+            const lockBundle = installedState.lock.bundles[bundle.name];
+            const chosenBlocks = choice ? new Set(choice.blocks) : undefined;
+            const blockSelections: BlockSelections = new Map();
             for (const unit of units) {
-                if (!plan.selected.has(unit.relativePath)) continue;
+                if (!selected.has(unit.relativePath)) continue;
                 const blockFiles = unitBlockFiles.get(unit.relativePath)!;
                 if (blockFiles.size === 0) continue;
-                const selections = await selectInstallBlocks(
-                    unit.relativePath,
-                    blockFiles,
-                    lockBundle?.units[unit.relativePath],
-                    { additive, requested: requested.get(unit.relativePath) },
-                );
-                for (const [target, selection] of selections) plan.blockSelections.set(target, selection);
+                const selections = selectInstallBlocks(blockFiles, lockBundle?.units[unit.relativePath], {
+                    additive,
+                    requested: requested.get(unit.relativePath),
+                    chosen: chosenBlocks,
+                });
+                for (const [file, selection] of selections) blockSelections.set(file, selection);
             }
+            plans.push({ bundle, source, selected, declined, tempDir, blockSelections });
         }
 
         const selectedUnits = plans.flatMap((plan) =>
@@ -198,7 +217,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
         if (
             isInteractive() &&
             !(await confirmInstall(
-                selectedBundles.map((entry) => entry.bundle),
+                plans.map((plan) => plan.bundle),
                 target,
                 selectedUnits,
             ))
@@ -218,7 +237,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 bundle: plan.bundle,
                 installed: installedState.bundles.find((entry) => entry.bundleName === plan.bundle.name),
                 lock: installedState.lock,
-                tempDir: plan.tempDir!,
+                tempDir: plan.tempDir,
                 selected: plan.selected,
                 declined: plan.declined,
                 blockSelections: plan.blockSelections,
@@ -254,9 +273,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             }`,
         );
     } finally {
-        for (const plan of plans) {
-            if (plan.tempDir) await fs.rm(plan.tempDir, { recursive: true, force: true });
-        }
+        for (const tempDir of tempDirs) await fs.rm(tempDir, { recursive: true, force: true });
         await sources.close();
     }
 }

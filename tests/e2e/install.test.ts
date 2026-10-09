@@ -12,7 +12,6 @@ import {
     isInteractive,
     selectBundleItems,
     selectNewUnits,
-    selectUnits,
     warnForeign,
     warnKeptRemoved,
     warnLegacyModified,
@@ -51,7 +50,6 @@ vi.mock("@/ui/prompts.js", () => ({
     selectBundleItems: vi.fn(),
     cancelNoBundles: vi.fn(),
     selectBlocks: vi.fn(),
-    selectUnits: vi.fn(),
     selectNewUnits: vi.fn(),
     confirmInstall: vi.fn(),
     showSuccess: vi.fn(),
@@ -76,7 +74,6 @@ const mockWarnModified = vi.mocked(warnModified);
 const mockWarnForeign = vi.mocked(warnForeign);
 const mockIsInteractive = vi.mocked(isInteractive);
 const mockSelectBundleItems = vi.mocked(selectBundleItems);
-const mockSelectUnits = vi.mocked(selectUnits);
 const mockSelectNewUnits = vi.mocked(selectNewUnits);
 
 describe("E2E: install", () => {
@@ -265,14 +262,17 @@ describe("E2E: install", () => {
 
     it("installs all bundles selected in the interactive wizard", async () => {
         mockIsInteractive.mockReturnValue(true);
-        mockSelectBundleItems.mockImplementation(async (entries) =>
-            new Map(
-                entries
-                    .filter((entry) => ["core", "pipeline"].includes(entry.bundle.name))
-                    .map((entry) => [entry.bundle.name, entry.units.map((unit) => unit.relativePath)]),
-            ),
+        mockSelectBundleItems.mockImplementation(
+            async (entries) =>
+                new Map(
+                    entries
+                        .filter((entry) => ["core", "pipeline"].includes(entry.bundle.name))
+                        .map((entry) => [
+                            entry.bundle.name,
+                            { units: entry.units.map((unit) => unit.relativePath), blocks: entry.blockDefaults },
+                        ]),
+                ),
         );
-        mockSelectUnits.mockImplementation(async (_bundle, units) => units.map((unit) => unit.relativePath));
         mockDownloadBundle.mockImplementation(async (_source, { name: bundleName }) => {
             const dir = await setupTemplateDir(manifest, bundleName);
             templateDirs.push(dir);

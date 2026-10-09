@@ -19,7 +19,6 @@ import {
     selectNewUnits,
     selectPlatform,
     selectTarget,
-    selectUnits,
     showCheckReport,
     warnForeign,
     warnKeptRemoved,
@@ -53,7 +52,6 @@ vi.mock("@/ui/prompts.js", () => ({
     selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
     selectBlocks: vi.fn(),
-    selectUnits: vi.fn(),
     showCheckReport: vi.fn(),
     showInfo: vi.fn(),
     showSuccess: vi.fn(),
@@ -75,7 +73,6 @@ const mockConfirmInstall = vi.mocked(confirmInstall);
 const mockConfirmDelete = vi.mocked(confirmDelete);
 const mockIsInteractive = vi.mocked(isInteractive);
 const mockSelectBundleItems = vi.mocked(selectBundleItems);
-const mockSelectUnits = vi.mocked(selectUnits);
 const mockSelectNewUnits = vi.mocked(selectNewUnits);
 
 function createManifest(
@@ -123,10 +120,15 @@ describe("lock-file command flows", () => {
         mockConfirmInstall.mockResolvedValue(true);
         mockConfirmDelete.mockResolvedValue(true);
         mockIsInteractive.mockReturnValue(false);
-        mockSelectBundleItems.mockImplementation(async (entries) =>
-            new Map(entries.map((entry) => [entry.bundle.name, entry.units.map((unit) => unit.relativePath)])),
+        mockSelectBundleItems.mockImplementation(
+            async (entries) =>
+                new Map(
+                    entries.map((entry) => [
+                        entry.bundle.name,
+                        { units: entry.units.map((unit) => unit.relativePath), blocks: entry.blockDefaults },
+                    ]),
+                ),
         );
-        mockSelectUnits.mockImplementation(async (_bundle, units) => units.map((unit) => unit.relativePath));
         mockSelectNewUnits.mockImplementation(async (_name, units) => units.map((unit) => unit.relativePath));
     });
 
@@ -231,7 +233,7 @@ describe("lock-file command flows", () => {
         await install();
         await fs.appendFile(path.join(rootDir, "skills/beta/SKILL.md"), "local edit");
         mockIsInteractive.mockReturnValue(true);
-        mockSelectUnits.mockResolvedValue(["skills/alpha"]);
+        mockSelectBundleItems.mockResolvedValue(new Map([["core", { units: ["skills/alpha"], blocks: [] }]]));
         await install();
         const lock = JSON.parse(await fs.readFile(path.join(rootDir, "astp.lock"), "utf8"));
         expect(lock.bundles.core.units["skills/beta"]).toBeDefined();
@@ -282,7 +284,7 @@ describe("lock-file command flows", () => {
 
     it("prompts for unit selection only in interactive installs", async () => {
         mockIsInteractive.mockReturnValue(true);
-        mockSelectUnits.mockResolvedValue(["skills/alpha"]);
+        mockSelectBundleItems.mockResolvedValue(new Map([["core", { units: ["skills/alpha"], blocks: [] }]]));
         await install();
         manifest = createManifest("1.1.0", [
             "skills/alpha/SKILL.md",
@@ -300,7 +302,7 @@ describe("lock-file command flows", () => {
         expect(mockSelectNewUnits).toHaveBeenCalledOnce();
         await executeUpdate({ platform: "claude-code", target: "project" });
         expect(mockSelectNewUnits).toHaveBeenCalledOnce();
-        expect(mockSelectUnits).toHaveBeenCalledOnce();
+        expect(mockSelectBundleItems).toHaveBeenCalledOnce();
     });
 
     it("rejects malformed locks before fetching the manifest", async () => {
@@ -751,7 +753,9 @@ describe("lock-file command flows", () => {
             await install();
             await fs.appendFile(betaFile(), "local edit");
             mockIsInteractive.mockReturnValue(true);
-            mockSelectUnits.mockResolvedValue(["skills/alpha", "agents/guide.md"]);
+            mockSelectBundleItems.mockResolvedValue(
+                new Map([["core", { units: ["skills/alpha", "agents/guide.md"], blocks: [] }]]),
+            );
             await install();
             const lock = await readLock();
             expect(lock.bundles.core.units["skills/beta"]).toBeDefined();

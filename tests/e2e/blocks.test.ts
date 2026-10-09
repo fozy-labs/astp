@@ -13,8 +13,7 @@ import type { Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import {
     isInteractive,
-    selectBlocks,
-    selectUnits,
+    selectBundleItems,
     showCheckReport,
     warnForeign,
     warnKeptBlocks,
@@ -45,7 +44,6 @@ vi.mock("@/ui/prompts.js", () => ({
     selectBundleItems: vi.fn(),
     cancelNoBundles: vi.fn(),
     selectInstalledBundles: vi.fn(),
-    selectUnits: vi.fn(),
     selectNewUnits: vi.fn(),
     selectBlocks: vi.fn(),
     confirmInstall: vi.fn().mockResolvedValue(true),
@@ -68,8 +66,23 @@ const mockFetchManifest = vi.mocked(fetchManifest);
 const mockDownloadBundle = vi.mocked(downloadBundle);
 const mockResolveTarget = vi.mocked(resolveTarget);
 const mockIsInteractive = vi.mocked(isInteractive);
-const mockSelectBlocks = vi.mocked(selectBlocks);
-const mockSelectUnits = vi.mocked(selectUnits);
+const mockSelectBundleItems = vi.mocked(selectBundleItems);
+
+/** Tree result: every bundle with `units` (default all) and `blocks` (default the entry's pre-checked ones). */
+function treeChoice(units?: string[], blocks?: string[]): void {
+    mockSelectBundleItems.mockImplementation(
+        async (entries) =>
+            new Map(
+                entries.map((entry) => [
+                    entry.bundle.name,
+                    {
+                        units: units ?? entry.units.map((unit) => unit.relativePath),
+                        blocks: blocks ?? entry.blockDefaults,
+                    },
+                ]),
+            ),
+    );
+}
 const mockShowCheckReport = vi.mocked(showCheckReport);
 const mockWarnKeptBlocks = vi.mocked(warnKeptBlocks);
 const mockWarnKeptRemoved = vi.mocked(warnKeptRemoved);
@@ -179,8 +192,7 @@ describe("E2E: blocks", () => {
 
         mockFetchManifest.mockImplementation(async () => manifest);
         mockIsInteractive.mockReturnValue(false);
-        mockSelectBlocks.mockReset();
-        mockSelectUnits.mockImplementation(async (_bundle, units) => units.map((unit) => unit.relativePath));
+        treeChoice();
         mockResolveTarget.mockReturnValue(makeProjectTarget(projectDir));
         mockDownloadBundle.mockImplementation(async (_source, { name: bundleName }) => {
             const dir = await setupTemplateDir(manifest, bundleName, contents);
@@ -297,7 +309,7 @@ describe("E2E: blocks", () => {
 
         // Re-install interactively, deselecting the filled block.
         mockIsInteractive.mockReturnValue(true);
-        mockSelectBlocks.mockResolvedValue([`${RULES_FILE}#project_map`]);
+        treeChoice(undefined, [`${RULES_FILE}#project_map`]);
         await install();
 
         expect(mockWarnKeptBlocks).toHaveBeenCalledWith([`${RULES_FILE}#extra`]);
@@ -331,7 +343,7 @@ describe("E2E: blocks", () => {
     it("non-TTY install brings back a declined non-optional block, keeps a declined optional one", async () => {
         // Interactive install selecting only project_map; extra and code_style declined.
         mockIsInteractive.mockReturnValue(true);
-        mockSelectBlocks.mockResolvedValue([`${RULES_FILE}#project_map`]);
+        treeChoice(undefined, [`${RULES_FILE}#project_map`]);
         await install();
         let content = await fs.readFile(filePath(), "utf8");
         expect(content).not.toContain("<extra>");
@@ -353,12 +365,12 @@ describe("E2E: blocks", () => {
 
     it("required blocks install without a prompt and are never shown", async () => {
         mockIsInteractive.mockReturnValue(true);
-        mockSelectBlocks.mockResolvedValue([]);
+        treeChoice(undefined, []);
         await install();
         // project_map is required: installed even though nothing was selected.
         const content = await fs.readFile(filePath(), "utf8");
         expect(content).toContain("<project_map>");
-        const options = mockSelectBlocks.mock.calls[0]![1]!;
+        const options = mockSelectBundleItems.mock.calls[0]![0][0]!.blocks.get(RULES_FILE)!;
         expect(options.map((option) => option.name)).not.toContain("project_map");
     });
 
@@ -399,7 +411,7 @@ describe("E2E: blocks", () => {
         await fillFile();
 
         mockIsInteractive.mockReturnValue(true);
-        mockSelectUnits.mockResolvedValue([]);
+        treeChoice([], []);
         await install();
         expect(await fs.readFile(filePath(), "utf8")).toContain("Filled by the agent.");
         expect(mockWarnKeptRemoved).toHaveBeenCalled();
@@ -411,7 +423,7 @@ describe("E2E: blocks", () => {
     it("deselecting a clean block unit still removes the file", async () => {
         await install();
         mockIsInteractive.mockReturnValue(true);
-        mockSelectUnits.mockResolvedValue([]);
+        treeChoice([], []);
         await install();
         await expect(fs.access(filePath())).rejects.toThrow();
     });
@@ -691,8 +703,7 @@ describe("E2E: blocks", () => {
             manifest = createMixedManifest("1.0.0");
             contents[OTHER_FILE] = OTHER_TPL;
             mockIsInteractive.mockReturnValue(true);
-            mockSelectUnits.mockResolvedValue([RULES_FILE]);
-            mockSelectBlocks.mockResolvedValue([]);
+            treeChoice([RULES_FILE], []);
             await install();
             expect((await lockUnit())!.declinedBlocks).toEqual([`${RULES_FILE}#code_style`, `${RULES_FILE}#extra`]);
 
@@ -710,7 +721,7 @@ describe("E2E: blocks", () => {
 
         it("list --json reports blocks with key, status and flags", async () => {
             mockIsInteractive.mockReturnValue(true);
-            mockSelectBlocks.mockResolvedValue([]);
+            treeChoice(undefined, []);
             await install();
             mockIsInteractive.mockReturnValue(false);
             manifest = createBlocksManifest("1.0.0");

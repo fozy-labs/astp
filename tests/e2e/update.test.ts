@@ -39,7 +39,6 @@ vi.mock("@/ui/prompts.js", () => ({
     selectBundleItems: vi.fn(),
     cancelNoBundles: vi.fn(),
     selectBlocks: vi.fn(),
-    selectUnits: vi.fn(),
     selectNewUnits: vi.fn(),
     confirmInstall: vi.fn(),
     showSuccess: vi.fn(),

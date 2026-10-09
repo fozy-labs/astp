@@ -21,7 +21,6 @@ import {
     selectBundleItems,
     selectPlatform,
     selectTarget,
-    selectUnits,
     showSuccess,
 } from "@/ui/prompts.js";
 
@@ -53,7 +52,6 @@ vi.mock("@/ui/prompts.js", () => ({
     isInteractive: vi.fn(),
     requireTerminal: vi.fn(),
     selectBlocks: vi.fn(),
-    selectUnits: vi.fn(),
     showSuccess: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
@@ -75,7 +73,6 @@ const mockSelectBundleItems = vi.mocked(selectBundleItems);
 const mockConfirmInstall = vi.mocked(confirmInstall);
 const mockShowSuccess = vi.mocked(showSuccess);
 const mockIsInteractive = vi.mocked(isInteractive);
-const mockSelectUnits = vi.mocked(selectUnits);
 const mockResolveTarget = vi.mocked(resolveTarget);
 
 const temporaryRoots: string[] = [];
@@ -192,8 +189,8 @@ describe("executeInstall", () => {
         mockIsInteractive.mockReturnValue(true);
         mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockResolvedValue(testTarget);
-        mockSelectBundleItems.mockResolvedValue(new Map([["core", ["skills/orchestrate"]]]));
-        mockResolveBundle.mockReturnValue(testBundle);
+        mockSelectBundleItems.mockResolvedValue(new Map([["core", { units: ["skills/orchestrate"], blocks: [] }]]));
+        mockResolveBundle.mockImplementation((manifest, name) => manifest.bundles[name]!);
 
         await executeInstall({});
 
@@ -202,7 +199,6 @@ describe("executeInstall", () => {
         expect(mockSelectBundleItems).toHaveBeenCalledWith(
             expect.arrayContaining([expect.objectContaining({ bundle: testBundle })]),
         );
-        expect(mockSelectUnits).not.toHaveBeenCalled();
         expect(mockConfirmInstall).toHaveBeenCalledWith([testBundle], testTarget, [
             { kind: "skill", relativePath: "skills/orchestrate", items: [testItem] },
         ]);
@@ -232,7 +228,7 @@ describe("executeInstall", () => {
         mockIsInteractive.mockReturnValue(true);
         mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockResolvedValue(testTarget);
-        mockSelectBundleItems.mockResolvedValue(new Map([["core", ["skills/orchestrate"]]]));
+        mockSelectBundleItems.mockResolvedValue(new Map([["core", { units: ["skills/orchestrate"], blocks: [] }]]));
         mockResolveBundle.mockReturnValue(testBundle);
         mockConfirmInstall.mockResolvedValue(false);
 
@@ -254,31 +250,47 @@ describe("executeInstall", () => {
     });
 
     it("shows success with correct file count", async () => {
+        mockIsInteractive.mockReturnValue(true);
         mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockResolvedValue(testTarget);
-        mockSelectBundleItems.mockResolvedValue(new Map([["core", ["skills/orchestrate"]]]));
-        mockResolveBundle.mockReturnValue(testBundle);
+        mockSelectBundleItems.mockResolvedValue(new Map([["core", { units: ["skills/orchestrate"], blocks: [] }]]));
+        mockResolveBundle.mockImplementation((manifest, name) => manifest.bundles[name]!);
 
         await executeInstall({});
 
         expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining("1 skill"));
     });
 
-    it("prompts for unit selection when installing a named bundle interactively", async () => {
+    it("shows the tree with only the named bundle, preselected, when installing it interactively", async () => {
         mockIsInteractive.mockReturnValue(true);
-        mockSelectUnits.mockResolvedValue([]);
+        mockSelectBundleItems.mockResolvedValue(new Map([["core", { units: [], blocks: [] }]]));
         mockResolveBundle.mockReturnValue(testBundle);
 
         await executeInstall({ bundle: "core", platform: "claude-code", target: "project" });
 
-        expect(mockSelectUnits).toHaveBeenCalledWith(
-            testBundle,
-            [{ kind: "skill", relativePath: "skills/orchestrate", items: [testItem] }],
-            ["skills/orchestrate"],
-        );
+        expect(mockSelectBundleItems).toHaveBeenCalledWith([
+            expect.objectContaining({
+                bundle: testBundle,
+                units: [{ kind: "skill", relativePath: "skills/orchestrate", items: [testItem] }],
+                defaults: ["skills/orchestrate"],
+                preselected: true,
+            }),
+        ]);
         expect(mockConfirmInstall).toHaveBeenCalledWith([testBundle], testTarget, []);
         expect(mockSyncBundle).toHaveBeenCalledWith(
             expect.objectContaining({ selected: new Set(), declined: new Set(["skills/orchestrate"]) }),
+        );
+    });
+
+    it("installs --skill without the tree in a terminal", async () => {
+        mockIsInteractive.mockReturnValue(true);
+        mockResolveBundle.mockReturnValue(testBundle);
+
+        await executeInstall({ bundle: "core", skills: ["orchestrate"], platform: "claude-code", target: "project" });
+
+        expect(mockSelectBundleItems).not.toHaveBeenCalled();
+        expect(mockSyncBundle).toHaveBeenCalledWith(
+            expect.objectContaining({ selected: new Set(["skills/orchestrate"]) }),
         );
     });
 });
@@ -324,8 +336,8 @@ describe("interactive bundle tree selection", () => {
     it("installs the chosen subset per bundle and declines the rest", async () => {
         mockSelectBundleItems.mockResolvedValue(
             new Map([
-                ["a", ["agents/a1.md", "rules/r1.md"]],
-                ["b", ["skills/s1"]],
+                ["a", { units: ["agents/a1.md", "rules/r1.md"], blocks: [] }],
+                ["b", { units: ["skills/s1"], blocks: [] }],
             ]),
         );
 
@@ -385,7 +397,7 @@ describe("interactive bundle tree selection", () => {
                 },
             ],
         });
-        mockSelectBundleItems.mockResolvedValue(new Map([["b", ["skills/s3"]]]));
+        mockSelectBundleItems.mockResolvedValue(new Map([["b", { units: ["skills/s3"], blocks: [] }]]));
 
         await executeInstall({});
 
@@ -438,7 +450,9 @@ describe("interactive bundle tree selection", () => {
                 },
             ],
         });
-        mockSelectBundleItems.mockResolvedValue(new Map([["a", ["agents/a1.md", "rules/r1.md"]]]));
+        mockSelectBundleItems.mockResolvedValue(
+            new Map([["a", { units: ["agents/a1.md", "rules/r1.md"], blocks: [] }]]),
+        );
 
         await executeInstall({});
 
@@ -458,7 +472,7 @@ describe("interactive bundle tree selection", () => {
     });
 
     it("does not install bundles absent from the prompt result", async () => {
-        mockSelectBundleItems.mockResolvedValue(new Map([["a", ["agents/a1.md"]]]));
+        mockSelectBundleItems.mockResolvedValue(new Map([["a", { units: ["agents/a1.md"], blocks: [] }]]));
 
         await executeInstall({});
 

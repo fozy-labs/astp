@@ -10,7 +10,6 @@ import {
     BundleTreePrompt,
     confirmInstall,
     selectPlatform,
-    selectUnits,
     showCheckReport,
     showUpdateReport,
     warnForeign,
@@ -43,7 +42,18 @@ const SPACE = " ";
 function treeEntry(
     name: string,
     unitPaths: string[],
-    { defaults = unitPaths, preselected = false }: { defaults?: string[]; preselected?: boolean } = {},
+    {
+        defaults = unitPaths,
+        preselected = false,
+        blocks = {},
+        blockDefaults = [],
+    }: {
+        defaults?: string[];
+        preselected?: boolean;
+        /** Unit path → block names, all in the unit's own file. */
+        blocks?: Record<string, string[]>;
+        blockDefaults?: string[];
+    } = {},
 ): BundleEntry {
     return {
         bundle: { name, version: "1.0.0", description: `${name} bundle`, default: preselected, items: [] },
@@ -54,6 +64,13 @@ function treeEntry(
         })),
         defaults,
         preselected,
+        blocks: new Map(
+            Object.entries(blocks).map(([unitPath, names]) => [
+                unitPath,
+                names.map((name) => ({ key: `${unitPath}#${name}`, name, file: unitPath })),
+            ]),
+        ),
+        blockDefaults,
     };
 }
 
@@ -63,10 +80,7 @@ function drivePrompt(entries: BundleEntry[], keys: string[] = []) {
         entries,
         input,
         output: new PassThrough(),
-        validate: (value) =>
-            !value || [...value.values()].every((paths) => paths.length === 0)
-                ? "Please select at least one option."
-                : undefined,
+        validate: (value) => (!value || value.size === 0 ? "Please select at least one option." : undefined),
         render: () => "",
     });
     const result = prompt.prompt();
@@ -85,7 +99,7 @@ describe("BundleTreePrompt", () => {
             [DOWN, ENTER],
         );
 
-        await expect(result).resolves.toEqual(new Map([["one", ["agents/a.md"]]]));
+        await expect(result).resolves.toEqual(new Map([["one", { units: ["agents/a.md"], blocks: [] }]]));
         expect(prompt.cursor).toBe(1);
     });
 
@@ -93,7 +107,7 @@ describe("BundleTreePrompt", () => {
         const entry = treeEntry("one", ["agents/a.md", "agents/b.md"], { preselected: true });
         const { prompt, result } = drivePrompt([entry, treeEntry("two", ["agents/c.md"])], [RIGHT, DOWN, SPACE, ENTER]);
 
-        await expect(result).resolves.toEqual(new Map([["one", ["agents/b.md"]]]));
+        await expect(result).resolves.toEqual(new Map([["one", { units: ["agents/b.md"], blocks: [] }]]));
         expect(prompt.renderRow({ entry }, false)).toContain("1/2");
     });
 
@@ -109,7 +123,7 @@ describe("BundleTreePrompt", () => {
         // The collapsed bundle is now toggled off; a second Space re-selects its defaults.
         expect(prompt.chosen.get("one")?.size).toBe(0);
         for (const key of [SPACE, ENTER]) input.write(key);
-        await expect(result).resolves.toEqual(new Map([["one", ["agents/a.md"]]]));
+        await expect(result).resolves.toEqual(new Map([["one", { units: ["agents/a.md"], blocks: [] }]]));
     });
 
     it("space on an unselected bundle chooses its defaults, not declined units", async () => {
@@ -132,13 +146,13 @@ describe("BundleTreePrompt", () => {
             [ENTER],
         );
 
-        await expect(result).resolves.toEqual(new Map([["two", ["agents/b.md"]]]));
+        await expect(result).resolves.toEqual(new Map([["two", { units: ["agents/b.md"], blocks: [] }]]));
         expect(prompt.state).toBe("submit");
 
         const empty = drivePrompt([treeEntry("three", ["agents/c.md"])], [ENTER]);
         await vi.waitFor(() => expect(empty.prompt.state).toBe("error"));
         for (const key of [SPACE, ENTER]) empty.input.write(key);
-        await expect(empty.result).resolves.toEqual(new Map([["three", ["agents/c.md"]]]));
+        await expect(empty.result).resolves.toEqual(new Map([["three", { units: ["agents/c.md"], blocks: [] }]]));
     });
 
     it("up from the first row wraps to the last visible row", async () => {
@@ -149,22 +163,69 @@ describe("BundleTreePrompt", () => {
 
         await vi.waitFor(() => expect(prompt.cursor).toBe(2));
         for (const key of [SPACE, ENTER]) input.write(key);
-        await expect(result).resolves.toEqual(new Map([["three", ["agents/c.md"]]]));
+        await expect(result).resolves.toEqual(new Map([["three", { units: ["agents/c.md"], blocks: [] }]]));
     });
 });
 
-describe("selectUnits", () => {
-    it("returns an empty selection for an empty bundle without prompting", async () => {
-        const bundle: Bundle = {
-            name: "empty",
-            version: "1.0.0",
-            description: "Empty bundle",
-            default: false,
-            items: [],
-        };
+describe("BundleTreePrompt blocks", () => {
+    const RULE = "rules/r.md";
+    const withBlocks = (options: { preselected?: boolean; blockDefaults?: string[] } = {}) =>
+        treeEntry("one", [RULE, "agents/a.md"], {
+            blocks: { [RULE]: ["x", "y"] },
+            blockDefaults: [`${RULE}#x`, `${RULE}#y`],
+            ...options,
+        });
 
-        await expect(selectUnits(bundle, [], [])).resolves.toEqual([]);
-        expect(p.multiselect).not.toHaveBeenCalled();
+    it("a single bundle starts expanded; right on an item shows its blocks, left returns to the item", async () => {
+        const { prompt, input, result } = drivePrompt([withBlocks({ preselected: true })], [DOWN, RIGHT]);
+
+        await vi.waitFor(() => expect(prompt.rows).toHaveLength(5));
+        expect(prompt.rows.map((row) => row.block?.name ?? row.unit?.relativePath ?? row.entry.bundle.name)).toEqual([
+            "one",
+            RULE,
+            "x",
+            "y",
+            "agents/a.md",
+        ]);
+        for (const key of [DOWN, DOWN, SPACE, LEFT]) input.write(key);
+        await vi.waitFor(() => expect(prompt.rows).toHaveLength(3));
+        expect(prompt.cursor).toBe(1);
+        expect(prompt.renderRow(prompt.rows[1]!, false)).toContain("1/2 blocks");
+        input.write(ENTER);
+        await expect(result).resolves.toEqual(
+            new Map([["one", { units: [RULE, "agents/a.md"], blocks: [`${RULE}#x`] }]]),
+        );
+    });
+
+    it("right on an item without blocks does nothing", async () => {
+        const { prompt, input, result } = drivePrompt([withBlocks({ preselected: true })], [DOWN, DOWN, RIGHT]);
+
+        await vi.waitFor(() => expect(prompt.cursor).toBe(2));
+        expect(prompt.rows).toHaveLength(3);
+        input.write(ENTER);
+        await expect(result).resolves.toEqual(
+            new Map([["one", { units: [RULE, "agents/a.md"], blocks: [`${RULE}#x`, `${RULE}#y`] }]]),
+        );
+    });
+
+    it("space on a block of an unchecked item checks the item and that block", async () => {
+        const { prompt, input, result } = drivePrompt(
+            [withBlocks({ blockDefaults: [`${RULE}#x`] }), treeEntry("two", ["agents/b.md"])],
+            [RIGHT, DOWN, RIGHT, DOWN, DOWN],
+        );
+
+        await vi.waitFor(() => expect(prompt.cursor).toBe(3));
+        expect(prompt.rows[3]!.block?.name).toBe("y");
+        for (const key of [SPACE, ENTER]) input.write(key);
+        await expect(result).resolves.toEqual(
+            new Map([["one", { units: [RULE], blocks: [`${RULE}#x`, `${RULE}#y`] }]]),
+        );
+    });
+
+    it("an unchecked item drops its blocks from the result", async () => {
+        const { result } = drivePrompt([withBlocks({ preselected: true })], [DOWN, SPACE, ENTER]);
+
+        await expect(result).resolves.toEqual(new Map([["one", { units: ["agents/a.md"], blocks: [] }]]));
     });
 });
 

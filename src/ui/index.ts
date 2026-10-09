@@ -13,7 +13,6 @@ export {
     selectInstalledBundles,
     selectNewUnits,
     selectTarget,
-    selectUnits,
     showCheckReport,
     showInfo,
     showSuccess,
@@ -25,4 +24,4 @@ export {
     warnLegacyModified,
     warnModified,
 } from "./prompts.js";
-export type { BlockOption, BundleEntry } from "./prompts.js";
+export type { BlockOption, BundleChoice, BundleEntry } from "./prompts.js";
