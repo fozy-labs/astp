@@ -113,7 +113,7 @@ describe("lock-file command flows", () => {
         manifest = createManifest();
         mockResolveTarget.mockReturnValue({ platform: "claude-code", type: "project", rootDir });
         mockFetchManifest.mockImplementation(async () => manifest);
-        mockDownloadBundle.mockImplementation(async (_repository, bundleName) => {
+        mockDownloadBundle.mockImplementation(async (_source, { name: bundleName }) => {
             const dir = await setupTemplateDir(manifest, bundleName);
             templateDirs.push(dir);
             return dir;
@@ -308,7 +308,7 @@ describe("lock-file command flows", () => {
 
     it("persists nothing when a later bundle download fails — all bundles download before any install", async () => {
         manifest = createManifest("1.0.0", ["agents/guide.md"], ["first", "second"]);
-        mockDownloadBundle.mockImplementation(async (_repository, bundleName) => {
+        mockDownloadBundle.mockImplementation(async (_source, { name: bundleName }) => {
             if (bundleName === "second") throw new Error("download failed");
             const dir = await setupTemplateDir(manifest, bundleName);
             templateDirs.push(dir);

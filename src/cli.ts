@@ -14,6 +14,9 @@ import { launchWizard } from "@/ui/wizard.js";
 
 const VALID_TARGETS: ReadonlySet<InstallTargetType> = new Set(["project", "user"]);
 
+const SOURCE_HELP =
+    "Manifest source: local path, owner/repo[#ref], GitHub URL, gh:/gitlab:/bitbucket:/sourcehut:, npm:<name>[@version], or URL";
+
 const PLATFORM_HELP = `Coding agent platform: ${ALL_PLATFORMS.join(", ")}`;
 
 function collect(value: string, previous: string[]): string[] {
@@ -53,6 +56,7 @@ program
 program
     .command("install")
     .argument("[bundle]", "Bundle name to install")
+    .option("--source <spec>", SOURCE_HELP)
     .option("--skill <name>", "Install one unit by name or path", collect, [])
     .option("--block <name>", "Install one block by name or key (file#name)", collect, [])
     .option("--force", "Overwrite locally modified or unmanaged files")
@@ -61,10 +65,18 @@ program
     .action(
         async (
             bundle: string | undefined,
-            options: { skill: string[]; block: string[]; force?: boolean; platform?: string; target?: string },
+            options: {
+                source?: string;
+                skill: string[];
+                block: string[];
+                force?: boolean;
+                platform?: string;
+                target?: string;
+            },
         ) => {
             await executeInstall({
                 bundle,
+                source: options.source,
                 skills: options.skill,
                 blocks: options.block,
                 force: options.force,
@@ -101,17 +113,24 @@ program
 program
     .command("list")
     .argument("[bundle]", "Bundle name to list")
+    .option("--source <spec>", SOURCE_HELP)
     .option("--json", "Print JSON only")
     .option("--platform <name>", PLATFORM_HELP)
     .option("--target <type>", "Install target: project or user")
-    .action(async (bundle: string | undefined, options: { json?: boolean; platform?: string; target?: string }) => {
-        await executeList({
-            bundle,
-            json: options.json,
-            platform: parsePlatform(options.platform),
-            target: parseTarget(options.target),
-        });
-    });
+    .action(
+        async (
+            bundle: string | undefined,
+            options: { source?: string; json?: boolean; platform?: string; target?: string },
+        ) => {
+            await executeList({
+                bundle,
+                source: options.source,
+                json: options.json,
+                platform: parsePlatform(options.platform),
+                target: parseTarget(options.target),
+            });
+        },
+    );
 
 program
     .command("delete")

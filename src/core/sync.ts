@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import type { Bundle, FileStatus, InstalledBundle, InstalledUnit, InstallTarget, Manifest } from "@/types/index.js";
+import type { Bundle, FileStatus, InstalledBundle, InstalledUnit, InstallTarget } from "@/types/index.js";
 
 import type { InstalledBlocks } from "./blocks.js";
 import { mergeBlockFile, parseInstalledBlocks } from "./blocks.js";
@@ -38,7 +38,8 @@ export type BlockSelections = Map<string, { selected: Set<string>; declined: Set
 
 export async function syncBundle(args: {
     target: InstallTarget;
-    manifest: Manifest;
+    /** Source string recorded in the lock. */
+    source: string;
     bundle: Bundle;
     installed?: InstalledBundle;
     lock: Lock;
@@ -68,12 +69,12 @@ export async function syncBundle(args: {
     const existingLock = args.lock.bundles[args.bundle.name];
     const lockBundle: LockBundle = existingLock
         ? {
-              source: args.manifest.repository,
+              source: args.source,
               declined: [...existingLock.declined],
               units: Object.assign(Object.create(null) as Record<string, LockUnit>, existingLock.units),
           }
         : {
-              source: args.manifest.repository,
+              source: args.source,
               declined: [],
               units: Object.create(null) as Record<string, LockUnit>,
           };

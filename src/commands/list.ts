@@ -3,8 +3,8 @@ import path from "node:path";
 
 import {
     assertBundleSources,
+    DEFAULT_SOURCE,
     downloadBundle,
-    fetchManifest,
     groupTemplateItems,
     loadInstalled,
     readDescription,
@@ -12,12 +12,15 @@ import {
     resolveBundle,
     validateUnitTargets,
 } from "@/core/index.js";
-import type { InstallTargetType, Platform } from "@/types/index.js";
+import type { InstalledBundle, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { filterBundlesByPlatform, resolveTarget } from "@/types/index.js";
 import { selectPlatform, selectTarget, spinner } from "@/ui/prompts.js";
 
+import { Sources } from "./sources.js";
+
 export interface ListOptions {
     bundle?: string;
+    source?: string;
     json?: boolean;
     platform?: Platform;
     target?: InstallTargetType;
@@ -29,10 +32,34 @@ export async function executeList(options: ListOptions): Promise<void> {
     const platform: Platform = options.platform ?? (await selectPlatform());
     const target = options.target ? resolveTarget(platform, options.target) : await selectTarget(platform);
     const installedState = await loadInstalled(target.rootDir);
+    const sources = new Sources(target);
+    try {
+        await list(options, platform, target, installedState, sources);
+    } finally {
+        await sources.close();
+    }
+}
+
+async function list(
+    options: ListOptions,
+    platform: Platform,
+    target: InstallTarget,
+    installedState: Awaited<ReturnType<typeof loadInstalled>>,
+    sources: Sources,
+): Promise<void> {
     const s = spinner();
+    const lock = installedState.lock;
+    const fromCli = options.source !== undefined;
+    const installedOf = (name: string): InstalledBundle | undefined =>
+        installedState.bundles.find((entry) => entry.bundleName === name);
     if (!options.json) s.start("Fetching manifest...");
-    const manifest = await fetchManifest();
+    const listing =
+        options.bundle && !fromCli && installedOf(options.bundle)
+            ? (await sources.openInstalled([installedOf(options.bundle)!], lock)).get(options.bundle)!
+            : await sources.open(options.source ?? DEFAULT_SOURCE, fromCli ? "cli" : "lock");
+    const installedSources = options.bundle ? new Map() : await sources.openInstalled(installedState.bundles, lock);
     if (!options.json) s.stop("Manifest fetched.");
+    const manifest = listing.manifest;
 
     if (!options.bundle) {
         const available = filterBundlesByPlatform(manifest, platform);
@@ -41,8 +68,9 @@ export async function executeList(options: ListOptions): Promise<void> {
             ...installedState.bundles.map((bundle) => bundle.bundleName),
         ]);
         const bundles = [...names].sort().map((name) => {
-            const bundle = manifest.bundles[name];
-            const installed = installedState.bundles.find((entry) => entry.bundleName === name);
+            const entry = installedSources.get(name) ?? listing;
+            const bundle = entry.manifest.bundles[name];
+            const installed = installedOf(name);
             const total = bundle ? groupTemplateItems(bundle.items).length : (installed?.units.length ?? 0);
             return {
                 name,
@@ -50,19 +78,23 @@ export async function executeList(options: ListOptions): Promise<void> {
                 version: bundle?.version ?? null,
                 installedVersion: installed?.version || null,
                 units: { installed: installed?.units.length ?? 0, total },
+                source: entry.spec,
             };
         });
         if (options.json) {
             process.stdout.write(`${JSON.stringify({ target: target.rootDir, bundles }, null, 2)}\n`);
         } else {
-            const lines = ["Name            Available   Installed   Units       Description"];
+            const sourceWidth = Math.max(8, ...bundles.map((bundle) => bundle.source.length + 2));
+            const lines = [
+                `Name            Available   Installed   Units       ${"Source".padEnd(sourceWidth)}Description`,
+            ];
             for (const bundle of bundles) {
                 lines.push(
                     `${bundle.name.padEnd(16)}${(bundle.version ?? "—").padEnd(12)}${(
                         bundle.installedVersion ?? "—"
-                    ).padEnd(12)}${`${bundle.units.installed}/${bundle.units.total}`.padEnd(12)}${
-                        bundle.description ?? ""
-                    }`,
+                    ).padEnd(12)}${`${bundle.units.installed}/${bundle.units.total}`.padEnd(12)}${bundle.source.padEnd(
+                        sourceWidth,
+                    )}${bundle.description ?? ""}`,
                 );
             }
             process.stdout.write(`${lines.join("\n")}\n`);
@@ -70,7 +102,7 @@ export async function executeList(options: ListOptions): Promise<void> {
         return;
     }
 
-    const installed = installedState.bundles.find((entry) => entry.bundleName === options.bundle);
+    const installed = installedOf(options.bundle);
     const manifestBundle = manifest.bundles[options.bundle];
     if (!manifestBundle) {
         if (!installed) resolveBundle(manifest, options.bundle);
@@ -83,6 +115,7 @@ export async function executeList(options: ListOptions): Promise<void> {
         }));
         const output = {
             bundle: options.bundle,
+            source: listing.spec,
             version: null,
             installedVersion: installed!.version || null,
             units: listed,
@@ -103,7 +136,7 @@ export async function executeList(options: ListOptions): Promise<void> {
     const units = groupTemplateItems(bundle.items);
     validateUnitTargets(target.rootDir, units);
     if (!options.json) s.start(`Downloading ${bundle.name}...`);
-    const tempDir = await downloadBundle(manifest.repository, bundle.name);
+    const tempDir = await downloadBundle(listing.source, bundle);
     try {
         await assertBundleSources(tempDir, bundle.name, units);
         if (!options.json) s.stop(`Downloaded ${bundle.name}.`);
@@ -174,6 +207,7 @@ export async function executeList(options: ListOptions): Promise<void> {
         }
         const output = {
             bundle: bundle.name,
+            source: listing.spec,
             version: bundle.version ?? null,
             installedVersion: installed?.version || null,
             units: listed,

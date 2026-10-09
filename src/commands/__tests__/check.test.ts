@@ -7,7 +7,8 @@ import { selectPlatform, selectTarget, showCheckReport, showInfo } from "@/ui/pr
 
 import { executeCheck } from "../check.js";
 
-vi.mock("@/core/index.js", () => ({
+vi.mock("@/core/index.js", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/core/index.js")>()),
     fetchManifest: vi.fn(),
     loadInstalled: vi.fn(),
     compareVersions: vi.fn(),

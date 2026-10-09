@@ -130,7 +130,7 @@ export function collectSkillLocations(
 // ── Marketplace Construction ─────────────────────────────────────────
 
 export function buildMarketplace(manifest: Manifest, excludedSkills: ReadonlySet<string> = new Set()): Marketplace {
-    const { owner, repo } = splitRepository(manifest.repository);
+    const { owner, repo } = splitRepository(manifest.repository ?? "");
     return {
         name: repo,
         owner: { name: owner, url: `https://github.com/${owner}` },

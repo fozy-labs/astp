@@ -261,7 +261,7 @@ describe("E2E: install", () => {
         mockIsInteractive.mockReturnValue(true);
         mockSelectBundles.mockResolvedValue([manifest.bundles.core!, pipeline]);
         mockSelectUnits.mockImplementation(async (_bundle, units) => units.map((unit) => unit.relativePath));
-        mockDownloadBundle.mockImplementation(async (_repository, bundleName) => {
+        mockDownloadBundle.mockImplementation(async (_source, { name: bundleName }) => {
             const dir = await setupTemplateDir(manifest, bundleName);
             templateDirs.push(dir);
             return dir;
