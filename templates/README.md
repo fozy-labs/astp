@@ -21,9 +21,12 @@ templates/
 │   └── skills/
 │       ├── markdown-craft/
 │       └── statechart-craft/
-└── design/                ← bundle: design (claude-code)
-    └── skills/
-        └── design-derivation/
+├── design/                ← bundle: design (claude-code)
+│   └── skills/
+│       └── design-derivation/
+└── agreement/             ← bundle: agreement (claude-code)
+    └── rules/
+        └── working-agreement.md
 ```
 
 Each bundle directory's internal structure mirrors the install target structure. For example, `fozy-labs/skills/fozy-labs-di/SKILL.md` installs to `<install-root>/skills/fozy-labs-di/SKILL.md`.
