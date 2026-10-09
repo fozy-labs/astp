@@ -9,7 +9,7 @@ export {
     requireTerminal,
     selectAction,
     selectBlocks,
-    selectBundles,
+    selectBundleItems,
     selectInstalledBundles,
     selectNewUnits,
     selectTarget,
@@ -25,4 +25,4 @@ export {
     warnLegacyModified,
     warnModified,
 } from "./prompts.js";
-export type { BlockOption } from "./prompts.js";
+export type { BlockOption, BundleEntry } from "./prompts.js";

@@ -10,7 +10,7 @@ import { resolveTarget } from "@/types/index.js";
 import {
     confirmInstall,
     isInteractive,
-    selectBundles,
+    selectBundleItems,
     selectNewUnits,
     selectUnits,
     warnForeign,
@@ -48,7 +48,8 @@ vi.mock("@/ui/prompts.js", () => ({
     requireTerminal: vi.fn(),
     selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
-    selectBundles: vi.fn(),
+    selectBundleItems: vi.fn(),
+    cancelNoBundles: vi.fn(),
     selectBlocks: vi.fn(),
     selectUnits: vi.fn(),
     selectNewUnits: vi.fn(),
@@ -74,7 +75,7 @@ const mockConfirmInstall = vi.mocked(confirmInstall);
 const mockWarnModified = vi.mocked(warnModified);
 const mockWarnForeign = vi.mocked(warnForeign);
 const mockIsInteractive = vi.mocked(isInteractive);
-const mockSelectBundles = vi.mocked(selectBundles);
+const mockSelectBundleItems = vi.mocked(selectBundleItems);
 const mockSelectUnits = vi.mocked(selectUnits);
 const mockSelectNewUnits = vi.mocked(selectNewUnits);
 
@@ -264,7 +265,13 @@ describe("E2E: install", () => {
 
     it("installs all bundles selected in the interactive wizard", async () => {
         mockIsInteractive.mockReturnValue(true);
-        mockSelectBundles.mockResolvedValue({ selected: ["core", "pipeline"] });
+        mockSelectBundleItems.mockImplementation(async (entries) =>
+            new Map(
+                entries
+                    .filter((entry) => ["core", "pipeline"].includes(entry.bundle.name))
+                    .map((entry) => [entry.bundle.name, entry.units.map((unit) => unit.relativePath)]),
+            ),
+        );
         mockSelectUnits.mockImplementation(async (_bundle, units) => units.map((unit) => unit.relativePath));
         mockDownloadBundle.mockImplementation(async (_source, { name: bundleName }) => {
             const dir = await setupTemplateDir(manifest, bundleName);

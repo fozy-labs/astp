@@ -1,6 +1,7 @@
 import { styleText } from "node:util";
 
-import { MultiSelectPrompt, wrapTextWithPrefix } from "@clack/core";
+import { Prompt, wrapTextWithPrefix } from "@clack/core";
+import type { PromptOptions } from "@clack/core";
 import * as p from "@clack/prompts";
 
 import { groupTemplateItems } from "@/core/index.js";
@@ -11,11 +12,10 @@ import type {
     InstalledBundle,
     InstallTarget,
     InstallTargetType,
-    Manifest,
     Platform,
     UpdateReport,
 } from "@/types/index.js";
-import { ALL_PLATFORMS, describeTarget, filterBundlesByPlatform, resolveTarget } from "@/types/index.js";
+import { ALL_PLATFORMS, describeTarget, resolveTarget } from "@/types/index.js";
 
 import { describeUnitCounts } from "./format.js";
 
@@ -97,39 +97,31 @@ export async function selectTarget(platform: Platform): Promise<InstallTarget> {
     return resolveTarget(platform, type as InstallTargetType);
 }
 
-interface BundleOption {
-    value: string;
-    label?: string;
-    hint?: string;
+export interface BundleEntry {
+    /** Resolved bundle (items from its lock source). */
+    bundle: Bundle;
+    /** `groupTemplateItems(bundle.items)`. */
+    units: TemplateUnit[];
+    /** Unit paths Space selects on an empty bundle: all minus the lock's declines. */
+    defaults: string[];
+    /** Initially selected with `defaults`. */
+    preselected: boolean;
 }
 
-/**
- * Bundle multiselect where → on an option submits with `customize` set to it.
- * Left/right are cursor aliases in core's MultiSelectPrompt, so right is
- * intercepted in `emit` before the cursor moves and finalizes the prompt.
- */
-export class BundleSelectPrompt extends MultiSelectPrompt<BundleOption> {
-    customize?: string;
-
-    emit(event: string, ...data: unknown[]): void {
-        if (event === "cursor" && data[0] === "right") {
-            const option = this.options[this.cursor];
-            if (option) {
-                this.customize = option.value;
-                if (!(this.value ?? []).includes(option.value)) this.value = [...(this.value ?? []), option.value];
-                this.state = "submit";
-            }
-            return;
-        }
-        (super.emit as (event: string, ...data: unknown[]) => void)(event, ...data);
-    }
+interface TreeRow {
+    entry: BundleEntry;
+    /** Present on item rows, absent on bundle rows. */
+    unit?: TemplateUnit;
 }
 
 type OptionRenderState = "active" | "selected" | "cancelled" | "active-selected" | "submitted" | "inactive";
 
-// Mirrors @clack/prompts 1.1.0 multiselect's render so the bundle screen
-// looks identical to the other prompts.
-function renderBundleOption(option: BundleOption, state: OptionRenderState): string {
+// Mirrors @clack/prompts 1.1.0 multiselect's option render so the tree rows
+// look identical to the other prompts.
+function renderBundleOption(
+    option: { value: string; label?: string; hint?: string },
+    state: OptionRenderState,
+): string {
     const label = option.label ?? String(option.value);
     const mapLines = (text: string, format: (line: string) => string) => text.split("\n").map(format).join("\n");
     const hint = option.hint ? ` ${styleText("dim", `(${option.hint})`)}` : "";
@@ -149,43 +141,147 @@ function renderBundleOption(option: BundleOption, state: OptionRenderState): str
     }
 }
 
-export interface BundlePick {
-    selected: string[];
-    customize?: string;
+/**
+ * Bundle + item selection on one screen: a collapsed tree of bundles whose
+ * item rows appear under → and hide under ←. Extends the base Prompt — the
+ * MultiSelect subclasses own the `cursor` event over a flat list, which
+ * fights hidden rows.
+ */
+export class BundleTreePrompt extends Prompt<Map<string, string[]>> {
+    /** Bundle names whose item rows are visible. */
+    readonly expanded = new Set<string>();
+    /** Bundle name → chosen unit paths (every entry is present, possibly empty). */
+    readonly chosen = new Map<string, Set<string>>();
+    cursor = 0;
+
+    readonly entries: BundleEntry[];
+
+    constructor(opts: PromptOptions<Map<string, string[]>, BundleTreePrompt> & { entries: BundleEntry[] }) {
+        super(opts, false);
+        this.entries = opts.entries;
+        for (const entry of this.entries) {
+            this.chosen.set(entry.bundle.name, new Set(entry.preselected ? entry.defaults : []));
+        }
+        this.refreshValue();
+        this.on("cursor", (key) => this.move(key));
+    }
+
+    /** Bundle rows plus the item rows of expanded bundles, in manifest order. */
+    get rows(): TreeRow[] {
+        const rows: TreeRow[] = [];
+        for (const entry of this.entries) {
+            rows.push({ entry });
+            if (this.expanded.has(entry.bundle.name)) {
+                for (const unit of entry.units) rows.push({ entry, unit });
+            }
+        }
+        return rows;
+    }
+
+    renderRow(row: TreeRow, active: boolean): string {
+        const set = this.chosen.get(row.entry.bundle.name)!;
+        if (row.unit) {
+            const option = {
+                value: row.unit.relativePath,
+                label: pathLabel(row.unit.relativePath),
+                hint: row.unit.relativePath,
+            };
+            const selected = set.has(row.unit.relativePath);
+            const state =
+                active && selected ? "active-selected" : selected ? "selected" : active ? "active" : "inactive";
+            return `  ${renderBundleOption(option, state)}`;
+        }
+        const { bundle } = row.entry;
+        const option = {
+            value: bundle.name,
+            label: `${bundle.name} — ${bundle.description} (${describeUnitCounts(
+                row.entry.units.map((unit) => ({ kind: unit.kind, path: unit.relativePath })),
+            )})`,
+            hint:
+                set.size > 0 && set.size < row.entry.units.length ? `${set.size}/${row.entry.units.length}` : undefined,
+        };
+        const selected = set.size > 0;
+        const state = active && selected ? "active-selected" : selected ? "selected" : active ? "active" : "inactive";
+        return renderBundleOption(option, state);
+    }
+
+    private refreshValue(): void {
+        const result = new Map<string, string[]>();
+        for (const entry of this.entries) {
+            const set = this.chosen.get(entry.bundle.name)!;
+            if (set.size > 0) {
+                result.set(
+                    entry.bundle.name,
+                    entry.units.filter((unit) => set.has(unit.relativePath)).map((unit) => unit.relativePath),
+                );
+            }
+        }
+        this.value = result;
+    }
+
+    private move(key?: string): void {
+        const rows = this.rows;
+        const row = rows[this.cursor];
+        switch (key) {
+            case "up":
+                this.cursor = (this.cursor - 1 + rows.length) % rows.length;
+                break;
+            case "down":
+                this.cursor = (this.cursor + 1) % rows.length;
+                break;
+            case "right":
+                if (row && !row.unit && row.entry.units.length > 0) this.expanded.add(row.entry.bundle.name);
+                break;
+            case "left":
+                if (!row) break;
+                if (row.unit) {
+                    this.expanded.delete(row.entry.bundle.name);
+                    this.cursor = this.rows.findIndex((r) => r.entry === row.entry && !r.unit);
+                } else {
+                    this.expanded.delete(row.entry.bundle.name);
+                }
+                break;
+            case "space":
+                if (!row) break;
+                if (row.unit) {
+                    const set = this.chosen.get(row.entry.bundle.name)!;
+                    if (set.has(row.unit.relativePath)) set.delete(row.unit.relativePath);
+                    else set.add(row.unit.relativePath);
+                } else {
+                    const set = this.chosen.get(row.entry.bundle.name)!;
+                    if (set.size === 0) {
+                        const paths =
+                            row.entry.defaults.length > 0
+                                ? row.entry.defaults
+                                : row.entry.units.map((unit) => unit.relativePath);
+                        for (const unitPath of paths) set.add(unitPath);
+                    } else {
+                        set.clear();
+                    }
+                }
+                break;
+        }
+        this.refreshValue();
+    }
 }
 
-export async function selectBundles(
-    manifest: Manifest,
-    platform: Platform,
-    state?: { selected: string[]; cursor?: string; notes?: Map<string, string> },
-): Promise<BundlePick> {
-    const available = filterBundlesByPlatform(manifest, platform);
-    if (available.length === 0) {
-        p.cancel(`No bundles available for platform '${platform}'.`);
+export function cancelNoBundles(platform: Platform): never {
+    p.cancel(`No bundles available for platform '${platform}'.`);
+    process.exit(0);
+}
+
+export async function selectBundleItems(entries: BundleEntry[]): Promise<Map<string, string[]>> {
+    if (entries.length === 0) {
+        p.cancel("No bundles available.");
         process.exit(0);
     }
 
-    const message = "Select bundles to install:\n(Space = toggle, → = customize, Enter = confirm)";
-    const options = available.map((bundle) => {
-        const units = groupTemplateItems(bundle.items);
-        const note = state?.notes?.get(bundle.name);
-        return {
-            value: bundle.name,
-            label: `${bundle.name} — ${bundle.description} (${describeUnitCounts(
-                units.map((unit) => ({ kind: unit.kind, path: unit.relativePath })),
-            )})${note ? ` ${note}` : ""}`,
-        };
-    });
+    const message = "Select bundles and items:\n(Space = toggle, → = expand, ← = collapse, Enter = confirm)";
 
-    const initialValues = state?.selected ?? available.filter((b) => b.default).map((b) => b.name);
-
-    const prompt = new BundleSelectPrompt({
-        options,
-        initialValues,
-        cursorAt: state?.cursor,
-        required: true,
+    const prompt = new BundleTreePrompt({
+        entries,
         validate: (value) => {
-            if (value === undefined || value.length === 0) {
+            if (!value || [...value.values()].every((paths) => paths.length === 0)) {
                 return `Please select at least one option.\n${styleText(
                     "reset",
                     styleText(
@@ -202,26 +298,28 @@ export async function selectBundles(
                 `${p.symbolBar(this.state)}  `,
                 `${p.symbol(this.state)}  `,
             )}\n`;
-            const value = this.value ?? [];
-            const styleOption = (option: BundleOption, active: boolean): string => {
-                const selected = value.includes(option.value);
-                if (active && selected) return renderBundleOption(option, "active-selected");
-                if (selected) return renderBundleOption(option, "selected");
-                return renderBundleOption(option, active ? "active" : "inactive");
-            };
+            const rows = this.rows;
+            const styleRow = (row: TreeRow, active: boolean): string => this.renderRow(row, active);
+            const chosenBundles = this.entries.filter((entry) => this.chosen.get(entry.bundle.name)!.size > 0);
             switch (this.state) {
                 case "submit": {
-                    const selectedOptions =
-                        this.options
-                            .filter((option) => value.includes(option.value))
-                            .map((option) => renderBundleOption(option, "submitted"))
+                    const submitted =
+                        chosenBundles
+                            .map((entry) => {
+                                const set = this.chosen.get(entry.bundle.name)!;
+                                const partial =
+                                    set.size < entry.units.length ? ` (${set.size}/${entry.units.length})` : "";
+                                return renderBundleOption(
+                                    { value: entry.bundle.name, label: `${entry.bundle.name}${partial}` },
+                                    "submitted",
+                                );
+                            })
                             .join(styleText("dim", ", ")) || styleText("dim", "none");
-                    return `${title}${wrapTextWithPrefix(undefined, selectedOptions, `${styleText("gray", p.S_BAR)}  `)}`;
+                    return `${title}${wrapTextWithPrefix(undefined, submitted, `${styleText("gray", p.S_BAR)}  `)}`;
                 }
                 case "cancel": {
-                    const cancelled = this.options
-                        .filter((option) => value.includes(option.value))
-                        .map((option) => renderBundleOption(option, "cancelled"))
+                    const cancelled = chosenBundles
+                        .map((entry) => renderBundleOption({ value: entry.bundle.name }, "cancelled"))
                         .join(styleText("dim", ", "));
                     if (cancelled.trim() === "") return `${title}${styleText("gray", p.S_BAR)}`;
                     return `${title}${wrapTextWithPrefix(undefined, cancelled, `${styleText("gray", p.S_BAR)}  `)}\n${styleText("gray", p.S_BAR)}`;
@@ -241,11 +339,11 @@ export async function selectBundles(
                     return `${title}${bar}${p
                         .limitOptions({
                             output: undefined,
-                            options: this.options,
+                            options: rows,
                             cursor: this.cursor,
                             columnPadding: bar.length,
                             rowPadding: titleLines + errorLines,
-                            style: styleOption,
+                            style: styleRow,
                         })
                         .join(`\n${bar}`)}\n${errorText}\n`;
                 }
@@ -255,11 +353,11 @@ export async function selectBundles(
                     return `${title}${bar}${p
                         .limitOptions({
                             output: undefined,
-                            options: this.options,
+                            options: rows,
                             cursor: this.cursor,
                             columnPadding: bar.length,
                             rowPadding: titleLines + 2,
-                            style: styleOption,
+                            style: styleRow,
                         })
                         .join(`\n${bar}`)}\n${styleText("cyan", p.S_BAR_END)}\n`;
                 }
@@ -274,7 +372,7 @@ export async function selectBundles(
         process.exit(0);
     }
 
-    return { selected: selected as string[], customize: prompt.customize };
+    return selected as Map<string, string[]>;
 }
 
 export async function confirmInstall(

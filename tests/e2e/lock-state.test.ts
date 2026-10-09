@@ -15,7 +15,7 @@ import {
     confirmDelete,
     confirmInstall,
     isInteractive,
-    selectBundles,
+    selectBundleItems,
     selectNewUnits,
     selectPlatform,
     selectTarget,
@@ -46,7 +46,8 @@ vi.mock("@/ui/prompts.js", () => ({
     confirmInstall: vi.fn(),
     isInteractive: vi.fn(),
     requireTerminal: vi.fn(),
-    selectBundles: vi.fn(),
+    selectBundleItems: vi.fn(),
+    cancelNoBundles: vi.fn(),
     selectInstalledBundles: vi.fn(),
     selectNewUnits: vi.fn(),
     selectPlatform: vi.fn(),
@@ -73,7 +74,7 @@ const mockResolveTarget = vi.mocked(resolveTarget);
 const mockConfirmInstall = vi.mocked(confirmInstall);
 const mockConfirmDelete = vi.mocked(confirmDelete);
 const mockIsInteractive = vi.mocked(isInteractive);
-const mockSelectBundles = vi.mocked(selectBundles);
+const mockSelectBundleItems = vi.mocked(selectBundleItems);
 const mockSelectUnits = vi.mocked(selectUnits);
 const mockSelectNewUnits = vi.mocked(selectNewUnits);
 
@@ -122,9 +123,9 @@ describe("lock-file command flows", () => {
         mockConfirmInstall.mockResolvedValue(true);
         mockConfirmDelete.mockResolvedValue(true);
         mockIsInteractive.mockReturnValue(false);
-        mockSelectBundles.mockImplementation(async (currentManifest) => ({
-            selected: Object.keys(currentManifest.bundles),
-        }));
+        mockSelectBundleItems.mockImplementation(async (entries) =>
+            new Map(entries.map((entry) => [entry.bundle.name, entry.units.map((unit) => unit.relativePath)])),
+        );
         mockSelectUnits.mockImplementation(async (_bundle, units) => units.map((unit) => unit.relativePath));
         mockSelectNewUnits.mockImplementation(async (_name, units) => units.map((unit) => unit.relativePath));
     });
