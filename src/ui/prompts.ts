@@ -25,7 +25,13 @@ export function isInteractive(): boolean {
     return Boolean(process.stdin.isTTY && process.stdout.isTTY);
 }
 
+/** Without a terminal a prompt never settles, so fail with what to pass instead. */
+export function requireTerminal(message: string): void {
+    if (!isInteractive()) throw new Error(message);
+}
+
 export async function selectAction(): Promise<"install" | "update" | "check" | "delete"> {
+    requireTerminal("astp needs a command without a terminal; run astp --help");
     const action = await p.select({
         message: "What would you like to do?",
         options: [
@@ -52,6 +58,7 @@ export async function selectPlatform(): Promise<Platform> {
     // With a single supported platform there is nothing to choose — skip the prompt.
     const [only] = ALL_PLATFORMS;
     if (ALL_PLATFORMS.length === 1 && only) return only;
+    requireTerminal(`--platform is required without a terminal (${ALL_PLATFORMS.join("|")})`);
 
     const platform = await p.select({
         message: "Which coding agent?",
@@ -67,6 +74,7 @@ export async function selectPlatform(): Promise<Platform> {
 }
 
 export async function selectTarget(platform: Platform): Promise<InstallTarget> {
+    requireTerminal("--target is required without a terminal (project|user)");
     const projectTarget = resolveTarget(platform, "project");
     const userTarget = resolveTarget(platform, "user");
 

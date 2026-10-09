@@ -21,6 +21,7 @@ import { describeUnitCounts } from "@/ui/format.js";
 import {
     confirmInstall,
     isInteractive,
+    requireTerminal,
     selectBundles,
     selectPlatform,
     selectTarget,
@@ -63,6 +64,7 @@ interface BundlePlan {
 export async function executeInstall(options: InstallOptions): Promise<void> {
     if (options.skills?.length && !options.bundle) throw new Error("--skill requires a bundle name");
     if (options.blocks?.length && !options.bundle) throw new Error("--block requires a bundle name");
+    if (!options.bundle) requireTerminal("install needs a bundle name without a terminal");
     const additive = Boolean(options.skills?.length || options.blocks?.length);
     const platform: Platform = options.platform ?? (await selectPlatform());
     const target: InstallTarget = options.target
