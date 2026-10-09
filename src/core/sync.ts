@@ -19,8 +19,16 @@ export interface SyncResult {
     removed: FileStatus[];
     skipped: FileStatus[];
     kept: FileStatus[];
-    /** Block keys kept because they changed locally while deselected or removed upstream. */
+    /** Units removed upstream but modified locally: left on disk, dropped from the lock. */
+    released: FileStatus[];
+    /** Unit paths already on disk with other content: left untouched, recorded as declined. */
+    foreign: FileStatus[];
+    /** Block keys kept because they changed locally while deselected. */
     keptBlocks: string[];
+    /** Block keys removed upstream but changed locally: text left in the file, dropped from the lock. */
+    releasedBlocks: string[];
+    /** Block keys whose region already exists with other content: left untouched, declined. */
+    foreignBlocks: string[];
     /** Block keys changed both locally and upstream — the new version was added as a FILL_INSTRUCTION. */
     conflictBlocks: string[];
 }
@@ -45,7 +53,11 @@ export async function syncBundle(args: {
         removed: [],
         skipped: [],
         kept: [],
+        released: [],
+        foreign: [],
         keptBlocks: [],
+        releasedBlocks: [],
+        foreignBlocks: [],
         conflictBlocks: [],
     };
     const rootDir = args.target.rootDir;
@@ -70,6 +82,11 @@ export async function syncBundle(args: {
 
     const remove = async (unit: InstalledUnit, declined: boolean): Promise<void> => {
         if ((unit.state === "modified" || unit.blocks?.dirty) && !args.force) {
+            if (!declined && unit.origin === "lock") {
+                delete lockBundle.units[unit.relativePath];
+                result.released.push(status(unit));
+                return;
+            }
             result.kept.push(status(unit));
             if (declined) {
                 args.declined.delete(unit.relativePath);
@@ -82,6 +99,11 @@ export async function syncBundle(args: {
         if (unit.origin === "legacy") removedLegacy.add(unit.relativePath);
         if (declined) args.declined.add(unit.relativePath);
         result.removed.push(status(unit));
+    };
+
+    const declineForeign = (unit: ReturnType<typeof groupTemplateItems>[number]): void => {
+        args.declined.add(unit.relativePath);
+        result.foreign.push({ targetPath: unit.relativePath, kind: unit.kind, state: "modified" });
     };
 
     for (const unit of args.installed?.units ?? []) {
@@ -136,7 +158,7 @@ export async function syncBundle(args: {
                     continue;
                 }
                 if (diskState === "modified" && !args.force) {
-                    result.skipped.push({ targetPath: unit.relativePath, kind: unit.kind, state: "modified" });
+                    declineForeign(unit);
                     continue;
                 }
             }
@@ -188,7 +210,7 @@ export async function syncBundle(args: {
                 continue;
             }
             if (diskState === "modified" && !args.force) {
-                result.skipped.push({ targetPath: unit.relativePath, kind: unit.kind, state: "modified" });
+                declineForeign(unit);
                 continue;
             }
         }
@@ -268,6 +290,7 @@ async function mergeUnitBlockFiles(
 
         const lockHasBlocks = Boolean(lockUnit?.blocks || lockUnit?.declinedBlocks);
         let installed: InstalledBlocks | null = null;
+        let occupied: Set<string> | undefined;
         if (lockHasBlocks) {
             let installedContent: string | null = null;
             try {
@@ -275,8 +298,17 @@ async function mergeUnitBlockFiles(
             } catch (error) {
                 if (!["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error;
             }
-            installed =
-                installedContent === null ? null : parseInstalledBlocks(installedContent, Object.keys(lockHashes));
+            if (installedContent !== null) {
+                // Template names outside the lock are parsed too, so an untracked region is
+                // adopted or declined instead of getting a duplicate inserted next to it.
+                const untracked = file.blocks.map((block) => block.name).filter((name) => !(name in lockHashes));
+                installed = parseInstalledBlocks(installedContent, [...Object.keys(lockHashes), ...untracked]);
+                if (!installed) {
+                    installed = parseInstalledBlocks(installedContent, Object.keys(lockHashes));
+                    const tagLines = new Set(installedContent.split(/\r?\n/).map((line) => line.trimEnd()));
+                    occupied = new Set(untracked.filter((name) => tagLines.has(`<${name}>`)));
+                }
+            }
         }
 
         const merged = mergeBlockFile({
@@ -285,12 +317,15 @@ async function mergeUnitBlockFiles(
             lockHashes,
             declined,
             selected,
+            occupied,
             force: args.force,
         });
         contents.set(target, merged.content);
         for (const [name, hash] of Object.entries(merged.blocks)) blocks[`${target}#${name}`] = hash;
         for (const name of merged.declinedBlocks) declinedBlocks.push(`${target}#${name}`);
         result.keptBlocks.push(...merged.kept.map((name) => `${target}#${name}`));
+        result.releasedBlocks.push(...merged.released.map((name) => `${target}#${name}`));
+        result.foreignBlocks.push(...merged.foreign.map((name) => `${target}#${name}`));
         result.conflictBlocks.push(...merged.conflicts.map((name) => `${target}#${name}`));
     }
 

@@ -34,19 +34,60 @@ function toSelections(entries: BlockEntry[], selectedKeys: Set<string>): BlockSe
 }
 
 /**
+ * Resolves `--block` values (a block name or a `file#name` key) to keys,
+ * grouped by unit path.
+ */
+export function resolveBlockKeys(
+    requested: string[],
+    units: Map<string, Map<string, UnitBlockFile>>,
+    bundleName: string,
+): Map<string, Set<string>> {
+    const entries = [...units].flatMap(([unitPath, blockFiles]) =>
+        unitBlockEntries(blockFiles).map((entry) => ({ ...entry, unitPath })),
+    );
+    const resolved = new Map<string, Set<string>>();
+    for (const value of requested) {
+        const matches = entries.filter((entry) => entry.key === value || entry.name === value);
+        if (matches.length === 0) {
+            const available = [
+                ...new Set(entries.filter((entry) => !entry.required).map((entry) => entry.name)),
+            ].sort();
+            const hint = available.length > 0 ? `Available: ${available.join(", ")}` : "The bundle has no blocks.";
+            throw new Error(`Unknown block '${value}' in bundle '${bundleName}'. ${hint}`);
+        }
+        if (matches.length > 1) {
+            throw new Error(
+                `Block '${value}' is ambiguous in bundle '${bundleName}'. Use the key: ${matches
+                    .map((entry) => entry.key)
+                    .sort()
+                    .join(", ")}`,
+            );
+        }
+        const match = matches[0]!;
+        resolved.set(match.unitPath, (resolved.get(match.unitPath) ?? new Set()).add(match.key));
+    }
+    return resolved;
+}
+
+/**
  * `install`: required blocks are always selected and never shown; the wizard
  * pre-checks lock selections plus new non-optional blocks (a unit without lock
  * blocks starts with all non-optional). Non-TTY installs all non-optional
- * blocks plus optional ones already in the lock.
+ * blocks plus optional ones already in the lock; with `additive` (--skill or
+ * --block) it keeps lock declines instead. `requested` keys are always selected.
  */
 export async function selectInstallBlocks(
     unitPath: string,
     blockFiles: Map<string, UnitBlockFile>,
     lockUnit: LockUnit | undefined,
+    options: { additive: boolean; requested?: Set<string> } = { additive: false },
 ): Promise<BlockSelections> {
     const entries = unitBlockEntries(blockFiles);
+    const requested = options.requested ?? new Set<string>();
     const selectable = entries.filter((entry) => !entry.required);
-    const selectedKeys = new Set(entries.filter((entry) => entry.required).map((entry) => entry.key));
+    const selectedKeys = new Set(
+        entries.filter((entry) => entry.required || requested.has(entry.key)).map((entry) => entry.key),
+    );
     const lockSelected = new Set(Object.keys(lockUnit?.blocks ?? {}));
     const lockDeclined = new Set(lockUnit?.declinedBlocks ?? []);
 
@@ -65,13 +106,15 @@ export async function selectInstallBlocks(
             for (const key of await selectBlocks(
                 unitPath,
                 selectable,
-                initial.filter((key) => templateKeys.has(key)),
+                [...new Set([...initial, ...requested])].filter((key) => templateKeys.has(key)),
             )) {
                 selectedKeys.add(key);
             }
         } else {
+            const keepDeclines = options.additive && Boolean(lockUnit?.blocks || lockUnit?.declinedBlocks);
             for (const entry of selectable) {
-                if (!entry.optional || lockSelected.has(entry.key)) selectedKeys.add(entry.key);
+                const declined = keepDeclines && lockDeclined.has(entry.key);
+                if ((!entry.optional && !declined) || lockSelected.has(entry.key)) selectedKeys.add(entry.key);
             }
         }
     }

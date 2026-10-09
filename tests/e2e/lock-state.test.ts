@@ -21,7 +21,11 @@ import {
     selectTarget,
     selectUnits,
     showCheckReport,
+    warnForeign,
+    warnKeptRemoved,
     warnLegacyModified,
+    warnModified,
+    warnReleased,
 } from "@/ui/prompts.js";
 
 import { cleanupDir, createTempProject, setupTemplateDir } from "./helpers.js";
@@ -55,6 +59,8 @@ vi.mock("@/ui/prompts.js", () => ({
     warnBlockConflicts: vi.fn(),
     warnKeptBlocks: vi.fn(),
     warnKeptRemoved: vi.fn(),
+    warnReleased: vi.fn(),
+    warnForeign: vi.fn(),
     warnLegacyModified: vi.fn(),
     warnModified: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
@@ -126,8 +132,8 @@ describe("lock-file command flows", () => {
         vi.clearAllMocks();
     });
 
-    const install = (bundle = "core", skills?: string[]) =>
-        executeInstall({ bundle, skills, platform: "claude-code", target: "project" });
+    const install = (bundle = "core", skills?: string[], force = false) =>
+        executeInstall({ bundle, skills, force, platform: "claude-code", target: "project" });
 
     it("installs full units byte-identically and records their hashes in astp.lock", async () => {
         const templateDir = await setupTemplateDir(manifest, "core");
@@ -246,14 +252,14 @@ describe("lock-file command flows", () => {
         expect(lock.bundles.core.declined).toContain("skills/beta");
     });
 
-    it("removes clean upstream removals and preserves modified removed units", async () => {
+    it("removes clean upstream removals and releases modified removed units", async () => {
         await install();
         await fs.appendFile(path.join(rootDir, "skills/beta/SKILL.md"), "local edit");
         manifest = createManifest("1.1.0", ["skills/gamma/SKILL.md"]);
         await executeUpdate({ platform: "claude-code", target: "project" });
         expect(await fs.readFile(path.join(rootDir, "skills/beta/SKILL.md"), "utf8")).toContain("local edit");
         const lock = JSON.parse(await fs.readFile(path.join(rootDir, "astp.lock"), "utf8"));
-        expect(lock.bundles.core.units["skills/beta"]).toBeDefined();
+        expect(lock.bundles.core.units["skills/beta"]).toBeUndefined();
         await expect(fs.access(path.join(rootDir, "skills/alpha"))).rejects.toMatchObject({ code: "ENOENT" });
         await expect(fs.access(path.join(rootDir, "agents/guide.md"))).rejects.toMatchObject({ code: "ENOENT" });
         await expect(fs.access(path.join(rootDir, "skills/gamma/SKILL.md"))).resolves.toBeUndefined();
@@ -592,5 +598,162 @@ describe("lock-file command flows", () => {
         await executeList({ json: true, platform: "claude-code", target: "project" });
         expect(JSON.parse(String(write.mock.calls[0]?.[0])).bundles).toHaveLength(1);
         write.mockRestore();
+    });
+
+    describe("lock ownership (issue #14)", () => {
+        const update = (force = false) => executeUpdate({ force, platform: "claude-code", target: "project" });
+        const readLock = async () => JSON.parse(await fs.readFile(path.join(rootDir, "astp.lock"), "utf8"));
+        const checkUpdates = async () => {
+            vi.mocked(showCheckReport).mockClear();
+            await executeCheck({ platform: "claude-code", target: "project" });
+            return vi.mocked(showCheckReport).mock.calls[0]![0].updates;
+        };
+        const clearWarnings = () =>
+            [warnModified, warnKeptRemoved, warnReleased, warnForeign].forEach((fn) => vi.mocked(fn).mockClear());
+        const expectNoWarnings = () => {
+            for (const fn of [warnModified, warnKeptRemoved, warnReleased, warnForeign]) {
+                expect(vi.mocked(fn)).not.toHaveBeenCalled();
+            }
+        };
+        const betaFile = () => path.join(rootDir, "skills/beta/SKILL.md");
+
+        it("install --skill adds units one by one and keeps the rest declined", async () => {
+            await install("core", ["alpha"]);
+            let lock = await readLock();
+            expect(Object.keys(lock.bundles.core.units)).toEqual(["skills/alpha"]);
+            expect(lock.bundles.core.declined).toEqual(["agents/guide.md", "skills/beta"]);
+
+            await install("core", ["beta"]);
+            lock = await readLock();
+            expect(Object.keys(lock.bundles.core.units)).toEqual(["skills/alpha", "skills/beta"]);
+            expect(lock.bundles.core.declined).toEqual(["agents/guide.md"]);
+        });
+
+        it("non-TTY update installs a new upstream unit into a partial selection", async () => {
+            await install("core", ["alpha"]);
+            manifest = createManifest("1.1.0", [
+                "skills/alpha/SKILL.md",
+                "skills/beta/SKILL.md",
+                "skills/delta/SKILL.md",
+                "agents/guide.md",
+            ]);
+            await update();
+            const lock = await readLock();
+            expect(Object.keys(lock.bundles.core.units)).toEqual(["skills/alpha", "skills/delta"]);
+            expect(lock.bundles.core.declined).toEqual(["agents/guide.md", "skills/beta"]);
+        });
+
+        it("releases a modified unit removed upstream: files kept, entry dropped, warned once", async () => {
+            await install();
+            await fs.appendFile(betaFile(), "local edit");
+            manifest = createManifest("1.1.0", ["skills/alpha/SKILL.md", "agents/guide.md"]);
+            clearWarnings();
+            await update();
+
+            expect(await fs.readFile(betaFile(), "utf8")).toContain("local edit");
+            const lock = await readLock();
+            expect(lock.bundles.core.units["skills/beta"]).toBeUndefined();
+            expect(lock.bundles.core.declined).not.toContain("skills/beta");
+            expect(vi.mocked(warnReleased)).toHaveBeenCalledWith(
+                [expect.objectContaining({ targetPath: "skills/beta", kind: "skill" })],
+                [],
+            );
+            expect(vi.mocked(warnKeptRemoved)).not.toHaveBeenCalled();
+            expect(await checkUpdates()).toEqual([]);
+
+            clearWarnings();
+            await update();
+            expectNoWarnings();
+            expect(await fs.readFile(betaFile(), "utf8")).toContain("local edit");
+        });
+
+        it("removes a modified unit removed upstream with --force", async () => {
+            await install();
+            await fs.appendFile(betaFile(), "local edit");
+            manifest = createManifest("1.1.0", ["skills/alpha/SKILL.md", "agents/guide.md"]);
+            await update(true);
+            await expect(fs.access(path.join(rootDir, "skills/beta"))).rejects.toMatchObject({ code: "ENOENT" });
+            expect((await readLock()).bundles.core.units["skills/beta"]).toBeUndefined();
+        });
+
+        it("declines a released unit that upstream brings back, without touching its files", async () => {
+            await install();
+            await fs.appendFile(betaFile(), "local edit");
+            manifest = createManifest("1.1.0", ["skills/alpha/SKILL.md", "agents/guide.md"]);
+            await update();
+            const edited = await fs.readFile(betaFile(), "utf8");
+
+            manifest = createManifest("1.2.0");
+            clearWarnings();
+            await update();
+            expect(await fs.readFile(betaFile(), "utf8")).toBe(edited);
+            const lock = await readLock();
+            expect(lock.bundles.core.units["skills/beta"]).toBeUndefined();
+            expect(lock.bundles.core.declined).toEqual(["skills/beta"]);
+            expect(vi.mocked(warnForeign)).toHaveBeenCalledWith(
+                "core",
+                [expect.objectContaining({ targetPath: "skills/beta" })],
+                [],
+            );
+            expect(vi.mocked(warnModified)).not.toHaveBeenCalled();
+            expect(await checkUpdates()).toEqual([]);
+
+            clearWarnings();
+            await update();
+            expectNoWarnings();
+
+            await install("core", ["beta"]);
+            expect(await fs.readFile(betaFile(), "utf8")).toBe(edited);
+            await install("core", ["beta"], true);
+            expect(await fs.readFile(betaFile(), "utf8")).not.toContain("local edit");
+            expect((await readLock()).bundles.core.units["skills/beta"]).toBeDefined();
+        });
+
+        it("declines a foreign path at a new manifest unit instead of reporting it as new", async () => {
+            await install();
+            const foreign = path.join(rootDir, "skills/delta/SKILL.md");
+            await fs.mkdir(path.dirname(foreign), { recursive: true });
+            await fs.writeFile(foreign, "my own skill");
+            manifest = createManifest("1.1.0", [
+                "skills/alpha/SKILL.md",
+                "skills/beta/SKILL.md",
+                "skills/delta/SKILL.md",
+                "agents/guide.md",
+            ]);
+            await update();
+            expect(await fs.readFile(foreign, "utf8")).toBe("my own skill");
+            expect((await readLock()).bundles.core.declined).toEqual(["skills/delta"]);
+            expect(await checkUpdates()).toEqual([]);
+        });
+
+        it("rejects an unknown --skill and lists the units", async () => {
+            await expect(install("core", ["nope"])).rejects.toThrow(
+                "Unknown unit 'nope' in bundle 'core'. Available: alpha, beta, guide.md",
+            );
+        });
+
+        it("rejects --block without a bundle and in a bundle without blocks", async () => {
+            const options = { platform: "claude-code" as const, target: "project" as const };
+            await expect(executeInstall({ ...options, blocks: ["x"] })).rejects.toThrow(
+                "--block requires a bundle name",
+            );
+            await expect(executeInstall({ ...options, bundle: "core", blocks: ["x"] })).rejects.toThrow(
+                "Unknown block 'x' in bundle 'core'. The bundle has no blocks.",
+            );
+        });
+
+        it("keeps a modified unit unchecked in the wizard installed and hints at --force", async () => {
+            await install();
+            await fs.appendFile(betaFile(), "local edit");
+            mockIsInteractive.mockReturnValue(true);
+            mockSelectUnits.mockResolvedValue(["skills/alpha", "agents/guide.md"]);
+            await install();
+            const lock = await readLock();
+            expect(lock.bundles.core.units["skills/beta"]).toBeDefined();
+            expect(lock.bundles.core.declined).not.toContain("skills/beta");
+            expect(vi.mocked(warnKeptRemoved)).toHaveBeenCalledWith([
+                expect.objectContaining({ targetPath: "skills/beta" }),
+            ]);
+        });
     });
 });

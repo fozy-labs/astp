@@ -54,17 +54,19 @@ program
     .command("install")
     .argument("[bundle]", "Bundle name to install")
     .option("--skill <name>", "Install one unit by name or path", collect, [])
+    .option("--block <name>", "Install one block by name or key (file#name)", collect, [])
     .option("--force", "Overwrite locally modified or unmanaged files")
     .option("--platform <name>", PLATFORM_HELP)
     .option("--target <type>", "Install target: project or user")
     .action(
         async (
             bundle: string | undefined,
-            options: { skill: string[]; force?: boolean; platform?: string; target?: string },
+            options: { skill: string[]; block: string[]; force?: boolean; platform?: string; target?: string },
         ) => {
             await executeInstall({
                 bundle,
                 skills: options.skill,
+                blocks: options.block,
                 force: options.force,
                 platform: parsePlatform(options.platform),
                 target: parseTarget(options.target),

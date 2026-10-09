@@ -425,16 +425,17 @@ describe("mergeBlockFile", () => {
         expect(Object.keys(result.blocks)).toEqual(["project_map"]);
 
         const filled = installed.content.replace("Ready-made text.", "Our own style.");
-        const kept = merge({
+        const released = merge({
             templateContent: smaller,
             installed: filled,
             lockHashes: installed.blocks,
             declined: installed.declinedBlocks,
             selected: ["project_map"],
         });
-        expect(kept.kept).toEqual(["code_style"]);
-        expect(kept.content).toContain("Our own style.");
-        expect(kept.blocks["code_style"]).toBe(installed.blocks["code_style"]);
+        expect(released.released).toEqual(["code_style"]);
+        expect(released.kept).toEqual([]);
+        expect(released.content).toContain("Our own style.");
+        expect(released.blocks).not.toHaveProperty("code_style");
     });
 
     it("never touches text outside blocks", () => {

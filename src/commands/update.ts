@@ -27,10 +27,12 @@ import {
     showUpdateReport,
     spinner,
     warnBlockConflicts,
+    warnForeign,
     warnKeptBlocks,
     warnKeptRemoved,
     warnLegacyModified,
     warnModified,
+    warnReleased,
 } from "@/ui/prompts.js";
 
 import { selectUpdateBlocks } from "./blocks.js";
@@ -150,14 +152,20 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             await writeLock(target.rootDir, installedState.lock);
             totals.installed.push(...result.installed);
             totals.removed.push(...result.removed);
-            totals.skipped.push(...result.skipped);
-            totals.kept.push(...result.kept);
+            totals.skipped.push(...result.skipped, ...result.foreign);
+            totals.kept.push(...result.kept, ...result.released);
             const legacy = result.skipped.filter((status) => status.state === "legacy");
             const modified = result.skipped.filter((status) => status.state !== "legacy");
             if (modified.length > 0) warnModified(modified);
             if (legacy.length > 0) warnLegacyModified(legacy);
             if (result.kept.length > 0) warnKeptRemoved(result.kept);
             if (result.keptBlocks.length > 0) warnKeptBlocks(result.keptBlocks);
+            if (result.released.length > 0 || result.releasedBlocks.length > 0) {
+                warnReleased(result.released, result.releasedBlocks);
+            }
+            if (result.foreign.length > 0 || result.foreignBlocks.length > 0) {
+                warnForeign(bundleName, result.foreign, result.foreignBlocks);
+            }
             if (result.conflictBlocks.length > 0) warnBlockConflicts(result.conflictBlocks);
             s.stop(`Updated ${bundleName}.`);
         } finally {

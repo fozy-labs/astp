@@ -13,6 +13,7 @@ import {
     selectBundles,
     selectNewUnits,
     selectUnits,
+    warnForeign,
     warnKeptRemoved,
     warnLegacyModified,
     warnModified,
@@ -60,6 +61,8 @@ vi.mock("@/ui/prompts.js", () => ({
     warnBlockConflicts: vi.fn(),
     warnKeptBlocks: vi.fn(),
     warnKeptRemoved: vi.fn(),
+    warnReleased: vi.fn(),
+    warnForeign: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
 
@@ -68,6 +71,7 @@ const mockDownloadBundle = vi.mocked(downloadBundle);
 const mockResolveTarget = vi.mocked(resolveTarget);
 const mockConfirmInstall = vi.mocked(confirmInstall);
 const mockWarnModified = vi.mocked(warnModified);
+const mockWarnForeign = vi.mocked(warnForeign);
 const mockIsInteractive = vi.mocked(isInteractive);
 const mockSelectBundles = vi.mocked(selectBundles);
 const mockSelectUnits = vi.mocked(selectUnits);
@@ -193,8 +197,10 @@ describe("E2E: install", () => {
         await installBundle("core");
 
         expect(await fs.readFile(userFile, "utf8")).toBe("unmanaged");
-        expect(mockWarnModified).toHaveBeenCalledWith(
+        expect(mockWarnForeign).toHaveBeenCalledWith(
+            "core",
             expect.arrayContaining([expect.objectContaining({ targetPath: "skills/orchestrate", kind: "skill" })]),
+            [],
         );
 
         await installBundle("core", true);
@@ -228,8 +234,10 @@ describe("E2E: install", () => {
         await installBundle("core");
 
         expect(await fs.readFile(skillPath, "utf8")).toBe("unmanaged file");
-        expect(mockWarnModified).toHaveBeenCalledWith(
+        expect(mockWarnForeign).toHaveBeenCalledWith(
+            "core",
             expect.arrayContaining([expect.objectContaining({ targetPath: "skills/orchestrate", kind: "skill" })]),
+            [],
         );
 
         await installBundle("core", true);

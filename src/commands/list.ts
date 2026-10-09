@@ -8,6 +8,7 @@ import {
     groupTemplateItems,
     loadInstalled,
     readDescription,
+    readUnitBlockFiles,
     resolveBundle,
     validateUnitTargets,
 } from "@/core/index.js";
@@ -131,12 +132,32 @@ export async function executeList(options: ListOptions): Promise<void> {
                       : declined.has(unit.relativePath)
                         ? "declined"
                         : "new";
+                const lockUnit = installedState.lock.bundles[bundle.name]?.units[unit.relativePath];
+                const blocks = [...(await readUnitBlockFiles(tempDir, unit))].flatMap(([fileTarget, file]) =>
+                    file.blocks.map((block) => {
+                        const key = `${fileTarget}#${block.name}`;
+                        const blockStatus =
+                            lockUnit?.blocks && key in lockUnit.blocks
+                                ? "selected"
+                                : lockUnit?.declinedBlocks?.includes(key)
+                                  ? "declined"
+                                  : "new";
+                        return {
+                            name: block.name,
+                            key,
+                            status: blockStatus,
+                            optional: block.optional,
+                            required: block.required,
+                        };
+                    }),
+                );
                 return {
                     name: path.posix.basename(unit.relativePath),
                     path: unit.relativePath,
                     kind: unit.kind,
                     status,
                     description,
+                    ...(blocks.length > 0 ? { blocks } : {}),
                 };
             }),
         );

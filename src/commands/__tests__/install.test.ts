@@ -138,6 +138,10 @@ beforeEach(async () => {
         skipped: [],
         kept: [],
         keptBlocks: [],
+        released: [],
+        foreign: [],
+        releasedBlocks: [],
+        foreignBlocks: [],
         conflictBlocks: [],
     });
     mockWriteLock.mockResolvedValue(undefined);
