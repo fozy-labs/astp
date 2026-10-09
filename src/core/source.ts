@@ -85,7 +85,8 @@ export async function resolveSource(spec: string, baseDir: string): Promise<Mani
 export function formatSource(source: ManifestSource, target: InstallTarget): string {
     if (source.kind !== "local" || target.type === "user") return source.spec;
     const fromProject = path.relative(path.dirname(target.rootDir), source.spec);
-    if (fromProject.startsWith("..") || path.isAbsolute(fromProject)) return source.spec;
+    if (fromProject === ".." || fromProject.startsWith(`..${path.sep}`) || path.isAbsolute(fromProject))
+        return source.spec;
     const relative = path.relative(target.rootDir, source.spec).split(path.sep).join("/");
     return relative.startsWith("../") || relative === ".." ? relative : `./${relative}`;
 }

@@ -123,6 +123,18 @@ describe("fetcher", () => {
         expect(await fs.readFile(path.join(dir, "rules/a.md"), "utf8")).toBe("file /m/docs/rules/a.md");
     });
 
+    it("fetches a URL item whose name has URL syntax characters", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (url: URL) => new Response(`file ${url.pathname}`)),
+        );
+        const source = await resolveSource("https://host/m/manifest.json", work);
+        const odd = { ...bundle, items: [{ ...bundle.items[0]!, target: "rules/a#1?%.md" }] };
+        const dir = await downloadBundle(source, odd);
+        tempDirs.push(dir);
+        expect(await fs.readFile(path.join(dir, "rules/a#1?%.md"), "utf8")).toBe("file /m/docs/rules/a%231%3F%25.md");
+    });
+
     it("rejects a URL item outside the manifest directory", async () => {
         vi.stubGlobal(
             "fetch",

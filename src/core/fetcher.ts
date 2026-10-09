@@ -45,7 +45,7 @@ export async function downloadBundle(source: ManifestSource, bundle: Bundle): Pr
         if (source.kind === "url") {
             const root = new URL(".", source.manifestUrl);
             for (const item of bundle.items) {
-                const url = new URL(`${bundle.name}/${item.target}`, root);
+                const url = new URL([bundle.name, ...item.target.split("/")].map(encodeURIComponent).join("/"), root);
                 if (!url.href.startsWith(root.href)) {
                     throw new Error(`item '${item.target}' resolves outside the manifest directory`);
                 }

@@ -57,7 +57,8 @@ async function list(
         options.bundle && !fromCli && installedOf(options.bundle)
             ? (await sources.openInstalled([installedOf(options.bundle)!], lock)).get(options.bundle)!
             : await sources.open(options.source ?? DEFAULT_SOURCE, fromCli ? "cli" : "lock");
-    const installedSources = options.bundle ? new Map() : await sources.openInstalled(installedState.bundles, lock);
+    const installedSources =
+        options.bundle || fromCli ? new Map() : await sources.openInstalled(installedState.bundles, lock);
     if (!options.json) s.stop("Manifest fetched.");
     const manifest = listing.manifest;
 

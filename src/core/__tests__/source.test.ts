@@ -136,6 +136,11 @@ describe("formatSource", () => {
         expect(formatSource(source, project)).toBe(path.resolve("/elsewhere/src"));
     });
 
+    it("stores a project dir whose name starts with '..' relative to the lock", async () => {
+        const source = await resolveSource("./..assets", cwd);
+        expect(formatSource(source, project)).toBe("../..assets");
+    });
+
     it("stores remote specs as resolved", async () => {
         expect(formatSource(await resolveSource("o/r#v1", cwd), project)).toBe("gh:o/r#v1");
     });

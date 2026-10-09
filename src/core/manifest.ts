@@ -46,7 +46,7 @@ function validateBundle(key: string, data: unknown): void {
 
     const bundle = data as Record<string, unknown>;
 
-    if (!("name" in bundle) || typeof bundle.name !== "string") {
+    if (typeof bundle.name !== "string" || !/^[\w.-]+$/.test(bundle.name) || /^\.+$/.test(bundle.name)) {
         throw new Error(`Invalid bundle '${key}': missing or invalid name`);
     }
 

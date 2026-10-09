@@ -36,6 +36,14 @@ const validManifestData = {
 };
 
 describe("validateManifest", () => {
+    it("rejects a bundle name that is not one path segment", () => {
+        for (const name of ["../core", "a/b", ".."]) {
+            const data = structuredClone(validManifestData);
+            data.bundles.core.name = name;
+            expect(() => validateManifest(data)).toThrow("invalid name");
+        }
+    });
+
     // T12: Valid manifest
     it("T12: parses valid manifest correctly", () => {
         const result = validateManifest(validManifestData);

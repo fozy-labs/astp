@@ -5,6 +5,7 @@ import { vi } from "vitest";
 
 import { executeCheck } from "@/commands/check.js";
 import { executeInstall } from "@/commands/install.js";
+import { executeList } from "@/commands/list.js";
 import { executeUpdate } from "@/commands/update.js";
 import type { Bundle, Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
@@ -122,6 +123,22 @@ describe("E2E: manifest sources", () => {
         expect(await rule("core")).toContain("core 5.0.0");
         expect((await readLockFixture(rootDir)).bundles.core!.source).toBe("../tests/test.manifest.json");
         expect(vi.mocked(showInfo)).toHaveBeenCalledWith("core source: ../a → ../tests/test.manifest.json");
+    });
+
+    it("lists every bundle from an explicit --source, ignoring lock sources", async () => {
+        await executeInstall({ ...opts, bundle: "core", source: "./a" });
+        await fs.rm(path.join(projectDir, "a"), { recursive: true });
+        const write = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        await executeList({ ...opts, source: "./tests/test.manifest.json", json: true });
+        const { bundles } = JSON.parse(String(write.mock.calls[0]![0])) as {
+            bundles: { name: string; version: string; installedVersion: string | null; source: string }[];
+        };
+        const core = bundles.find((bundle) => bundle.name === "core")!;
+        expect([core.version, core.installedVersion, core.source]).toEqual([
+            "5.0.0",
+            "1.0.0",
+            "../tests/test.manifest.json",
+        ]);
     });
 
     it("names the bundle and a fix when its lock source is gone", async () => {
