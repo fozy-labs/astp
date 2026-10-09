@@ -6,6 +6,7 @@ import { vi } from "vitest";
 import { executeCheck } from "@/commands/check.js";
 import { executeDelete } from "@/commands/delete.js";
 import { executeInstall } from "@/commands/install.js";
+import { executeList } from "@/commands/list.js";
 import { executeUpdate } from "@/commands/update.js";
 import { downloadBundle, fetchManifest } from "@/core/index.js";
 import type { Manifest } from "@/types/index.js";
@@ -15,12 +16,13 @@ import {
     selectBlocks,
     selectUnits,
     showCheckReport,
+    warnForeign,
     warnKeptBlocks,
     warnKeptRemoved,
+    warnReleased,
 } from "@/ui/prompts.js";
 
-import { cleanupDir, createTempProject, makeProjectTarget, readLockFixture } from "./helpers.js";
-import { setupTemplateDir } from "./helpers.js";
+import { cleanupDir, createTempProject, makeProjectTarget, readLockFixture, setupTemplateDir } from "./helpers.js";
 
 vi.mock("@/core/index.js", async (importOriginal) => {
     const actual = await importOriginal<typeof import("@/core/index.js")>();
@@ -54,6 +56,8 @@ vi.mock("@/ui/prompts.js", () => ({
     warnModified: vi.fn(),
     warnLegacyModified: vi.fn(),
     warnKeptRemoved: vi.fn(),
+    warnReleased: vi.fn(),
+    warnForeign: vi.fn(),
     warnKeptBlocks: vi.fn(),
     warnBlockConflicts: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
@@ -411,18 +415,25 @@ describe("E2E: blocks", () => {
         await expect(fs.access(filePath())).rejects.toThrow();
     });
 
-    it("a unit leaving the bundle keeps a filled file on update; --force removes it", async () => {
+    it("a unit leaving the bundle releases a filled file on update; --force removes it", async () => {
         await install();
         await fillFile();
 
         manifest = createBlocksManifest("1.1.0");
         manifest.bundles.blocks.items = [];
-        await update();
-        expect(await fs.readFile(filePath(), "utf8")).toContain("Filled by the agent.");
-        expect(mockWarnKeptRemoved).toHaveBeenCalled();
-
         await update(true);
         await expect(fs.access(filePath())).rejects.toThrow();
+
+        manifest = createBlocksManifest("1.0.0");
+        await install();
+        await fillFile();
+        manifest = createBlocksManifest("1.1.0");
+        manifest.bundles.blocks.items = [];
+        await update();
+        expect(await fs.readFile(filePath(), "utf8")).toContain("Filled by the agent.");
+        expect(vi.mocked(warnReleased)).toHaveBeenCalledWith([expect.objectContaining({ targetPath: RULES_FILE })], []);
+        expect(mockWarnKeptRemoved).not.toHaveBeenCalled();
+        await expect(fs.access(path.join(rootDir(), "astp.lock"))).rejects.toThrow();
     });
 
     it("a unit leaving the bundle still removes a clean block file", async () => {
@@ -533,5 +544,199 @@ describe("E2E: blocks", () => {
         await expect(fs.access(filePath())).rejects.toThrow();
         const lockPath = path.join(rootDir(), "astp.lock");
         await expect(fs.access(lockPath)).rejects.toThrow();
+    });
+
+    describe("lock ownership and block selection (issue #14)", () => {
+        const OTHER_FILE = "rules/other.md";
+        const PLAIN_FILE = "agents/plain.md";
+        const OTHER_TPL = `${FM}\n<astp-block name="extra">\nOther extra.\n</astp-block>\n`;
+
+        function createMixedManifest(version: string): Manifest {
+            const mixed = createBlocksManifest(version);
+            mixed.bundles.blocks.items.push(
+                { source: `blocks/${OTHER_FILE}`, target: OTHER_FILE, category: "rule" },
+                { source: `blocks/${PLAIN_FILE}`, target: PLAIN_FILE, category: "agent" },
+            );
+            return mixed;
+        }
+
+        const installWith = (args: { skills?: string[]; blocks?: string[]; force?: boolean }) =>
+            executeInstall({ bundle: "blocks", ...args, platform: "claude-code", target: "project" });
+        const lockUnit = async (target = RULES_FILE) => (await readLockFixture(rootDir())).bundles.blocks.units[target];
+        const checkUpdates = async () => {
+            mockShowCheckReport.mockClear();
+            await executeCheck({ platform: "claude-code", target: "project" });
+            return mockShowCheckReport.mock.calls[0]![0].updates;
+        };
+        const clearWarnings = () =>
+            [mockWarnKeptBlocks, mockWarnKeptRemoved, vi.mocked(warnReleased), vi.mocked(warnForeign)].forEach((fn) =>
+                fn.mockClear(),
+            );
+        const expectNoWarnings = () => {
+            for (const fn of [mockWarnKeptBlocks, mockWarnKeptRemoved, warnReleased, warnForeign]) {
+                expect(vi.mocked(fn)).not.toHaveBeenCalled();
+            }
+        };
+        const tagCount = (content: string, name: string) =>
+            content.split("\n").filter((line) => line === `<${name}>`).length;
+        const withoutExtra = () => tplV1().replace(/<astp-block name="extra">[\s\S]*?<\/astp-block>\n\n/, "");
+
+        async function releaseEditedExtra(): Promise<void> {
+            await install();
+            const content = await fs.readFile(filePath(), "utf8");
+            await fs.writeFile(filePath(), content.replace("Extra ready-made text.", "My own extra."));
+            manifest = createBlocksManifest("1.1.0");
+            contents[RULES_FILE] = withoutExtra();
+            clearWarnings();
+            await update();
+        }
+
+        it("releases a modified block removed upstream: text kept, key dropped, warned once", async () => {
+            await releaseEditedExtra();
+
+            const content = await fs.readFile(filePath(), "utf8");
+            expect(content).toContain("My own extra.");
+            expect(tagCount(content, "extra")).toBe(1);
+            const unit = await lockUnit();
+            expect(unit!.blocks).not.toHaveProperty(`${RULES_FILE}#extra`);
+            expect(unit!.declinedBlocks).not.toContain(`${RULES_FILE}#extra`);
+            expect(vi.mocked(warnReleased)).toHaveBeenCalledWith([], [`${RULES_FILE}#extra`]);
+            expect(mockWarnKeptBlocks).not.toHaveBeenCalled();
+            expect(await checkUpdates()).toEqual([]);
+
+            clearWarnings();
+            await update();
+            expectNoWarnings();
+
+            // The released text is outside text now: delete keeps the file without --force.
+            await executeDelete({ bundle: "blocks", platform: "claude-code", target: "project" });
+            expect(await fs.readFile(filePath(), "utf8")).toContain("My own extra.");
+        });
+
+        it("declines a re-added block whose untracked text differs, keeping one region", async () => {
+            await releaseEditedExtra();
+            manifest = createBlocksManifest("1.2.0");
+            contents[RULES_FILE] = tplV1().replace("Extra ready-made text.", "Extra v2 text.");
+            clearWarnings();
+            await update();
+
+            const content = await fs.readFile(filePath(), "utf8");
+            expect(tagCount(content, "extra")).toBe(1);
+            expect(content).toContain("My own extra.");
+            expect(content).not.toContain("Extra v2 text.");
+            const unit = await lockUnit();
+            expect(unit!.blocks).not.toHaveProperty(`${RULES_FILE}#extra`);
+            expect(unit!.declinedBlocks).toContain(`${RULES_FILE}#extra`);
+            expect(vi.mocked(warnForeign)).toHaveBeenCalledWith("blocks", [], [`${RULES_FILE}#extra`]);
+            expect(await checkUpdates()).toEqual([]);
+
+            clearWarnings();
+            await update();
+            expectNoWarnings();
+
+            await installWith({ blocks: ["extra"], force: true });
+            const forced = await fs.readFile(filePath(), "utf8");
+            expect(tagCount(forced, "extra")).toBe(1);
+            expect(forced).toContain("Extra v2 text.");
+            expect((await lockUnit())!.blocks).toHaveProperty(`${RULES_FILE}#extra`);
+        });
+
+        it("adopts a re-added block whose untracked text equals the template", async () => {
+            await releaseEditedExtra();
+            manifest = createBlocksManifest("1.2.0");
+            contents[RULES_FILE] = tplV1().replace("Extra ready-made text.", "My own extra.");
+            clearWarnings();
+            await update();
+
+            const content = await fs.readFile(filePath(), "utf8");
+            expect(tagCount(content, "extra")).toBe(1);
+            const unit = await lockUnit();
+            expect(unit!.blocks).toHaveProperty(`${RULES_FILE}#extra`);
+            expect(unit!.declinedBlocks).not.toContain(`${RULES_FILE}#extra`);
+            expectNoWarnings();
+            expect(await checkUpdates()).toEqual([]);
+        });
+
+        it("install --block adds a block and installs its unit without touching other units", async () => {
+            manifest = createMixedManifest("1.0.0");
+            contents[OTHER_FILE] = OTHER_TPL;
+            await installWith({ skills: ["plain.md"] });
+            let lock = await readLockFixture(rootDir());
+            expect(lock.bundles.blocks.declined).toEqual([RULES_FILE, OTHER_FILE]);
+
+            await installWith({ blocks: ["code_style"] });
+            const content = await fs.readFile(filePath(), "utf8");
+            expect(content).toContain("<code_style>");
+            expect(content).toContain("<extra>");
+            lock = await readLockFixture(rootDir());
+            expect(Object.keys(lock.bundles.blocks.units)).toEqual([PLAIN_FILE, RULES_FILE]);
+            expect(lock.bundles.blocks.declined).toEqual([OTHER_FILE]);
+            expect(lock.bundles.blocks.units[RULES_FILE]!.blocks).toHaveProperty(`${RULES_FILE}#code_style`);
+            expect(lock.bundles.blocks.units[RULES_FILE]!.declinedBlocks).toEqual([]);
+
+            await expect(installWith({ blocks: ["extra"] })).rejects.toThrow(
+                `Block 'extra' is ambiguous in bundle 'blocks'. Use the key: ${RULES_FILE}#extra, ${OTHER_FILE}#extra`,
+            );
+            await expect(installWith({ blocks: ["nope"] })).rejects.toThrow(
+                "Unknown block 'nope' in bundle 'blocks'. Available: code_style, extra",
+            );
+            await installWith({ blocks: [`${OTHER_FILE}#extra`] });
+            lock = await readLockFixture(rootDir());
+            expect(lock.bundles.blocks.declined).toEqual([]);
+            expect(lock.bundles.blocks.units[OTHER_FILE]!.blocks).toHaveProperty(`${OTHER_FILE}#extra`);
+        });
+
+        it("install --skill and --block keep declined blocks of installed units", async () => {
+            manifest = createMixedManifest("1.0.0");
+            contents[OTHER_FILE] = OTHER_TPL;
+            mockIsInteractive.mockReturnValue(true);
+            mockSelectUnits.mockResolvedValue([RULES_FILE]);
+            mockSelectBlocks.mockResolvedValue([]);
+            await install();
+            expect((await lockUnit())!.declinedBlocks).toEqual([`${RULES_FILE}#code_style`, `${RULES_FILE}#extra`]);
+
+            mockIsInteractive.mockReturnValue(false);
+            await installWith({ skills: ["plain.md"] });
+            expect(await fs.readFile(filePath(), "utf8")).not.toContain("<extra>");
+            expect((await lockUnit())!.declinedBlocks).toEqual([`${RULES_FILE}#code_style`, `${RULES_FILE}#extra`]);
+
+            await installWith({ blocks: ["code_style"] });
+            const content = await fs.readFile(filePath(), "utf8");
+            expect(content).toContain("<code_style>");
+            expect(content).not.toContain("<extra>");
+            expect((await lockUnit())!.declinedBlocks).toEqual([`${RULES_FILE}#extra`]);
+        });
+
+        it("list --json reports blocks with key, status and flags", async () => {
+            mockIsInteractive.mockReturnValue(true);
+            mockSelectBlocks.mockResolvedValue([]);
+            await install();
+            mockIsInteractive.mockReturnValue(false);
+            manifest = createBlocksManifest("1.0.0");
+            contents[RULES_FILE] = `${tplV1()}\n<astp-block name="added">\nNew.\n</astp-block>\n`;
+
+            const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+            await executeList({ bundle: "blocks", json: true, platform: "claude-code", target: "project" });
+            const listed = JSON.parse(String(write.mock.calls[0]?.[0])).units;
+            write.mockRestore();
+            expect(listed[0].blocks).toEqual([
+                {
+                    name: "project_map",
+                    key: `${RULES_FILE}#project_map`,
+                    status: "selected",
+                    optional: false,
+                    required: true,
+                },
+                { name: "extra", key: `${RULES_FILE}#extra`, status: "declined", optional: false, required: false },
+                {
+                    name: "code_style",
+                    key: `${RULES_FILE}#code_style`,
+                    status: "declined",
+                    optional: true,
+                    required: false,
+                },
+                { name: "added", key: `${RULES_FILE}#added`, status: "new", optional: false, required: false },
+            ]);
+        });
     });
 });

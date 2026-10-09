@@ -21,9 +21,11 @@ import {
     confirmDelete,
     confirmInstall,
     showCheckReport,
+    warnForeign,
     warnKeptRemoved,
     warnLegacyModified,
     warnModified,
+    warnReleased,
 } from "@/ui/prompts.js";
 
 import {
@@ -64,6 +66,8 @@ vi.mock("@/ui/prompts.js", () => ({
     warnBlockConflicts: vi.fn(),
     warnKeptBlocks: vi.fn(),
     warnKeptRemoved: vi.fn(),
+    warnReleased: vi.fn(),
+    warnForeign: vi.fn(),
     warnLegacyModified: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
@@ -77,6 +81,8 @@ const mockShowCheckReport = vi.mocked(showCheckReport);
 const mockWarnKeptRemoved = vi.mocked(warnKeptRemoved);
 const mockWarnLegacyModified = vi.mocked(warnLegacyModified);
 const mockWarnModified = vi.mocked(warnModified);
+const mockWarnForeign = vi.mocked(warnForeign);
+const mockWarnReleased = vi.mocked(warnReleased);
 
 describe("E2E: skill directory units", () => {
     let projectDir: string;
@@ -405,7 +411,7 @@ Skill A v1.1 content`,
         });
     });
 
-    it("retries a new skill after its unmanaged directory collision is removed", async () => {
+    it("declines a new skill at an unmanaged directory and installs it with --skill once removed", async () => {
         await installSkillpack();
         const manifestV2 = createFixtureManifest("1.1.0");
         manifestV2.bundles.skillpack.items.push({
@@ -425,13 +431,18 @@ Skill A v1.1 content`,
         await executeUpdate({ platform: "claude-code", target: "project" });
 
         expect(await fs.readFile(userFile, "utf8")).toBe("unmanaged");
-        expect(mockWarnModified).toHaveBeenCalledWith(
-            expect.arrayContaining([expect.objectContaining({ targetPath: "skills/new", kind: "skill" })]),
+        expect(mockWarnForeign).toHaveBeenCalledWith(
+            "skillpack",
+            [expect.objectContaining({ targetPath: "skills/new", kind: "skill" })],
+            [],
         );
         await expect(fs.access(path.join(path.dirname(userFile), "SKILL.md"))).rejects.toThrow();
+        expect((await readLockFixture(path.join(projectDir, ".claude"))).bundles.skillpack.declined).toEqual([
+            "skills/new",
+        ]);
 
         await fs.rm(path.dirname(userFile), { recursive: true });
-        await executeUpdate({ platform: "claude-code", target: "project" });
+        await executeInstall({ bundle: "skillpack", skills: ["new"], platform: "claude-code", target: "project" });
 
         const installedSkill = await fs.readFile(path.join(path.dirname(userFile), "SKILL.md"), "utf8");
         expect(installedSkill).not.toContain("astp-source");
@@ -471,7 +482,7 @@ Skill A v1.1 content`,
         await expect(fs.access(orphan)).resolves.toBeUndefined();
     });
 
-    it("keeps modified orphan skills with a warning unless --force is passed", async () => {
+    it("releases modified orphan skills with a warning; later --force leaves them", async () => {
         manifest = orphanManifest("1.0.0", true);
         await installSkillpack();
 
@@ -487,17 +498,17 @@ Skill A v1.1 content`,
         await executeUpdate({ platform: "claude-code", target: "project" });
 
         expect(await fs.readFile(orphanSkill, "utf8")).toContain("USER EDIT");
-        expect(mockWarnKeptRemoved).toHaveBeenCalledWith(
-            expect.arrayContaining([
-                expect.objectContaining({ targetPath: "skills/deprecated/z", kind: "skill", state: "modified" }),
-            ]),
+        expect(mockWarnReleased).toHaveBeenCalledWith(
+            [expect.objectContaining({ targetPath: "skills/deprecated/z", kind: "skill", state: "modified" })],
+            [],
         );
+        expect(mockWarnKeptRemoved).not.toHaveBeenCalled();
 
         await executeUpdate({ force: true, platform: "claude-code", target: "project" });
-        await expect(fs.access(path.dirname(orphanSkill))).rejects.toThrow();
+        expect(await fs.readFile(orphanSkill, "utf8")).toContain("USER EDIT");
     });
 
-    it("removes a restored orphan skill on a same-version update", async () => {
+    it("leaves a released orphan skill alone after its content is restored", async () => {
         manifest = orphanManifest("1.0.0", true);
         await installSkillpack();
 
@@ -515,7 +526,7 @@ Skill A v1.1 content`,
         await fs.writeFile(orphanSkill, originalContent);
         await executeUpdate({ platform: "claude-code", target: "project" });
 
-        await expect(fs.access(path.dirname(orphanSkill))).rejects.toThrow();
+        expect(await fs.readFile(orphanSkill, "utf8")).toBe(originalContent);
     });
 
     async function writeLegacyInstall(singleFile = false): Promise<void> {

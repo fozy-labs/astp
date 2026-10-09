@@ -29,7 +29,7 @@ astp install fozy-labs --target project
 | Command | Description |
 |---------|-------------|
 | `astp` | Launch interactive wizard |
-| `astp install [bundle] [--skill <name>] [--force]` | Install a bundle or selected units to the selected target |
+| `astp install [bundle] [--skill <name>] [--block <name>] [--force]` | Install a bundle or selected units to the selected target |
 | `astp update [--force]` | Update installed files to latest versions |
 | `astp check` | Check for updates and bundles out of sync with the manifest |
 | `astp delete [bundle] [--skill <name>] [--force]` | Remove an installed bundle or selected units |
@@ -44,10 +44,10 @@ All commands accept `--platform <claude-code>` and `--target <project|user>` to 
 ### install
 
 ```bash
-astp install [bundle] [--skill <name>]... [--force] [--platform <claude-code>] [--target <project|user>]
+astp install [bundle] [--skill <name>]... [--block <name>]... [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Install template bundles. Locally modified or unmanaged files and skills are skipped by default; use `--force` to overwrite them. Repeat `--skill` to select units by name or path. Without arguments, prompts for target directory and bundle selection (the platform prompt is skipped while only one platform is supported). Passing a bundle name with `--platform` and `--target` runs non-interactively. Bundles that don't support the requested platform are rejected with a clear error.
+Install template bundles. Locally modified or unmanaged files and skills are skipped by default (unmanaged ones are recorded as declined); use `--force` to overwrite them. Repeat `--skill` to add units by name or path, and `--block` to add blocks by name or by the `key` from `list --json`, installing the block's unit if needed; both keep the declined units and blocks. Without them, a non-interactive `install <bundle>` installs every unit, clears declined units, and re-selects every non-optional block. Without arguments, prompts for target directory and bundle selection (the platform prompt is skipped while only one platform is supported). Passing a bundle name with `--platform` and `--target` runs non-interactively. Bundles that don't support the requested platform are rejected with a clear error.
 
 ### update
 
@@ -55,7 +55,7 @@ Install template bundles. Locally modified or unmanaged files and skills are ski
 astp update [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Update installed units to the latest version from the manifest. Units dropped upstream are removed; modified or legacy units are kept unless `--force` is passed.
+Update installed units to the latest version from the manifest. A non-interactive update also installs new units and keeps declined ones. Units and blocks dropped upstream are removed; modified ones are left in place and no longer tracked in `astp.lock`, unless `--force` is passed. Modified legacy units are kept unless `--force` is passed.
 
 ### check
 
@@ -79,7 +79,7 @@ Remove the files of an installed bundle. Repeat `--skill` to select units by nam
 astp list [bundle] [--json] [--platform <claude-code>] [--target <project|user>]
 ```
 
-List bundles and installed unit state. Add a bundle name for per-unit status and descriptions; `--json` prints machine-readable output.
+List bundles and installed unit state. Add a bundle name for per-unit status and descriptions; `--json` prints machine-readable output; units with blocks list each block's `name`, `key`, `status` (`selected`, `declined`, or `new`), `optional`, and `required`.
 
 ## Bundles
 
@@ -132,7 +132,7 @@ astp install fozy-labs --platform claude-code --target project
 
 ## How it works
 
-`astp` fetches template files from the [`fozy-labs/astp`](https://github.com/fozy-labs/astp) GitHub repository using [giget](https://github.com/unjs/giget). A `manifest.json` file in the repository defines available bundles, their versions, and file mappings. Install state lives in `astp.lock`; commit it in projects. Installed files are byte-identical to their templates.
+`astp` fetches template files from the [`fozy-labs/astp`](https://github.com/fozy-labs/astp) GitHub repository using [giget](https://github.com/unjs/giget). A `manifest.json` file in the repository defines available bundles, their versions, and file mappings. Install state lives in `astp.lock`; commit it in projects. Installed files without blocks are byte-identical to their templates.
 
 Installs from astp ≤ 0.3.1 carry `astp-*` fields — `astp update` migrates unmodified ones, and `astp update --force` replaces modified ones.
 

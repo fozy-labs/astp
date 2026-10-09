@@ -71,6 +71,8 @@ export interface MergeBlockFileArgs {
     declined: Set<string>;
     /** Names selected for this file. */
     selected: Set<string>;
+    /** Template names not in the lock whose tag already appears in the file but did not parse as a region. */
+    occupied?: Set<string>;
     force: boolean;
 }
 
@@ -80,8 +82,12 @@ export interface MergeBlockFileResult {
     blocks: Record<string, string>;
     /** New `declinedBlocks` names for this file. */
     declinedBlocks: string[];
-    /** Deselected/removed-upstream blocks kept because they changed locally. */
+    /** Deselected blocks kept because they changed locally. */
     kept: string[];
+    /** Blocks removed upstream but changed locally: left in the file as consumer text, dropped from the lock. */
+    released: string[];
+    /** Selected blocks not in the lock whose region already exists with other content: left as is, declined. */
+    foreign: string[];
     /** Locally changed blocks that also changed upstream (wrapper added). */
     conflicts: string[];
 }
@@ -433,6 +439,8 @@ export function mergeBlockFile(args: MergeBlockFileArgs): MergeBlockFileResult {
     const newHashes: Record<string, string> = {};
     const declined = new Set([...args.declined].filter((name) => inTemplate.has(name)));
     const kept: string[] = [];
+    const released: string[] = [];
+    const foreign: string[] = [];
     const conflicts: string[] = [];
     const actions = new Map<string, BlockAction>();
     const insertions: TemplateBlock[] = [];
@@ -459,6 +467,13 @@ export function mergeBlockFile(args: MergeBlockFileArgs): MergeBlockFileResult {
                     actions.set(block.name, { type: "keep" });
                 }
                 newHashes[block.name] = templateHash;
+            } else if (region && (currentHash === templateHash || args.force)) {
+                // An untracked region (e.g. a released block brought back upstream): adopt it.
+                actions.set(block.name, { type: "replace", block });
+                newHashes[block.name] = templateHash;
+            } else if (region || (args.occupied?.has(block.name) && !args.force)) {
+                declined.add(block.name);
+                foreign.push(block.name);
             } else {
                 insertions.push(block);
                 newHashes[block.name] = templateHash;
@@ -493,8 +508,7 @@ export function mergeBlockFile(args: MergeBlockFileArgs): MergeBlockFileResult {
             actions.set(name, { type: "remove" });
         } else {
             actions.set(name, { type: "keep" });
-            newHashes[name] = lockHash;
-            kept.push(name);
+            released.push(name);
         }
     }
 
@@ -508,6 +522,8 @@ export function mergeBlockFile(args: MergeBlockFileArgs): MergeBlockFileResult {
         blocks: newHashes,
         declinedBlocks: [...declined].sort(),
         kept: kept.sort(),
+        released: released.sort(),
+        foreign: foreign.sort(),
         conflicts: conflicts.sort(),
     };
 }

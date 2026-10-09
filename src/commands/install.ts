@@ -28,17 +28,20 @@ import {
     showSuccess,
     spinner,
     warnBlockConflicts,
+    warnForeign,
     warnKeptBlocks,
     warnKeptRemoved,
     warnLegacyModified,
     warnModified,
+    warnReleased,
 } from "@/ui/prompts.js";
 
-import { selectInstallBlocks } from "./blocks.js";
+import { resolveBlockKeys, selectInstallBlocks } from "./blocks.js";
 
 export interface InstallOptions {
     bundle?: string;
     skills?: string[];
+    blocks?: string[];
     force?: boolean;
     platform?: Platform;
     target?: InstallTargetType;
@@ -54,6 +57,8 @@ interface BundlePlan {
 
 export async function executeInstall(options: InstallOptions): Promise<void> {
     if (options.skills?.length && !options.bundle) throw new Error("--skill requires a bundle name");
+    if (options.blocks?.length && !options.bundle) throw new Error("--block requires a bundle name");
+    const additive = Boolean(options.skills?.length || options.blocks?.length);
     const platform: Platform = options.platform ?? (await selectPlatform());
     const target: InstallTarget = options.target
         ? resolveTarget(platform, options.target)
@@ -90,8 +95,9 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
         let selected: Set<string>;
         let declined: Set<string>;
 
-        if (options.skills?.length) {
-            const matched = resolveUnitPaths(options.skills, units, bundle.name);
+        if (additive) {
+            // Units of --block values are added after the download, once block files are known.
+            const matched = resolveUnitPaths(options.skills ?? [], units, bundle.name);
             selected = new Set([...tracked, ...matched]);
             const previouslyTracked = tracked.size > 0 || oldDeclined.size > 0;
             declined = previouslyTracked
@@ -121,14 +127,23 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             await assertBundleBlocks(plan.tempDir, plan.bundle.name, units);
 
             const lockBundle = installedState.lock.bundles[plan.bundle.name];
+            const unitBlockFiles = new Map<string, Awaited<ReturnType<typeof readUnitBlockFiles>>>();
+            for (const unit of units)
+                unitBlockFiles.set(unit.relativePath, await readUnitBlockFiles(plan.tempDir, unit));
+            const requested = resolveBlockKeys(options.blocks ?? [], unitBlockFiles, plan.bundle.name);
+            for (const unitPath of requested.keys()) {
+                plan.selected.add(unitPath);
+                plan.declined.delete(unitPath);
+            }
             for (const unit of units) {
                 if (!plan.selected.has(unit.relativePath)) continue;
-                const blockFiles = await readUnitBlockFiles(plan.tempDir, unit);
+                const blockFiles = unitBlockFiles.get(unit.relativePath)!;
                 if (blockFiles.size === 0) continue;
                 const selections = await selectInstallBlocks(
                     unit.relativePath,
                     blockFiles,
                     lockBundle?.units[unit.relativePath],
+                    { additive, requested: requested.get(unit.relativePath) },
                 );
                 for (const [target, selection] of selections) plan.blockSelections.set(target, selection);
             }
@@ -156,7 +171,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             });
             await writeLock(target.rootDir, installedState.lock);
             totals.installed.push(...result.installed);
-            totals.skipped.push(...result.skipped);
+            totals.skipped.push(...result.skipped, ...result.foreign);
             totals.kept.push(...result.kept);
             const legacy = result.skipped.filter((status) => status.state === "legacy");
             const modified = result.skipped.filter((status) => status.state !== "legacy");
@@ -164,6 +179,12 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             if (legacy.length > 0) warnLegacyModified(legacy);
             if (result.kept.length > 0) warnKeptRemoved(result.kept);
             if (result.keptBlocks.length > 0) warnKeptBlocks(result.keptBlocks);
+            if (result.released.length > 0 || result.releasedBlocks.length > 0) {
+                warnReleased(result.released, result.releasedBlocks);
+            }
+            if (result.foreign.length > 0 || result.foreignBlocks.length > 0) {
+                warnForeign(plan.bundle.name, result.foreign, result.foreignBlocks);
+            }
             if (result.conflictBlocks.length > 0) warnBlockConflicts(result.conflictBlocks);
             s.stop(`Installed ${plan.bundle.name}.`);
         }

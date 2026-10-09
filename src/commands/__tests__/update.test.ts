@@ -59,6 +59,8 @@ vi.mock("@/ui/prompts.js", () => ({
     warnBlockConflicts: vi.fn(),
     warnKeptBlocks: vi.fn(),
     warnKeptRemoved: vi.fn(),
+    warnReleased: vi.fn(),
+    warnForeign: vi.fn(),
     warnLegacyModified: vi.fn(),
     warnModified: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
@@ -159,6 +161,10 @@ beforeEach(async () => {
         skipped: [],
         kept: [],
         keptBlocks: [],
+        released: [],
+        foreign: [],
+        releasedBlocks: [],
+        foreignBlocks: [],
         conflictBlocks: [],
     });
     mockWriteLock.mockResolvedValue(undefined);
@@ -182,6 +188,10 @@ describe("executeUpdate", () => {
             skipped: [],
             kept: [],
             keptBlocks: [],
+            released: [],
+            foreign: [],
+            releasedBlocks: [],
+            foreignBlocks: [],
             conflictBlocks: [],
         });
 
@@ -247,6 +257,10 @@ describe("executeUpdate", () => {
             skipped: [],
             kept: [],
             keptBlocks: [],
+            released: [],
+            foreign: [],
+            releasedBlocks: [],
+            foreignBlocks: [],
             conflictBlocks: [],
         });
 
@@ -302,6 +316,10 @@ describe("executeUpdate", () => {
             skipped: [{ targetPath: testItem.target, kind: "file", state: "modified" }],
             kept: [{ targetPath: keptUnit.relativePath, kind: "file", state: "modified" }],
             keptBlocks: [],
+            released: [],
+            foreign: [],
+            releasedBlocks: [],
+            foreignBlocks: [],
             conflictBlocks: [],
         });
 
@@ -366,6 +384,10 @@ describe("executeUpdate", () => {
             skipped: [{ targetPath: testItem.target, kind: "file", state: "modified" }],
             kept: [],
             keptBlocks: [],
+            released: [],
+            foreign: [],
+            releasedBlocks: [],
+            foreignBlocks: [],
             conflictBlocks: [],
         });
 

@@ -328,10 +328,26 @@ export function warnKeptRemoved(units: FileStatus[]): void {
     );
 }
 
+export function warnReleased(units: FileStatus[], blockKeys: string[]): void {
+    const list = [...units.map((unit) => unit.targetPath), ...blockKeys].map((entry) => `  • ${entry}`).join("\n");
+    p.log.warn(`Removed upstream but changed locally — left in place, no longer managed by astp:\n${list}`);
+}
+
+export function warnForeign(bundleName: string, units: FileStatus[], blockKeys: string[]): void {
+    const list = [...units.map((unit) => unit.targetPath), ...blockKeys].map((entry) => `  • ${entry}`).join("\n");
+    const commands = [
+        ...units.map((unit) => `  astp install ${bundleName} --skill ${unit.targetPath} --force`),
+        ...blockKeys.map((key) => `  astp install ${bundleName} --block ${key} --force`),
+    ].join("\n");
+    p.log.warn(
+        `Already present with other content — left untouched, recorded as declined:\n${list}\nTo overwrite, run:\n${commands}`,
+    );
+}
+
 export function warnKeptBlocks(keys: string[]): void {
     const list = keys.map((key) => `  • ${key}`).join("\n");
     p.log.warn(
-        `${keys.length} block${keys.length === 1 ? "" : "s"} not selected or removed upstream but changed locally — kept:\n${list}\nUse --force to delete them.`,
+        `${keys.length} block${keys.length === 1 ? "" : "s"} not selected but changed locally — kept:\n${list}\nUse --force to delete them.`,
     );
 }
 
