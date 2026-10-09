@@ -8,9 +8,9 @@ description: >-
 
 # astp
 
-Written for astp 0.4. Run `astp --help` and `astp <command> --help` for details and for flags of other versions.
+Written for astp 0.4. Run `astp --help` and `astp <command> --help` for what each command and flag does.
 
-Run `astp` if it is on PATH, otherwise `npx -y @fozy-labs/astp`.
+Run `astp` if it is on PATH, otherwise `npx -y @fozy-labs/astp`. Below 0.4 (`astp --version`) the commands here do not exist: tell the user to update astp.
 
 ## Commands
 
@@ -25,15 +25,13 @@ Without a terminal the CLI cannot prompt, so always pass `--target project` (`./
 | Check, then update | `astp check --target project`, then `astp update --target project` |
 | Remove | `astp delete <bundle> [--skill <name>] --target project` |
 
-- `install <bundle>` without `--skill` or `--block` installs every unit and clears what the user declined earlier; to add something, pass `--skill` or `--block`.
+- To add to an installed bundle, pass `--skill` or `--block`: a plain `install <bundle>` also brings back what the user declined.
 - Commit `astp.lock` with the installed files; never edit it by hand.
 
 ## Ask before `--force`
 
-astp skips files the user changed and files it does not own. When the output reports skipped or kept files, tell the user which ones and run `--force` only with their OK: it overwrites or deletes them.
+astp skips files the user changed and files it does not own. When the output reports skipped or kept files, tell the user which ones and run `--force` only with their OK, including the `--force` commands astp prints: it overwrites or deletes them.
 
 ## Filling blocks
 
-A file with a `<SETUP_REQUIRED>` block right after its frontmatter needs filling: replace each `<FILL_INSTRUCTION>…</FILL_INSTRUCTION>` with the content it asks for, taken from the real project, then remove the `<SETUP_REQUIRED>` block. Keep the surrounding `<block_name>…</block_name>` tags: astp tracks blocks by them.
-
-After `update`, a `<FILL_INSTRUCTION>` can hold the new template of a block the user changed: merge it into the block, keep the project-specific content, then remove the instruction.
+A `<SETUP_REQUIRED>` block after the frontmatter, or a `<FILL_INSTRUCTION>` left by `update`, carries its own instruction: follow it with content from the real project. Keep the `<block_name>…</block_name>` tags around each block: astp tracks blocks by them.
