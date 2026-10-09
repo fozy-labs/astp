@@ -37,10 +37,18 @@ const validManifestData = {
 
 describe("validateManifest", () => {
     it("rejects a bundle name that is not one path segment", () => {
-        for (const name of ["../core", "a/b", ".."]) {
+        for (const name of ["../core", "a/b", "a\\b", "..", ""]) {
             const data = structuredClone(validManifestData);
             data.bundles.core.name = name;
             expect(() => validateManifest(data)).toThrow("invalid name");
+        }
+    });
+
+    it("accepts any other one-segment bundle name", () => {
+        for (const name of ["my+tools", "tools@2", "café"]) {
+            const data = structuredClone(validManifestData);
+            data.bundles.core.name = name;
+            expect(() => validateManifest(data)).not.toThrow();
         }
     });
 

@@ -141,6 +141,17 @@ describe("E2E: manifest sources", () => {
         ]);
     });
 
+    it("lists an installed bundle missing from --source with its lock source", async () => {
+        await executeInstall({ ...opts, bundle: "extra", source: "./tests/test.manifest.json" });
+        const write = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        await executeList({ ...opts, source: "./a", json: true });
+        const { bundles } = JSON.parse(String(write.mock.calls[0]![0])) as {
+            bundles: { name: string; version: string | null; source: string }[];
+        };
+        const extra = bundles.find((bundle) => bundle.name === "extra")!;
+        expect([extra.version, extra.source]).toEqual([null, "../tests/test.manifest.json"]);
+    });
+
     it("names the bundle and a fix when its lock source is gone", async () => {
         await executeInstall({ ...opts, bundle: "core", source: "./a" });
         await fs.rm(path.join(projectDir, "a"), { recursive: true });

@@ -79,7 +79,7 @@ async function list(
                 version: bundle?.version ?? null,
                 installedVersion: installed?.version || null,
                 units: { installed: installed?.units.length ?? 0, total },
-                source: entry.spec,
+                source: bundle ? entry.spec : (lock?.bundles[name]?.source ?? entry.spec),
             };
         });
         if (options.json) {
