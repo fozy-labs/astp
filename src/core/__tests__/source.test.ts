@@ -68,6 +68,14 @@ describe("resolveSource", () => {
         });
     });
 
+    it("accepts plain http only for localhost", async () => {
+        await expect(resolveSource("http://host/a.tgz", cwd)).rejects.toThrow("use https");
+        await expect(resolveSource("http://host/m.json", cwd)).rejects.toThrow("use https");
+        for (const host of ["localhost:8080", "127.0.0.1", "[::1]"]) {
+            await expect(resolveSource(`http://${host}/m.json`, cwd)).resolves.toMatchObject({ kind: "url" });
+        }
+    });
+
     it("maps a GitHub repo URL without network", async () => {
         await expect(resolveSource("https://github.com/fozy-labs/astp", cwd)).resolves.toMatchObject({
             spec: "gh:fozy-labs/astp",

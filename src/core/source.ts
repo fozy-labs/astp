@@ -9,6 +9,7 @@ const GIT_PROVIDERS = new Set(["gh", "github", "gitlab", "bitbucket", "sourcehut
 // giget's parseGitURI grammar: the repository is always two segments.
 const GIT_RE = /^(?<repo>[\w.-]+\/[\w.-]+)(?<path>\/[^#]*)?(?:#(?<ref>[\w./@-]+))?$/;
 const NPM_RE = /^(?<name>(?:@[\w.-]+\/)?[\w.-]+)(?:@(?<version>[\w.+-]+))?$/;
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const LOCAL_RE = /^(?:\.{1,2}(?:[\\/]|$)|\/|[A-Za-z]:[\\/])/;
 
 export const ACCEPTED_SOURCES = [
@@ -71,6 +72,9 @@ export async function resolveSource(spec: string, baseDir: string): Promise<Mani
             url = new URL(trimmed);
         } catch {
             throw invalidSource(spec);
+        }
+        if (url.protocol === "http:" && !LOCAL_HOSTS.has(url.hostname)) {
+            throw new Error(`Source '${spec}' uses plain http; use https (http is allowed only for localhost)`);
         }
         if (url.hostname === "github.com" || url.hostname === "www.github.com") return githubUrlSource(url, spec);
         if (isJson(url.pathname)) return { kind: "url", spec: url.href, manifestUrl: url };
