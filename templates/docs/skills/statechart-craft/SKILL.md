@@ -56,7 +56,7 @@ Above the `stateDiagram-v2` header only blank lines and `%%` lines are allowed.
 | `[*] --> A` | initial state of the enclosing scope; **exactly one per scope** |
 | `A --> [*]` | transition into the synthetic `$final` of the scope the line is written in |
 | `A --> B` | eventless transition (`always`) |
-| `A --> B: label` | see [Transition labels](#3-transition-labels) |
+| `A --> B: label` | [Transition labels](#3-transition-labels) |
 | `A --> B: done` | `onDone` of compound/parallel `A` |
 | `A --> B: after 3000` / `after name` | delayed transition; a named delay needs `@delay` |
 | `state X {` … `}` | compound state; `{` ends its line, `}` sits alone |
