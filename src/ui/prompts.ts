@@ -101,7 +101,6 @@ interface BundleOption {
     value: string;
     label?: string;
     hint?: string;
-    disabled?: boolean;
 }
 
 /**
@@ -115,7 +114,7 @@ export class BundleSelectPrompt extends MultiSelectPrompt<BundleOption> {
     emit(event: string, ...data: unknown[]): void {
         if (event === "cursor" && data[0] === "right") {
             const option = this.options[this.cursor];
-            if (option && option.disabled !== true) {
+            if (option) {
                 this.customize = option.value;
                 if (!(this.value ?? []).includes(option.value)) this.value = [...(this.value ?? []), option.value];
                 this.state = "submit";
@@ -126,24 +125,15 @@ export class BundleSelectPrompt extends MultiSelectPrompt<BundleOption> {
     }
 }
 
-type OptionRenderState =
-    | "disabled"
-    | "active"
-    | "selected"
-    | "cancelled"
-    | "active-selected"
-    | "submitted"
-    | "inactive";
+type OptionRenderState = "active" | "selected" | "cancelled" | "active-selected" | "submitted" | "inactive";
 
 // Mirrors @clack/prompts 1.1.0 multiselect's render so the bundle screen
 // looks identical to the other prompts.
-function renderBundleOption(option: BundleOption & { disabled?: boolean }, state: OptionRenderState): string {
+function renderBundleOption(option: BundleOption, state: OptionRenderState): string {
     const label = option.label ?? String(option.value);
     const mapLines = (text: string, format: (line: string) => string) => text.split("\n").map(format).join("\n");
     const hint = option.hint ? ` ${styleText("dim", `(${option.hint})`)}` : "";
     switch (state) {
-        case "disabled":
-            return `${styleText("gray", p.S_CHECKBOX_INACTIVE)} ${mapLines(label, (line) => styleText(["strikethrough", "gray"], line))}${styleText("dim", `(${option.hint ?? "disabled"})`)}`;
         case "active":
             return `${styleText("cyan", p.S_CHECKBOX_ACTIVE)} ${label}${hint}`;
         case "selected":
@@ -214,7 +204,6 @@ export async function selectBundles(
             )}\n`;
             const value = this.value ?? [];
             const styleOption = (option: BundleOption, active: boolean): string => {
-                if (option.disabled) return renderBundleOption(option, "disabled");
                 const selected = value.includes(option.value);
                 if (active && selected) return renderBundleOption(option, "active-selected");
                 if (selected) return renderBundleOption(option, "selected");

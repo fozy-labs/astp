@@ -87,7 +87,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
         s.stop("Manifest fetched.");
 
         const selectedBundles: Array<{ bundle: Bundle; source: OpenedSource }> = [];
-        const customized = new Map<string, string[]>();
+        const customized = new Map<string, { chosen: string[]; total: number }>();
         if (options.bundle) {
             selectedBundles.push({ bundle: resolveBundle(primary.manifest, options.bundle), source: primary });
         } else {
@@ -98,19 +98,19 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 const customizeBundle = resolveBundle(customizeSource.manifest, name);
                 const customizeUnits = groupTemplateItems(customizeBundle.items);
                 const customizeInstalled = installedState.bundles.find((entry) => entry.bundleName === name);
-                customized.set(
-                    name,
-                    await selectUnits(
+                customized.set(name, {
+                    chosen: await selectUnits(
                         customizeBundle,
                         customizeUnits,
-                        customized.get(name) ?? defaultSelection(customizeUnits, customizeInstalled),
+                        customized.get(name)?.chosen ?? defaultSelection(customizeUnits, customizeInstalled),
                     ),
-                );
+                    total: customizeUnits.length,
+                });
                 const notes = new Map(
-                    [...customized].map(([bundleName, chosen]) => {
-                        const total = groupTemplateItems(resolveBundle(primary.manifest, bundleName).items).length;
-                        return [bundleName, `customized: ${chosen.length}/${total}`];
-                    }),
+                    [...customized].map(([bundleName, { chosen, total }]) => [
+                        bundleName,
+                        `customized: ${chosen.length}/${total}`,
+                    ]),
                 );
                 pick = await selectBundles(primary.manifest, platform, {
                     selected: pick.selected,
@@ -154,7 +154,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 selected = new Set(await selectUnits(bundle, units, defaultSelection(units, installed)));
                 declined = new Set([...paths].filter((unitPath) => !selected.has(unitPath)));
             } else if (!options.bundle && isInteractive()) {
-                const chosen = customized.get(bundle.name) ?? defaultSelection(units, installed);
+                const chosen = customized.get(bundle.name)?.chosen ?? defaultSelection(units, installed);
                 selected = new Set(chosen.filter((unitPath) => paths.has(unitPath)));
                 declined = new Set([...paths].filter((unitPath) => !selected.has(unitPath)));
             } else {
