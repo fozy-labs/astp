@@ -19,7 +19,9 @@ const SOURCE_HELP =
 
 const PLATFORM_HELP = `Coding agent platform: ${ALL_PLATFORMS.join(", ")}`;
 
-function collect(value: string, previous: string[]): string[] {
+const TARGET_HELP = "project (./.claude/) or user ($CLAUDE_CONFIG_DIR or ~/.claude/); required without a terminal";
+
+function collect(value: string, previous: string[] = []): string[] {
     return [...previous, value];
 }
 
@@ -47,7 +49,7 @@ const program = new Command();
 
 program
     .name("astp")
-    .description("MDA file manager for AI coding agents")
+    .description("Install and update skills, agents and rules for AI coding agents. No command: interactive wizard.")
     .version(version ?? "0.0.0")
     .action(async () => {
         await launchWizard();
@@ -55,20 +57,25 @@ program
 
 program
     .command("install")
-    .argument("[bundle]", "Bundle name to install")
+    .description("Install a bundle, or add units and blocks to it")
+    .argument("[bundle]", "Bundle name; required without a terminal")
     .option("--source <spec>", SOURCE_HELP)
-    .option("--skill <name>", "Install one unit by name or path", collect, [])
-    .option("--block <name>", "Install one block by name or key (file#name)", collect, [])
-    .option("--force", "Overwrite locally modified or unmanaged files")
+    .option("--skill <name>", "Add a unit by name or path; repeatable", collect)
+    .option("--block <name>", "Add a block by name or key (file#name), with its unit; repeatable", collect)
+    .option("--force", "Overwrite files changed locally or not installed by astp")
     .option("--platform <name>", PLATFORM_HELP)
-    .option("--target <type>", "Install target: project or user")
+    .option("--target <type>", TARGET_HELP)
+    .addHelpText(
+        "after",
+        "\nWithout --skill or --block: a terminal asks which units to install; without one,\nevery unit and non-optional block is selected, clearing earlier declines.\n--skill and --block add to the current selection.",
+    )
     .action(
         async (
             bundle: string | undefined,
             options: {
                 source?: string;
-                skill: string[];
-                block: string[];
+                skill?: string[];
+                block?: string[];
                 force?: boolean;
                 platform?: string;
                 target?: string;
@@ -88,9 +95,14 @@ program
 
 program
     .command("update")
-    .option("--force", "Overwrite locally modified files")
+    .description("Update installed bundles from the sources recorded in astp.lock")
+    .option("--force", "Overwrite locally changed files; delete changed ones dropped upstream")
     .option("--platform <name>", PLATFORM_HELP)
-    .option("--target <type>", "Install target: project or user")
+    .option("--target <type>", TARGET_HELP)
+    .addHelpText(
+        "after",
+        "\nNew units are installed (a terminal asks first). Units dropped upstream are\nremoved; locally changed ones stay in place and leave astp.lock.",
+    )
     .action(async (options: { force?: boolean; platform?: string; target?: string }) => {
         await executeUpdate({
             force: options.force,
@@ -101,8 +113,9 @@ program
 
 program
     .command("check")
+    .description("Report bundles with updates or out of sync with their source; changes nothing")
     .option("--platform <name>", PLATFORM_HELP)
-    .option("--target <type>", "Install target: project or user")
+    .option("--target <type>", TARGET_HELP)
     .action(async (options: { platform?: string; target?: string }) => {
         await executeCheck({
             platform: parsePlatform(options.platform),
@@ -112,11 +125,12 @@ program
 
 program
     .command("list")
+    .description("List bundles, or the units and blocks of one bundle")
     .argument("[bundle]", "Bundle name to list")
     .option("--source <spec>", SOURCE_HELP)
-    .option("--json", "Print JSON only")
+    .option("--json", "Print JSON only; requires --target. Block keys are values for install --block")
     .option("--platform <name>", PLATFORM_HELP)
-    .option("--target <type>", "Install target: project or user")
+    .option("--target <type>", TARGET_HELP)
     .action(
         async (
             bundle: string | undefined,
@@ -134,15 +148,16 @@ program
 
 program
     .command("delete")
-    .argument("[bundle]", "Installed bundle name to delete")
-    .option("--skill <name>", "Delete one unit by name or path", collect, [])
-    .option("--force", "Delete locally modified files")
+    .description("Delete an installed bundle or some of its units")
+    .argument("[bundle]", "Installed bundle name; required without a terminal")
+    .option("--skill <name>", "Delete a unit by name or path; repeatable", collect)
+    .option("--force", "Also delete locally changed files")
     .option("--platform <name>", PLATFORM_HELP)
-    .option("--target <type>", "Install target: project or user")
+    .option("--target <type>", TARGET_HELP)
     .action(
         async (
             bundle: string | undefined,
-            options: { skill: string[]; force?: boolean; platform?: string; target?: string },
+            options: { skill?: string[]; force?: boolean; platform?: string; target?: string },
         ) => {
             await executeDelete({
                 bundle,

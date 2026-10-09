@@ -4,7 +4,7 @@
     "bundles": {
         "astp": {
             "name": "astp",
-            "version": "1.0.1",
+            "version": "1.0.2",
             "description": "astp CLI skill — install, update and fill astp bundles from an agent",
             "default": false,
             "platforms": [

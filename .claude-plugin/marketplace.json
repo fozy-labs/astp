@@ -12,7 +12,7 @@
             "name": "astp",
             "source": "./templates/astp",
             "description": "astp CLI skill — install, update and fill astp bundles from an agent",
-            "version": "1.0.1",
+            "version": "1.0.2",
             "skills": [
                 "./skills/astp"
             ]

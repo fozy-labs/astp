@@ -36,7 +36,7 @@ export async function executeCheck(options: CheckOptions): Promise<void> {
                 entry.manifest,
             ),
         );
-        showCheckReport(mergeReports(reports));
+        showCheckReport(mergeReports(reports), target.type);
     } finally {
         await sources.close();
     }

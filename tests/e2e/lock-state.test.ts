@@ -695,6 +695,7 @@ describe("lock-file command flows", () => {
                 "core",
                 [expect.objectContaining({ targetPath: "skills/beta" })],
                 [],
+                "project",
             );
             expect(vi.mocked(warnModified)).not.toHaveBeenCalled();
             expect(await checkUpdates()).toEqual([]);

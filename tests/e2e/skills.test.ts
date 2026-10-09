@@ -435,6 +435,7 @@ Skill A v1.1 content`,
             "skillpack",
             [expect.objectContaining({ targetPath: "skills/new", kind: "skill" })],
             [],
+            "project",
         );
         await expect(fs.access(path.join(path.dirname(userFile), "SKILL.md"))).rejects.toThrow();
         expect((await readLockFixture(path.join(projectDir, ".claude"))).bundles.skillpack.declined).toEqual([
@@ -576,7 +577,7 @@ Skill A v1.1 content`,
         const templateDir = await setupBundle();
         mockDownloadFrom(templateDir);
         await executeUpdate({ platform: "claude-code", target: "project" });
-        expect(mockWarnLegacyModified).toHaveBeenCalled();
+        expect(mockWarnLegacyModified).toHaveBeenCalledWith(expect.any(Array), "project");
         expect((await getInstalledSkillpack())?.units[0]).toMatchObject({ origin: "legacy", version: "1.0.0" });
 
         await executeUpdate({ force: true, platform: "claude-code", target: "project" });

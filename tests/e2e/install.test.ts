@@ -167,6 +167,7 @@ describe("E2E: install", () => {
         expect(await fs.readFile(skillPath, "utf8")).toBe(edited);
         expect(mockWarnModified).toHaveBeenCalledWith(
             expect.arrayContaining([expect.objectContaining({ targetPath: "skills/sample", kind: "skill" })]),
+            "astp install skillpack --force --target project",
         );
 
         await installBundle("skillpack", true);
@@ -183,6 +184,7 @@ describe("E2E: install", () => {
         expect(await fs.readFile(extraPath, "utf8")).toBe("keep me");
         expect(mockWarnModified).toHaveBeenCalledWith(
             expect.arrayContaining([expect.objectContaining({ targetPath: "skills/sample", kind: "skill" })]),
+            "astp install skillpack --force --target project",
         );
 
         await installBundle("skillpack", true);
@@ -202,6 +204,7 @@ describe("E2E: install", () => {
             "core",
             expect.arrayContaining([expect.objectContaining({ targetPath: "skills/orchestrate", kind: "skill" })]),
             [],
+            "project",
         );
 
         await installBundle("core", true);
@@ -221,6 +224,7 @@ describe("E2E: install", () => {
             expect.arrayContaining([
                 expect.objectContaining({ targetPath: "agents/pipeline-approve.agent.md", kind: "file" }),
             ]),
+            "astp install pipeline --force --target project",
         );
 
         await installBundle("pipeline", true);
@@ -239,6 +243,7 @@ describe("E2E: install", () => {
             "core",
             expect.arrayContaining([expect.objectContaining({ targetPath: "skills/orchestrate", kind: "skill" })]),
             [],
+            "project",
         );
 
         await installBundle("core", true);
