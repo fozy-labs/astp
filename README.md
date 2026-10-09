@@ -85,17 +85,19 @@ List bundles and installed unit state. Add a bundle name for per-unit status and
 
 | Bundle | Files | Description | Default |
 |--------|-------|-------------|---------|
+| `astp` | 1 | astp CLI skill — install, update and fill astp bundles from an agent | No |
 | `fozy-labs` | 34 | Fozy Labs stack skills (DI, FSD, rx-api, signals) | No |
 | `docs` | 6 | Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas | No |
 | `design` | 13 | Design decision derivation — gated procedure for interface, layout, and visual design choices | No |
 
+- **astp** ships the `astp` skill: how an agent runs the CLI without prompts, when to ask before `--force`, and how to fill `<SETUP_REQUIRED>` blocks.
 - **fozy-labs** ships four skills covering the `@fozy-labs` stack — `simplest-di`, Feature-Sliced Design v2.1, `rx-toolkit` server state, and `rx-toolkit` signals. All four use progressive disclosure: a short `SKILL.md` plus `references/*.md` loaded only when the situation calls for them. It installs under `.claude/skills/`.
 - **design** ships `design-derivation` — a gated procedure for deriving visual and interface decisions (frame, value, scenario → charge and sign → surface and accuracy) instead of picking a remembered look. It carries no styles, palettes, or component recipes; references are loaded on demand per gate.
 - **docs** ships two skills. `markdown-craft` carries stack-agnostic rules for the Markdown an agent writes: one home per fact, one reader per document, diagram-first flows, and link hygiene, with references loaded on demand for Mermaid diagrams and for writing or reviewing a specification. `statechart-craft` covers the other kind of Mermaid an agent writes — a `.mmd` statechart schema: the `stateDiagram-v2` subset, the `%% @…` directives, the `statechart-convert` CLI and the typed file it emits, with references for the live visualizer and for the `toMermaid()` round trip.
 
 ## Installing skills with `npx skills`
 
-The `design`, `docs` and `fozy-labs` bundles are also published for the [`skills` CLI](https://github.com/vercel-labs/skills), which installs Agent Skills into Claude Code, Cursor, Copilot and other agents:
+The `astp`, `design`, `docs` and `fozy-labs` bundles are also published for the [`skills` CLI](https://github.com/vercel-labs/skills), which installs Agent Skills into Claude Code, Cursor, Copilot and other agents:
 
 ```bash
 npx skills add fozy-labs/astp                          # choose interactively
@@ -103,7 +105,7 @@ npx skills add fozy-labs/astp --list                   # preview what is availab
 npx skills add fozy-labs/astp --skill markdown-craft   # install one skill
 ```
 
-Discovery is driven by `.claude-plugin/marketplace.json`, generated from `templates/manifest.json`. Only bundles that support `claude-code` **and** ship skills are published — all three current bundles qualify.
+Discovery is driven by `.claude-plugin/marketplace.json`, generated from `templates/manifest.json`. Only bundles that support `claude-code` **and** ship skills are published — all four current bundles qualify.
 
 > **Pick one installer per project.** `npx skills` symlinks skills from its own cache and tracks them in `skills-lock.json`; `astp` writes real files and tracks them in `astp.lock`. Neither sees the other's installs: `astp check`, `astp update` and `astp delete` ignore skills added by `npx skills`, and installing the same skill both ways leaves a file and a symlink fighting over one path.
 

@@ -8,6 +8,9 @@ This directory contains the canonical template files for the `astp` CLI tool. Te
 templates/
 ├── manifest.json          ← central manifest (source of truth)
 ├── README.md              ← this file
+├── astp/                  ← bundle: astp (claude-code)
+│   └── skills/
+│       └── astp/
 ├── fozy-labs/             ← bundle: fozy-labs (claude-code)
 │   └── skills/
 │       ├── fozy-labs-di/

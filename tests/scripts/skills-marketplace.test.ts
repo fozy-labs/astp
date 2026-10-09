@@ -387,7 +387,7 @@ describe("committed marketplace", () => {
     it("publishes the claude-code bundles", async () => {
         const manifest = await readRepoManifest();
         const marketplace = buildMarketplace(manifest, await findBlockSkillDirs(manifest));
-        expect(marketplace.plugins.map((plugin) => plugin.name)).toEqual(["design", "docs", "fozy-labs"]);
+        expect(marketplace.plugins.map((plugin) => plugin.name)).toEqual(["astp", "design", "docs", "fozy-labs"]);
     });
 
     it("keeps templates/manifest.json internally consistent", async () => {
