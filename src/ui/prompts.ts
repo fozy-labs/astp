@@ -300,8 +300,9 @@ export async function confirmInstall(
 }
 
 export async function selectUnits(bundle: Bundle, units: TemplateUnit[], initial: string[]): Promise<string[]> {
+    if (units.length === 0) return [];
     const selected = await p.multiselect({
-        message: `Select items from ${bundle.name}:\n(Space = toggle, Enter = back to bundles)`,
+        message: `Select items from ${bundle.name}:\n(Space = toggle, Enter = done)`,
         options: units.map((unit) => ({
             value: unit.relativePath,
             label: pathLabel(unit.relativePath),

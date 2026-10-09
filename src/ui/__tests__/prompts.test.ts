@@ -9,6 +9,7 @@ import {
     BundleSelectPrompt,
     confirmInstall,
     selectPlatform,
+    selectUnits,
     showCheckReport,
     showUpdateReport,
     warnForeign,
@@ -21,6 +22,7 @@ vi.mock("@clack/prompts", () => ({
     outro: vi.fn(),
     spinner: vi.fn(),
     select: vi.fn(),
+    multiselect: vi.fn(),
     confirm: vi.fn(),
     log: { info: vi.fn(), warn: vi.fn() },
     isCancel: vi.fn(() => false),
@@ -78,6 +80,21 @@ describe("BundleSelectPrompt", () => {
         await vi.waitFor(() => expect(prompt.state).toBe("error"));
         for (const key of [SPACE, ENTER]) input.write(key);
         await expect(result).resolves.toEqual(["one"]);
+    });
+});
+
+describe("selectUnits", () => {
+    it("returns an empty selection for an empty bundle without prompting", async () => {
+        const bundle: Bundle = {
+            name: "empty",
+            version: "1.0.0",
+            description: "Empty bundle",
+            default: false,
+            items: [],
+        };
+
+        await expect(selectUnits(bundle, [], [])).resolves.toEqual([]);
+        expect(p.multiselect).not.toHaveBeenCalled();
     });
 });
 
