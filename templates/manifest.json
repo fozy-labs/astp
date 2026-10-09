@@ -2,6 +2,22 @@
     "schemaVersion": 1,
     "repository": "fozy-labs/astp",
     "bundles": {
+        "astp": {
+            "name": "astp",
+            "version": "1.0.1",
+            "description": "astp CLI skill — install, update and fill astp bundles from an agent",
+            "default": false,
+            "platforms": [
+                "claude-code"
+            ],
+            "items": [
+                {
+                    "source": "astp/skills/astp/SKILL.md",
+                    "target": "skills/astp/SKILL.md",
+                    "category": "skill"
+                }
+            ]
+        },
         "fozy-labs": {
             "name": "fozy-labs",
             "version": "1.5.0",

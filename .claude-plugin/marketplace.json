@@ -9,6 +9,15 @@
     },
     "plugins": [
         {
+            "name": "astp",
+            "source": "./templates/astp",
+            "description": "astp CLI skill — install, update and fill astp bundles from an agent",
+            "version": "1.0.1",
+            "skills": [
+                "./skills/astp"
+            ]
+        },
+        {
             "name": "design",
             "source": "./templates/design",
             "description": "Design decision derivation — gated procedure for interface, layout, and visual design choices",
