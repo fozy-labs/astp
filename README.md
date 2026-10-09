@@ -1,6 +1,6 @@
 # astp
 
-CLI tool for managing MDA files (skills, agents, instructions, stage definitions) used by AI coding agents. Installs them for **Claude Code** (`.claude/`, `~/.claude/`).
+CLI tool for managing skills, agents and rules used by AI coding agents. Installs them for **Claude Code** (`.claude/`, `~/.claude/`).
 
 ## Installation
 
