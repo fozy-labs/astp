@@ -15,6 +15,8 @@ import {
     isInteractive,
     selectBundleItems,
     showCheckReport,
+    showInfo,
+    showSuccess,
     warnBlockConflicts,
     warnForeign,
     warnKeptBlocks,
@@ -86,6 +88,8 @@ function treeChoice(units?: string[], blocks?: string[]): void {
     );
 }
 const mockShowCheckReport = vi.mocked(showCheckReport);
+const mockShowInfo = vi.mocked(showInfo);
+const mockShowSuccess = vi.mocked(showSuccess);
 const mockWarnKeptBlocks = vi.mocked(warnKeptBlocks);
 const mockWarnKeptRemoved = vi.mocked(warnKeptRemoved);
 
@@ -359,6 +363,22 @@ describe("E2E: blocks", () => {
         expect(content).toContain("Extra ready-made text.");
         expect(content).not.toContain("My own extra.");
         expect(content).toContain("Filled by the agent.");
+    });
+
+    it("update --force reports up to date when only fills are dirty", async () => {
+        await install();
+        await fillFile();
+        const file = filePath();
+        const lock = path.join(rootDir(), "astp.lock");
+        const fileBefore = await fs.readFile(file, "utf8");
+        const lockBefore = await fs.readFile(lock, "utf8");
+
+        await update(true);
+
+        expect(await fs.readFile(file, "utf8")).toBe(fileBefore);
+        expect(await fs.readFile(lock, "utf8")).toBe(lockBefore);
+        expect(mockShowInfo).toHaveBeenCalledWith("All bundles up to date.");
+        expect(mockShowSuccess).not.toHaveBeenCalledWith(expect.stringContaining("Updated"));
     });
 
     it("non-TTY install brings back a declined non-optional block, keeps a declined optional one", async () => {

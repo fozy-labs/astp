@@ -6,13 +6,14 @@ import {
     compareVersions,
     downloadBundle,
     groupTemplateItems,
+    hasFillInstruction,
     loadInstalled,
     readUnitBlockFiles,
     syncBundle,
     validateUnitTargets,
 } from "@/core/index.js";
 import type { BlockSelections } from "@/core/index.js";
-import type { FileStatus, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
+import type { FileStatus, InstalledBundle, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { describeUnitCounts } from "@/ui/format.js";
 import {
@@ -71,7 +72,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
         if (options.force) {
             for (const bundle of installedState.bundles) {
                 if (
-                    bundle.units.some((unit) => unit.state === "modified" || unit.blocks?.dirty) &&
+                    bundle.units.some((unit) => unit.state === "modified" || (unit.blocks?.edited.length ?? 0) > 0) &&
                     opened.get(bundle.bundleName)!.manifest.bundles[bundle.bundleName]
                 ) {
                     bundleNames.add(bundle.bundleName);
@@ -103,12 +104,22 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             return;
         }
 
+        const forceOnly = new Set(
+            [...bundleNames].filter(
+                (name) =>
+                    !report.updates.some((update) => update.bundleName === name) &&
+                    !installedState.bundles
+                        .find((bundle) => bundle.bundleName === name)!
+                        .units.some((unit) => unit.state === "modified"),
+            ),
+        );
         const totals = {
             installed: [] as FileStatus[],
             removed: [] as FileStatus[],
             skipped: [] as FileStatus[],
             kept: [] as FileStatus[],
         };
+        let synced = false;
         for (const bundleName of bundleNames) {
             const { source, spec, manifest } = opened.get(bundleName)!;
             const bundle = manifest.bundles[bundleName];
@@ -143,6 +154,9 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                 await assertBundleSources(tempDir, bundleName, units);
                 await assertBundleBlocks(tempDir, bundleName, units);
 
+                if (forceOnly.has(bundleName) && !(await hasRestorableEdit(tempDir, units, installed))) continue;
+
+                synced = true;
                 const blockSelections: BlockSelections = new Map();
                 for (const unit of units) {
                     if (!selected.has(unit.relativePath)) continue;
@@ -189,14 +203,37 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             }
         }
 
-        showSuccess(
-            `Updated ${countStatuses(totals.installed)}${totals.skipped.length ? `, skipped ${countStatuses(totals.skipped)}` : ""}${
-                totals.removed.length ? `, removed ${countStatuses(totals.removed)}` : ""
-            }${totals.kept.length ? `, kept ${countStatuses(totals.kept)}` : ""}`,
-        );
+        if (!synced) {
+            if (report.notInManifest.length === 0) showInfo("All bundles up to date.");
+        } else {
+            showSuccess(
+                `Updated ${countStatuses(totals.installed)}${totals.skipped.length ? `, skipped ${countStatuses(totals.skipped)}` : ""}${
+                    totals.removed.length ? `, removed ${countStatuses(totals.removed)}` : ""
+                }${totals.kept.length ? `, kept ${countStatuses(totals.kept)}` : ""}`,
+            );
+        }
     } finally {
         await sources.close();
     }
+}
+
+async function hasRestorableEdit(
+    tempDir: string,
+    units: ReturnType<typeof groupTemplateItems>,
+    installed: InstalledBundle | undefined,
+): Promise<boolean> {
+    const editedKeys = (installed?.units ?? []).flatMap((unit) => unit.blocks?.edited ?? []);
+    for (const unit of units) {
+        const blockFiles = await readUnitBlockFiles(tempDir, unit);
+        for (const key of editedKeys) {
+            const hashIndex = key.lastIndexOf("#");
+            const block = blockFiles
+                .get(key.slice(0, hashIndex))
+                ?.blocks.find((candidate) => candidate.name === key.slice(hashIndex + 1));
+            if (block && !hasFillInstruction(block.content)) return true;
+        }
+    }
+    return false;
 }
 
 function countStatuses(statuses: FileStatus[]): string {

@@ -206,7 +206,7 @@ async function getLockUnitState(
 
     // Unit with blocks: the hash covers frontmatter only; blocks are verified individually.
     const blockFiles = [...new Set(blockKeys.map((key) => key.slice(0, key.lastIndexOf("#"))))];
-    const blockInfo = { missing: false, dirty: false, parseFailed: false };
+    const blockInfo = { missing: false, dirty: false, parseFailed: false, edited: [] as string[] };
     let modified = false;
 
     if (unit.kind === "file") {
@@ -240,7 +240,7 @@ async function getLockUnitState(
 
     return {
         state: modified ? "modified" : "unmodified",
-        blocks: { missing: blockInfo.missing, dirty: blockInfo.dirty },
+        blocks: { missing: blockInfo.missing, dirty: blockInfo.dirty, edited: blockInfo.edited.sort() },
     };
 }
 
@@ -248,7 +248,7 @@ function inspectBlockFile(
     content: string,
     fileTarget: string,
     lockBlocks: Record<string, string>,
-    info: { missing: boolean; dirty: boolean; parseFailed: boolean },
+    info: { missing: boolean; dirty: boolean; parseFailed: boolean; edited: string[] },
 ): void {
     const names = Object.keys(lockBlocks)
         .filter((key) => key.startsWith(`${fileTarget}#`))
@@ -265,7 +265,10 @@ function inspectBlockFile(
             info.missing = true;
             continue;
         }
-        if (blockHash(region.content) !== lockBlocks[`${fileTarget}#${name}`]) info.dirty = true;
+        if (blockHash(region.content) !== lockBlocks[`${fileTarget}#${name}`]) {
+            info.dirty = true;
+            info.edited.push(`${fileTarget}#${name}`);
+        }
     }
     if (parsed.outsideText.trim() !== "") info.dirty = true;
 }

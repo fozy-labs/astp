@@ -545,24 +545,24 @@ describe("loadInstalled with blocks", () => {
     it("reports a clean block file as unmodified with no missing/dirty", async () => {
         const unit = await setup(CLEAN);
         expect(unit.state).toBe("unmodified");
-        expect(unit.blocks).toEqual({ missing: false, dirty: false });
+        expect(unit.blocks).toEqual({ missing: false, dirty: false, edited: [] });
     });
 
     it("a filled block is dirty but still unmodified", async () => {
         const unit = await setup(CLEAN.replace("text", "filled"));
         expect(unit.state).toBe("unmodified");
-        expect(unit.blocks).toEqual({ missing: false, dirty: true });
+        expect(unit.blocks).toEqual({ missing: false, dirty: true, edited: ["rules/x.md#a"] });
     });
 
-    it("consumer text outside blocks is dirty", async () => {
+    it("consumer text outside blocks is dirty but edits no block", async () => {
         const unit = await setup(`${CLEAN}extra\n`);
-        expect(unit.blocks).toEqual({ missing: false, dirty: true });
+        expect(unit.blocks).toEqual({ missing: false, dirty: true, edited: [] });
     });
 
     it("a deleted block is missing, not modified", async () => {
         const unit = await setup(`${TEMPLATE_FM}\n`);
         expect(unit.state).toBe("unmodified");
-        expect(unit.blocks).toEqual({ missing: true, dirty: false });
+        expect(unit.blocks).toEqual({ missing: true, dirty: false, edited: [] });
     });
 
     it("an unparseable file is modified", async () => {

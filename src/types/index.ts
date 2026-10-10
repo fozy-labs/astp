@@ -88,8 +88,9 @@ export interface InstalledUnit {
      * Block state, present only for units whose template has `<astp-block>` files.
      * `missing`: a recorded block name is absent from its file.
      * `dirty`: a recorded block changed locally or the file has consumer text outside blocks.
+     * `edited`: sorted `<file target>#<name>` keys of recorded blocks whose installed content differs.
      */
-    blocks?: { missing: boolean; dirty: boolean };
+    blocks?: { missing: boolean; dirty: boolean; edited: string[] };
 }
 
 /** Files and skill directories grouped by bundle after scanning the install target. */
