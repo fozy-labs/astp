@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 
 import type { InstallTarget } from "@/types/index.js";
@@ -10,7 +11,7 @@ const GIT_PROVIDERS = new Set(["gh", "github", "gitlab", "bitbucket", "sourcehut
 const GIT_RE = /^(?<repo>[\w.-]+\/[\w.-]+)(?<path>\/[^#]*)?(?:#(?<ref>[\w./@-]+))?$/;
 const NPM_RE = /^(?<name>(?:@[\w.-]+\/)?[\w.-]+)(?:@(?<version>[\w.+-]+))?$/;
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-const LOCAL_RE = /^(?:\.{1,2}(?:[\\/]|$)|\/|[A-Za-z]:[\\/])/;
+const LOCAL_RE = /^(?:\.{1,2}(?:[\\/]|$)|[\\/]|[A-Za-z]:[\\/])/;
 
 export const ACCEPTED_SOURCES = [
     "./path/manifest.json or ./dir (local)",
@@ -81,7 +82,18 @@ export async function resolveSource(spec: string, baseDir: string): Promise<Mani
         return { kind: "archive", spec: url.href, address: url.href, manifestFile: DEFAULT_MANIFEST, auth: false };
     }
 
-    if (!provider) return gitSource("gh", trimmed, spec);
+    if (!provider) {
+        const exists = await fs.access(path.resolve(baseDir, trimmed)).then(
+            () => true,
+            () => false,
+        );
+        if (exists) {
+            throw new Error(
+                `Source '${spec}' is ambiguous: a local path with that name exists. Use './${trimmed}' for the local path or 'gh:${trimmed}' for GitHub.`,
+            );
+        }
+        return gitSource("gh", trimmed, spec);
+    }
     throw invalidSource(spec);
 }
 
