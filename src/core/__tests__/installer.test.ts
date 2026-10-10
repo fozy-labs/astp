@@ -2,9 +2,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { canSymlinkFiles } from "../../__tests__/links.js";
 import { describeTarget, resolveTarget } from "../../types/index.js";
 import { computeHash } from "../frontmatter.js";
-import { installFile, installSkill, validateTargetPath } from "../installer.js";
+import { assertBundleSources, installFile, installSkill, validateTargetPath } from "../installer.js";
 
 async function snapshotDirectory(root: string): Promise<Record<string, string>> {
     const snapshot: Record<string, string> = {};
@@ -111,6 +112,23 @@ describe("validateTargetPath", () => {
     // T46: Forward-slash paths resolve correctly
     it("T46: resolves paths with / separators correctly", () => {
         expect(() => validateTargetPath(installRoot, "skills/orchestrate/SKILL.md")).not.toThrow();
+    });
+});
+
+describe("assertBundleSources", () => {
+    it.skipIf(!canSymlinkFiles)("reports a symlinked item as missing even when its target is a file", async () => {
+        const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "astp-src-"));
+        try {
+            await fs.mkdir(path.join(tempDir, "rules"));
+            await fs.writeFile(path.join(tempDir, "target.md"), "# target\n");
+            await fs.symlink(path.join(tempDir, "target.md"), path.join(tempDir, "rules/a.md"), "file");
+            const item = { source: "b/rules/a.md", target: "rules/a.md", category: "rule" } as const;
+            await expect(
+                assertBundleSources(tempDir, "b", [{ kind: "file", relativePath: item.target, item }]),
+            ).rejects.toThrow("Downloaded bundle 'b' is missing files listed in the manifest: rules/a.md");
+        } finally {
+            await fs.rm(tempDir, { recursive: true, force: true });
+        }
     });
 });
 

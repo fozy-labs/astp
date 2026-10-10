@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Bundle } from "@/types/index.js";
 
+import { canSymlinkFiles } from "../../__tests__/links.js";
 import { closeSource, downloadBundle, fetchManifest } from "../fetcher.js";
 import { resolveSource } from "../source.js";
 
@@ -55,6 +56,53 @@ describe("fetcher", () => {
         await expect(fs.stat(path.join(work, "tests/docs/rules/a.md"))).resolves.toBeTruthy();
     });
 
+    describe("links in a local source", () => {
+        let root: string;
+        let outside: string;
+        let source: Awaited<ReturnType<typeof resolveSource>>;
+
+        beforeEach(async () => {
+            root = path.join(work, "src");
+            outside = path.join(work, "outside");
+            await writeRoot(root);
+            await fs.mkdir(outside);
+            await fs.writeFile(path.join(outside, "secret.md"), "SECRET");
+            source = await resolveSource("./src/manifest.json", work);
+        });
+
+        async function download(): Promise<string> {
+            const dir = await downloadBundle(source, bundle);
+            tempDirs.push(dir);
+            return dir;
+        }
+
+        it.skipIf(!canSymlinkFiles)("does not copy a file symlink", async () => {
+            await fs.rm(path.join(root, "docs/rules/a.md"));
+            await fs.symlink(path.join(outside, "secret.md"), path.join(root, "docs/rules/a.md"), "file");
+            await expect(fs.lstat(path.join(await download(), "rules/a.md"))).rejects.toMatchObject({ code: "ENOENT" });
+        });
+
+        it("does not copy a directory link or junction", async () => {
+            await fs.mkdir(path.join(root, "docs/skills/x"), { recursive: true });
+            await fs.symlink(outside, path.join(root, "docs/skills/x/refs"), "junction");
+            const dir = await download();
+            await expect(fs.lstat(path.join(dir, "skills/x/refs"))).rejects.toMatchObject({ code: "ENOENT" });
+            expect(await fs.readFile(path.join(dir, "rules/a.md"), "utf8")).toBe("# a\n");
+        });
+
+        it("copies nothing when the bundle directory is a link", async () => {
+            await fs.rename(path.join(root, "docs"), path.join(outside, "docs"));
+            await fs.symlink(path.join(outside, "docs"), path.join(root, "docs"), "junction");
+            expect(await fs.readdir(await download())).toEqual([]);
+        });
+
+        it.skipIf(!canSymlinkFiles)("rejects a manifest that is a symlink", async () => {
+            await fs.rename(path.join(root, "manifest.json"), path.join(outside, "manifest.json"));
+            await fs.symlink(path.join(outside, "manifest.json"), path.join(root, "manifest.json"), "file");
+            await expect(fetchManifest(source)).rejects.toThrow("is not a regular file");
+        });
+    });
+
     it("names the checked path when a local manifest is missing", async () => {
         const source = await resolveSource("./nowhere", work);
         await expect(fetchManifest(source)).rejects.toThrow(path.join(work, "nowhere/templates/manifest.json"));
@@ -91,6 +139,23 @@ describe("fetcher", () => {
         mockedDownloadTemplate.mockImplementation(async (_input, options) => ({ dir: options!.dir! }) as never);
         const source = await resolveSource("gh:o/r/missing", work);
         await expect(fetchManifest(source)).rejects.toThrow("Manifest not found for source 'gh:o/r/missing'");
+        await closeSource(source);
+    });
+
+    it("rejects an archive whose manifest directory links outside the download", async () => {
+        const outside = path.join(work, "outside");
+        await writeRoot(outside);
+        mockedDownloadTemplate.mockImplementation(async (_input, options) => {
+            await fs.symlink(outside, path.join(options!.dir!, "templates"), "junction");
+            return { dir: options!.dir! } as never;
+        });
+        const source = await resolveSource("https://host/a.tgz", work);
+        await expect(fetchManifest(source)).rejects.toThrow(
+            "Manifest directory of source 'https://host/a.tgz' resolves outside the downloaded source",
+        );
+        await expect(downloadBundle(source, bundle)).rejects.toThrow(
+            "bundle directory resolves outside the downloaded source",
+        );
         await closeSource(source);
     });
 
