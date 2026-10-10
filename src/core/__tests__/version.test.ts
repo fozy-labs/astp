@@ -217,6 +217,34 @@ describe("compareVersions", () => {
         expect(report.updates).toHaveLength(1);
     });
 
+    it("treats a bundle with only declined units as up to date", () => {
+        const report = compareVersions(
+            [{ bundleName: "pipeline", version: "", units: [], declined: ["agents/a.md"] }],
+            createManifest("1.0.0"),
+        );
+        expect(report.upToDate).toHaveLength(1);
+        expect(report.updates).toHaveLength(0);
+    });
+
+    it("offers an update when a declined-only bundle has a new unit upstream", () => {
+        const manifest = createManifest("1.0.0");
+        manifest.bundles.pipeline!.items.push({
+            source: "pipeline/agents/b.md",
+            target: "agents/b.md",
+            category: "agent",
+        });
+        const report = compareVersions(
+            [{ bundleName: "pipeline", version: "", units: [], declined: ["agents/a.md"] }],
+            manifest,
+        );
+        expect(report.updates).toHaveLength(1);
+        expect(report.updates[0]?.units).toContainEqual({
+            targetPath: "agents/b.md",
+            kind: "file",
+            state: "new",
+        });
+    });
+
     it("classifies bundles missing from the manifest as not in the manifest", () => {
         const manifest: Manifest = {
             schemaVersion: 1,

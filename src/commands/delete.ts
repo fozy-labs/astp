@@ -79,28 +79,31 @@ export async function executeDelete(options: DeleteOptions): Promise<void> {
             };
             installedState.lock.bundles[bundle.bundleName] = lockBundle;
         }
-        for (const unit of bundle.units) {
-            if ((unit.state === "modified" || unit.blocks?.dirty) && !options.force) {
-                kept.push(toStatus(unit));
-                continue;
+        try {
+            for (const unit of bundle.units) {
+                if ((unit.state === "modified" || unit.blocks?.dirty) && !options.force) {
+                    kept.push(toStatus(unit));
+                    continue;
+                }
+                const unitPath = path.join(target.rootDir, unit.relativePath);
+                await assertInsideRoot(target.rootDir, unit.relativePath);
+                await fs.rm(unitPath, { recursive: true, force: true });
+                await removeEmptyDirectories(path.dirname(unitPath), target.rootDir);
+                delete lockBundle.units[unit.relativePath];
+                lockBundle.declined.push(unit.relativePath);
+                removedPaths.add(`${unit.kind}\0${unit.relativePath}`);
+                removed.push(toStatus(unit));
             }
-            const unitPath = path.join(target.rootDir, unit.relativePath);
-            await assertInsideRoot(target.rootDir, unit.relativePath);
-            await fs.rm(unitPath, { recursive: true, force: true });
-            await removeEmptyDirectories(path.dirname(unitPath), target.rootDir);
-            delete lockBundle.units[unit.relativePath];
-            lockBundle.declined.push(unit.relativePath);
-            removedPaths.add(`${unit.kind}\0${unit.relativePath}`);
-            removed.push(toStatus(unit));
+        } finally {
+            lockBundle.declined = [...new Set(lockBundle.declined)].sort();
+            const legacyRemaining = (installedBundle?.units ?? []).some(
+                (unit) => unit.origin === "legacy" && !removedPaths.has(`${unit.kind}\0${unit.relativePath}`),
+            );
+            if (Object.keys(lockBundle.units).length === 0 && !legacyRemaining) {
+                delete installedState.lock.bundles[bundle.bundleName];
+            }
+            await writeLock(target.rootDir, installedState.lock);
         }
-        lockBundle.declined = [...new Set(lockBundle.declined)].sort();
-        const legacyRemaining = (installedBundle?.units ?? []).some(
-            (unit) => unit.origin === "legacy" && !removedPaths.has(`${unit.kind}\0${unit.relativePath}`),
-        );
-        if (Object.keys(lockBundle.units).length === 0 && !legacyRemaining) {
-            delete installedState.lock.bundles[bundle.bundleName];
-        }
-        await writeLock(target.rootDir, installedState.lock);
         s.stop(`Deleted ${bundle.bundleName}.`);
     }
     if (kept.length > 0) warnKeptRemoved(kept);

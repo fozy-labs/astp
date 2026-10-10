@@ -5,7 +5,7 @@ import { vi } from "vitest";
 
 import { executeDelete } from "@/commands/delete.js";
 import { executeInstall } from "@/commands/install.js";
-import { downloadBundle, fetchManifest } from "@/core/index.js";
+import { assertInsideRoot, downloadBundle, fetchManifest } from "@/core/index.js";
 import type { Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { confirmInstall } from "@/ui/prompts.js";
@@ -25,6 +25,7 @@ vi.mock("@/core/index.js", async (importOriginal) => {
         ...actual,
         fetchManifest: vi.fn(),
         downloadBundle: vi.fn(),
+        assertInsideRoot: vi.fn(actual.assertInsideRoot),
     };
 });
 
@@ -62,6 +63,7 @@ const mockFetchManifest = vi.mocked(fetchManifest);
 const mockDownloadBundle = vi.mocked(downloadBundle);
 const mockResolveTarget = vi.mocked(resolveTarget);
 const mockConfirmInstall = vi.mocked(confirmInstall);
+const mockAssertInsideRoot = vi.mocked(assertInsideRoot);
 
 describe("E2E: delete", () => {
     let projectDir: string;
@@ -122,6 +124,52 @@ describe("E2E: delete", () => {
         expect(content).not.toContain("astp-source");
         const lock = await readLockFixture(path.join(projectDir, ".claude"));
         expect(lock.bundles.pipeline.units["agents/pipeline-approve.agent.md"]).toBeDefined();
+    });
+
+    it("keeps the lock in step with the disk when a removal fails", async () => {
+        manifest = {
+            schemaVersion: 1,
+            repository: "fixture/repo",
+            bundles: {
+                core: {
+                    name: "core",
+                    version: "1.0.0",
+                    description: "core",
+                    default: false,
+                    platforms: ["claude-code"],
+                    items: [
+                        { source: "core/agents/first.md", target: "agents/first.md", category: "agent" },
+                        { source: "core/agents/second.md", target: "agents/second.md", category: "agent" },
+                    ],
+                },
+            },
+        };
+        mockFetchManifest.mockResolvedValue(manifest);
+        const tplDir = await setupTemplateDir(manifest, "core");
+        templateDirs.push(tplDir);
+        mockDownloadBundle.mockResolvedValue(tplDir);
+        await executeInstall({ bundle: "core", platform: "claude-code", target: "project" });
+
+        const passThrough = mockAssertInsideRoot.getMockImplementation()!;
+        mockAssertInsideRoot.mockImplementation(async (rootDir, relativePath) => {
+            if (relativePath === "agents/second.md") throw new Error("boom");
+            return passThrough(rootDir, relativePath);
+        });
+        try {
+            await expect(executeDelete({ bundle: "core", platform: "claude-code", target: "project" })).rejects.toThrow(
+                "boom",
+            );
+        } finally {
+            mockAssertInsideRoot.mockImplementation(passThrough);
+        }
+
+        const rootDir = path.join(projectDir, ".claude");
+        const lock = await readLockFixture(rootDir);
+        expect(lock.bundles.core.units["agents/first.md"]).toBeUndefined();
+        expect(lock.bundles.core.declined).toEqual(["agents/first.md"]);
+        expect(lock.bundles.core.units["agents/second.md"]).toBeDefined();
+        await expect(fs.access(path.join(rootDir, "agents/first.md"))).rejects.toMatchObject({ code: "ENOENT" });
+        expect(await fs.readFile(path.join(rootDir, "agents/second.md"), "utf8")).toContain("second");
     });
 
     it("removes modified files with force", async () => {
