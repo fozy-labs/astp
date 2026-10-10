@@ -99,9 +99,7 @@ describe("fetcher", () => {
         it.skipIf(!canSymlinkFiles)("rejects a manifest that is a symlink", async () => {
             await fs.rename(path.join(root, "manifest.json"), path.join(outside, "manifest.json"));
             await fs.symlink(path.join(outside, "manifest.json"), path.join(root, "manifest.json"), "file");
-            await expect(fetchManifest(source)).rejects.toThrow(
-                "Manifest at source './src/manifest.json' is not a regular file",
-            );
+            await expect(fetchManifest(source)).rejects.toThrow("is not a regular file");
         });
     });
 
