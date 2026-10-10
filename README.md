@@ -48,7 +48,7 @@ By default bundles come from `gh:fozy-labs/astp` (`templates/manifest.json` on `
 | `--source` | Reads |
 |------------|-------|
 | `./x.json`, `./dir` | a local manifest, or `<dir>/templates/manifest.json`; bundle `B` from `B/` next to the manifest |
-| `owner/repo[/path][#ref]`, `gh:` `gitlab:` `bitbucket:` `sourcehut:` + the same | a git repo at a branch, tag or commit; no ref means the default branch |
+| `owner/repo[/path][#ref]`, `gh:` `gitlab:` `bitbucket:` `sourcehut:` + the same | a git repo at a branch, tag or commit; no ref means the default branch; a bare `owner/repo` that is also a local path is rejected: write `./owner/repo` or `gh:owner/repo` |
 | `https://github.com/owner/repo[/tree/<ref>/<dir> \| /blob/<ref>/<file>.json]` | the same, from a GitHub URL |
 | `npm:<name>[@<version or tag>]` | `templates/manifest.json` in an npm package |
 | `https://…/x.json` | a hosted manifest; each file is fetched next to it |

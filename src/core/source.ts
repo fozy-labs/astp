@@ -83,16 +83,14 @@ export async function resolveSource(spec: string, baseDir: string): Promise<Mani
     }
 
     if (!provider) {
-        const exists = await fs.access(path.resolve(baseDir, trimmed)).then(
-            () => true,
-            () => false,
-        );
-        if (exists) {
+        const source = gitSource("gh", trimmed, spec);
+        const local = trimmed.replace(/#.*$/, "");
+        if (await pathExists(path.resolve(baseDir, local), spec)) {
             throw new Error(
-                `Source '${spec}' is ambiguous: a local path with that name exists. Use './${trimmed}' for the local path or 'gh:${trimmed}' for GitHub.`,
+                `Source '${spec}' is ambiguous: a local path with that name exists. Use './${local}' for the local path or 'gh:${trimmed}' for GitHub.`,
             );
         }
-        return gitSource("gh", trimmed, spec);
+        return source;
     }
     throw invalidSource(spec);
 }
@@ -168,6 +166,18 @@ async function refExists(repo: string, ref: string): Promise<boolean> {
 
 function isJson(value: string): boolean {
     return value.toLowerCase().endsWith(".json");
+}
+
+/** `false` only when the path is confirmed absent; any other failure is an error, never a silent GitHub fetch. */
+async function pathExists(target: string, spec: string): Promise<boolean> {
+    try {
+        await fs.lstat(target);
+        return true;
+    } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === "ENOENT" || code === "ENOTDIR") return false;
+        throw new Error(`Cannot check whether source '${spec}' names a local path: ${(error as Error).message}`);
+    }
 }
 
 function invalidSource(spec: string): Error {
