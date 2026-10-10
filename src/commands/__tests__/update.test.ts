@@ -244,7 +244,7 @@ describe("executeUpdate", () => {
         );
         expect(mockWarnLegacyModified).toHaveBeenCalledWith(
             [{ targetPath: "skills/old", kind: "skill", state: "legacy" }],
-            "project",
+            "astp update --force --target project",
         );
         expect(mockShowInfo).toHaveBeenCalledWith("All bundles up to date.");
         expect(mockDownloadBundle).not.toHaveBeenCalled();

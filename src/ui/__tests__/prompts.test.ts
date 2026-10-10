@@ -308,7 +308,10 @@ describe("legacy migration prompts", () => {
     });
 
     it("shows the force-migration hint when modified legacy units are skipped", () => {
-        warnLegacyModified([{ targetPath: "skills/example", kind: "skill", state: "legacy" }], "user");
+        warnLegacyModified(
+            [{ targetPath: "skills/example", kind: "skill", state: "legacy" }],
+            "astp update --force --target user",
+        );
 
         expect(p.log.warn).toHaveBeenCalledWith(
             expect.stringContaining("Run `astp update --force --target user` to replace them."),
@@ -321,6 +324,23 @@ describe("legacy migration prompts", () => {
 
         expect(p.log.warn).toHaveBeenCalledWith(
             expect.stringContaining("astp install core --skill skills/sample --force --target user"),
+        );
+    });
+
+    it("keeps --source in foreign overwrite commands, quoting values with spaces", () => {
+        vi.mocked(p.log.warn).mockClear();
+        warnForeign(
+            "core",
+            [{ targetPath: "skills/sample", kind: "skill", state: "modified" }],
+            [],
+            "user",
+            "./my src",
+        );
+
+        expect(p.log.warn).toHaveBeenCalledWith(
+            expect.stringContaining(
+                'astp install core --skill skills/sample --force --source "./my src" --target user',
+            ),
         );
     });
 

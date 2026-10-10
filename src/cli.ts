@@ -67,7 +67,7 @@ program
     .option("--target <type>", TARGET_HELP)
     .addHelpText(
         "after",
-        "\nWithout --skill or --block: a terminal asks which units to install; without one,\nevery unit and non-optional block is selected, clearing earlier declines.\n--skill and --block add to the current selection.",
+        "\nWithout --skill or --block: a terminal asks which units to install; without one,\nevery unit and non-optional block is selected, clearing earlier declines.\n--skill and --block add to the current selection. With --skill or --block,\n--force covers only the named units and blocks.",
     )
     .action(
         async (

@@ -38,6 +38,9 @@ export interface SyncResult {
 /** Per-file block selection: block names (without the `file#` prefix). */
 export type BlockSelections = Map<string, { selected: Set<string>; declined: Set<string> }>;
 
+/** `true`/`false` for a global force; an object scopes it to unit paths and `file#name` block keys. */
+export type ForceScope = boolean | { units: ReadonlySet<string>; blocks: ReadonlySet<string> };
+
 /** Writes astp.lock before returning or throwing, so the lock matches the disk even after a failure. */
 export async function syncBundle(args: {
     target: InstallTarget;
@@ -50,7 +53,7 @@ export async function syncBundle(args: {
     selected: Set<string>;
     declined: Set<string>;
     blockSelections?: BlockSelections;
-    force: boolean;
+    force: ForceScope;
 }): Promise<SyncResult> {
     const result: SyncResult = {
         installed: [],
@@ -81,7 +84,7 @@ export async function syncBundle(args: {
     const keptPaths = new Set<string>();
 
     const remove = async (unit: InstalledUnit, declined: boolean): Promise<void> => {
-        if ((unit.state === "modified" || unit.blocks?.dirty) && !args.force) {
+        if ((unit.state === "modified" || unit.blocks?.dirty) && !unitForced(args.force, unit.relativePath)) {
             if (!declined && unit.origin === "lock") {
                 delete lockBundle.units[unit.relativePath];
                 result.released.push(status(unit));
@@ -127,14 +130,14 @@ export async function syncBundle(args: {
             const templateHasBlocks = blockFiles.size > 0;
             const lockHasBlocks = Boolean(lockUnit?.blocks || lockUnit?.declinedBlocks);
 
-            if (current?.state === "modified" && !args.force) {
+            if (current?.state === "modified" && !unitForced(args.force, unit.relativePath)) {
                 result.skipped.push(status(current));
                 continue;
             }
 
             if (!templateHasBlocks && lockHasBlocks && current && current.state !== "missing") {
                 // The template lost its blocks: install as a plain unit unless the file has local edits.
-                if (current.blocks?.dirty && !args.force) {
+                if (current.blocks?.dirty && !unitForced(args.force, unit.relativePath)) {
                     result.skipped.push(status(current));
                     continue;
                 }
@@ -160,7 +163,7 @@ export async function syncBundle(args: {
                         result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
                         continue;
                     }
-                    if (diskState === "modified" && !args.force) {
+                    if (diskState === "modified" && !unitForced(args.force, unit.relativePath)) {
                         declineForeign(unit);
                         continue;
                     }
@@ -179,7 +182,7 @@ export async function syncBundle(args: {
             // Unit with blocks: merge each block file, then write. A lock block
             // file that went plain in the template is protected like a whole unit
             // going plain — mergeUnitBlockFiles would not touch it, installSkill would.
-            if (current?.blocks?.dirty && !args.force && lockUnit) {
+            if (current?.blocks?.dirty && !unitForced(args.force, unit.relativePath) && lockUnit) {
                 const lockTargets = new Set(
                     [...Object.keys(lockUnit.blocks ?? {}), ...(lockUnit.declinedBlocks ?? [])].map(
                         (key) => splitBlockKey(key)[0],
@@ -212,7 +215,7 @@ export async function syncBundle(args: {
                     result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
                     continue;
                 }
-                if (diskState === "modified" && !args.force) {
+                if (diskState === "modified" && !unitForced(args.force, unit.relativePath)) {
                     declineForeign(unit);
                     continue;
                 }
@@ -267,7 +270,7 @@ async function mergeUnitBlockFiles(
         target: InstallTarget;
         tempDir: string;
         blockSelections?: BlockSelections;
-        force: boolean;
+        force: ForceScope;
     },
     rootDir: string,
     unit: ReturnType<typeof groupTemplateItems>[number],
@@ -324,7 +327,7 @@ async function mergeUnitBlockFiles(
             declined,
             selected,
             occupied,
-            force: args.force,
+            force: blockFileForce(args.force, unit.relativePath, target),
         });
         contents.set(target, merged.content);
         for (const [name, hash] of Object.entries(merged.blocks)) blocks[`${target}#${name}`] = hash;
@@ -341,6 +344,22 @@ async function mergeUnitBlockFiles(
 function splitBlockKey(key: string): [string, string] {
     const separator = key.lastIndexOf("#");
     return [key.slice(0, separator), key.slice(separator + 1)];
+}
+
+function unitForced(force: ForceScope, unitPath: string): boolean {
+    return force === true || (force !== false && force.units.has(unitPath));
+}
+
+/** Force for one block file: whole-unit force, or the block names the scope lists for this target. */
+function blockFileForce(force: ForceScope, unitPath: string, fileTarget: string): boolean | Set<string> {
+    if (unitForced(force, unitPath)) return true;
+    if (typeof force === "boolean") return force;
+    return new Set(
+        [...force.blocks]
+            .map((key) => splitBlockKey(key))
+            .filter(([file]) => file === fileTarget)
+            .map(([, name]) => name),
+    );
 }
 
 /**

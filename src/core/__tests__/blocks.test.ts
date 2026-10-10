@@ -62,7 +62,7 @@ function merge(args: {
     lockHashes?: Record<string, string>;
     declined?: string[];
     selected: string[];
-    force?: boolean;
+    force?: boolean | ReadonlySet<string>;
 }) {
     const { frontmatter, blocks, errors } = parseTemplateBlocks(args.templateContent);
     expect(errors).toEqual([]);
@@ -289,6 +289,30 @@ describe("mergeBlockFile", () => {
         expect(forced.conflicts).toEqual([]);
         expect(forced.content).toContain("New ready-made text.");
         expect(forced.content).not.toContain("Our own style.");
+    });
+
+    it("a set of names forces only those blocks", () => {
+        const installed = merge({ templateContent: TEMPLATE, selected: ["project_map", "code_style"] });
+        const filled = installed.content
+            .replace("Describe the project file structure. If the map depth is not obvious, ask the user.", "Our map.")
+            .replace("Ready-made text.", "Our own style.");
+        const changedTemplate = TEMPLATE.replace(
+            "Describe the project file structure. If the map depth is not obvious, ask the user.",
+            "List top-level dirs.",
+        ).replace("Ready-made text.", "New ready-made text.");
+
+        const result = merge({
+            templateContent: changedTemplate,
+            installed: filled,
+            lockHashes: installed.blocks,
+            selected: ["project_map", "code_style"],
+            force: new Set(["project_map"]),
+        });
+        expect(result.conflicts).toEqual(["code_style"]);
+        expect(result.content).toContain("List top-level dirs.");
+        expect(result.content).not.toContain("Our map.");
+        expect(result.content).toContain("Our own style.");
+        expect(result.content).toContain("The astp template of this block changed");
     });
 
     it("C != L and T == L keeps the block as is", () => {

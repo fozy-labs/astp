@@ -97,7 +97,8 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                 }
                 if (modifiedLockUnits.length > 0)
                     warnModified(modifiedLockUnits, `astp update --force --target ${target.type}`);
-                if (modifiedLegacyUnits.length > 0) warnLegacyModified(modifiedLegacyUnits, target.type);
+                if (modifiedLegacyUnits.length > 0)
+                    warnLegacyModified(modifiedLegacyUnits, `astp update --force --target ${target.type}`);
             }
             return;
         }
@@ -172,7 +173,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                 const legacy = result.skipped.filter((status) => status.state === "legacy");
                 const modified = result.skipped.filter((status) => status.state !== "legacy");
                 if (modified.length > 0) warnModified(modified, `astp update --force --target ${target.type}`);
-                if (legacy.length > 0) warnLegacyModified(legacy, target.type);
+                if (legacy.length > 0) warnLegacyModified(legacy, `astp update --force --target ${target.type}`);
                 if (result.kept.length > 0) warnKeptRemoved(result.kept);
                 if (result.keptBlocks.length > 0) warnKeptBlocks(result.keptBlocks);
                 if (result.released.length > 0 || result.releasedBlocks.length > 0) {

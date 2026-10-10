@@ -9,7 +9,7 @@ import { executeList } from "@/commands/list.js";
 import { executeUpdate } from "@/commands/update.js";
 import type { Bundle, Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
-import { showCheckReport, showInfo } from "@/ui/prompts.js";
+import { showCheckReport, showInfo, warnForeign, warnModified } from "@/ui/prompts.js";
 
 import { createTempProject, makeProjectTarget, readLockFixture } from "./helpers.js";
 
@@ -167,6 +167,42 @@ describe("E2E: manifest sources", () => {
         for (const entry of installed.filter((entry) => entry.isFile())) {
             expect(await fs.readFile(path.join(entry.parentPath, entry.name), "utf8")).not.toContain("SECRET");
         }
+    });
+
+    it("keeps --source in the printed force-retry commands", async () => {
+        const bundle = ruleBundle("core", "1.0.0");
+        bundle.items = [
+            { source: "core/rules/a.md", target: "rules/a.md", category: "rule" },
+            { source: "core/rules/b.md", target: "rules/b.md", category: "rule" },
+        ];
+        const manifestPath = path.join(projectDir, "a/templates/manifest.json");
+        const manifest: Manifest = { schemaVersion: 1, bundles: { core: bundle } };
+        const rules = path.join(projectDir, "a/templates/core/rules");
+        await fs.writeFile(path.join(rules, "a.md"), "a v1\n");
+        await fs.writeFile(path.join(rules, "b.md"), "b v1\n");
+        await fs.writeFile(manifestPath, JSON.stringify(manifest));
+
+        await executeInstall({ ...opts, bundle: "core", source: "./a" });
+        await fs.appendFile(path.join(rootDir, "rules/a.md"), "local edit\n");
+        const lockPath = path.join(rootDir, "astp.lock");
+        const lock = JSON.parse(await fs.readFile(lockPath, "utf8"));
+        delete lock.bundles.core.units["rules/b.md"];
+        await fs.writeFile(lockPath, JSON.stringify(lock));
+        await fs.writeFile(path.join(rootDir, "rules/b.md"), "not the template\n");
+
+        await executeInstall({ ...opts, bundle: "core", source: "./a" });
+
+        expect(vi.mocked(warnModified)).toHaveBeenCalledWith(
+            [expect.objectContaining({ targetPath: "rules/a.md" })],
+            "astp install core --skill rules/a.md --force --source ./a --target project",
+        );
+        expect(vi.mocked(warnForeign)).toHaveBeenCalledWith(
+            "core",
+            [expect.objectContaining({ targetPath: "rules/b.md" })],
+            [],
+            "project",
+            "./a",
+        );
     });
 
     it("names the bundle and a fix when its lock source is gone", async () => {
