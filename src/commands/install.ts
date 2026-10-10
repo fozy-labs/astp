@@ -12,7 +12,6 @@ import {
     resolveUnitPaths,
     syncBundle,
     validateUnitTargets,
-    writeLock,
 } from "@/core/index.js";
 import type { BlockSelections, UnitBlockFile } from "@/core/index.js";
 import type { TemplateUnit } from "@/core/units.js";
@@ -243,7 +242,6 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 blockSelections: plan.blockSelections,
                 force: options.force ?? false,
             });
-            await writeLock(target.rootDir, installedState.lock);
             totals.installed.push(...result.installed);
             totals.skipped.push(...result.skipped, ...result.foreign);
             totals.kept.push(...result.kept);

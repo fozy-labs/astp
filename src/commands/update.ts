@@ -10,7 +10,6 @@ import {
     readUnitBlockFiles,
     syncBundle,
     validateUnitTargets,
-    writeLock,
 } from "@/core/index.js";
 import type { BlockSelections } from "@/core/index.js";
 import type { FileStatus, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
@@ -166,7 +165,6 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                     blockSelections,
                     force: options.force ?? false,
                 });
-                await writeLock(target.rootDir, installedState.lock);
                 totals.installed.push(...result.installed);
                 totals.removed.push(...result.removed);
                 totals.skipped.push(...result.skipped, ...result.foreign);

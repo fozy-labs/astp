@@ -273,7 +273,6 @@ describe("executeUpdate", () => {
             expect.objectContaining({ name: "pipeline" }),
         );
         expect(mockSyncBundle).toHaveBeenCalledWith(expect.objectContaining({ bundle: emptyBundle }));
-        expect(mockWriteLock).toHaveBeenCalled();
     });
 
     it("does not sync dropped units when downloading the replacement fails", async () => {

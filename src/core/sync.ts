@@ -1,3 +1,4 @@
+import type { Stats } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -7,6 +8,7 @@ import type { InstalledBlocks } from "./blocks.js";
 import { mergeBlockFile, parseInstalledBlocks } from "./blocks.js";
 import { computeHash } from "./frontmatter.js";
 import { installFile, installSkill } from "./installer.js";
+import { writeLock } from "./lock.js";
 import type { Lock, LockBundle, LockUnit } from "./lock.js";
 import { assertInsideRoot, nullPrototype } from "./path-safety.js";
 import { computeSkillTreeHash, computeTemplateUnitHash } from "./skill-tree.js";
@@ -36,6 +38,7 @@ export interface SyncResult {
 /** Per-file block selection: block names (without the `file#` prefix). */
 export type BlockSelections = Map<string, { selected: Set<string>; declined: Set<string> }>;
 
+/** Writes astp.lock before returning or throwing, so the lock matches the disk even after a failure. */
 export async function syncBundle(args: {
     target: InstallTarget;
     /** Source string recorded in the lock. */
@@ -99,57 +102,112 @@ export async function syncBundle(args: {
     };
 
     const declineForeign = (unit: ReturnType<typeof groupTemplateItems>[number]): void => {
+        delete lockBundle.units[unit.relativePath];
         args.declined.add(unit.relativePath);
         result.foreign.push({ targetPath: unit.relativePath, kind: unit.kind, state: "modified" });
     };
 
-    for (const unit of args.installed?.units ?? []) {
-        if (!manifestPaths.has(`${unit.kind}\0${unit.relativePath}`)) await remove(unit, false);
-    }
-    for (const unit of units) {
-        if (!args.declined.has(unit.relativePath)) continue;
-        const current = currentByPath.get(unit.relativePath);
-        if (current) await remove(current, true);
-        else args.declined.add(unit.relativePath);
-    }
-
-    for (const unit of units) {
-        if (!args.selected.has(unit.relativePath)) continue;
-        const current = currentByPath.get(unit.relativePath);
-        const lockUnit = lockBundle.units[unit.relativePath];
-        const blockFiles = await readUnitBlockFiles(args.tempDir, unit);
-        const templateHasBlocks = blockFiles.size > 0;
-        const lockHasBlocks = Boolean(lockUnit?.blocks || lockUnit?.declinedBlocks);
-
-        if (current?.state === "modified" && !args.force) {
-            result.skipped.push(status(current));
-            continue;
+    try {
+        for (const unit of args.installed?.units ?? []) {
+            if (!manifestPaths.has(`${unit.kind}\0${unit.relativePath}`)) await remove(unit, false);
+        }
+        for (const unit of units) {
+            if (!args.declined.has(unit.relativePath)) continue;
+            const current = currentByPath.get(unit.relativePath);
+            if (current) await remove(current, true);
+            else args.declined.add(unit.relativePath);
         }
 
-        if (!templateHasBlocks && lockHasBlocks && current) {
-            // The template lost its blocks: install as a plain unit unless the file has local edits.
-            if (current.blocks?.dirty && !args.force) {
+        for (const unit of units) {
+            if (!args.selected.has(unit.relativePath)) continue;
+            const current = currentByPath.get(unit.relativePath);
+            const untracked = !current || current.state === "missing";
+            const lockUnit = lockBundle.units[unit.relativePath];
+            const blockFiles = await readUnitBlockFiles(args.tempDir, unit);
+            const templateHasBlocks = blockFiles.size > 0;
+            const lockHasBlocks = Boolean(lockUnit?.blocks || lockUnit?.declinedBlocks);
+
+            if (current?.state === "modified" && !args.force) {
                 result.skipped.push(status(current));
                 continue;
             }
-            const hash =
-                unit.kind === "skill"
-                    ? await installSkill(args.tempDir, unit, args.target)
-                    : await installFile(args.tempDir, unit.item, args.target);
-            lockBundle.units[unit.relativePath] = { kind: unit.kind, version: args.bundle.version, hash };
-            if (current.origin === "legacy") removedLegacy.add(current.relativePath);
-            result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
-            continue;
-        }
 
-        if (!templateHasBlocks) {
-            if (!current) {
-                const diskState = await compareUntracked(rootDir, args.tempDir, unit);
+            if (!templateHasBlocks && lockHasBlocks && current && current.state !== "missing") {
+                // The template lost its blocks: install as a plain unit unless the file has local edits.
+                if (current.blocks?.dirty && !args.force) {
+                    result.skipped.push(status(current));
+                    continue;
+                }
+                const hash =
+                    unit.kind === "skill"
+                        ? await installSkill(args.tempDir, unit, args.target)
+                        : await installFile(args.tempDir, unit.item, args.target);
+                lockBundle.units[unit.relativePath] = { kind: unit.kind, version: args.bundle.version, hash };
+                if (current.origin === "legacy") removedLegacy.add(current.relativePath);
+                result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
+                continue;
+            }
+
+            if (!templateHasBlocks) {
+                if (untracked) {
+                    const diskState = await compareUntracked(rootDir, args.tempDir, unit);
+                    if (diskState === "equal") {
+                        lockBundle.units[unit.relativePath] = {
+                            kind: unit.kind,
+                            version: args.bundle.version,
+                            hash: await computeTemplateUnitHash(args.tempDir, unit),
+                        };
+                        result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
+                        continue;
+                    }
+                    if (diskState === "modified" && !args.force) {
+                        declineForeign(unit);
+                        continue;
+                    }
+                }
+
+                const hash =
+                    unit.kind === "skill"
+                        ? await installSkill(args.tempDir, unit, args.target)
+                        : await installFile(args.tempDir, unit.item, args.target);
+                lockBundle.units[unit.relativePath] = { kind: unit.kind, version: args.bundle.version, hash };
+                if (current?.origin === "legacy") removedLegacy.add(current.relativePath);
+                result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
+                continue;
+            }
+
+            // Unit with blocks: merge each block file, then write. A lock block
+            // file that went plain in the template is protected like a whole unit
+            // going plain — mergeUnitBlockFiles would not touch it, installSkill would.
+            if (current?.blocks?.dirty && !args.force && lockUnit) {
+                const lockTargets = new Set(
+                    [...Object.keys(lockUnit.blocks ?? {}), ...(lockUnit.declinedBlocks ?? [])].map(
+                        (key) => splitBlockKey(key)[0],
+                    ),
+                );
+                if ([...lockTargets].some((target) => !blockFiles.has(target))) {
+                    result.skipped.push(status(current));
+                    continue;
+                }
+            }
+            const merged = await mergeUnitBlockFiles(args, rootDir, unit, blockFiles, lockUnit, result);
+            const blockTargets = new Set(blockFiles.keys());
+            const hash = await computeTemplateUnitHash(args.tempDir, unit, {
+                blockFiles:
+                    unit.kind === "skill"
+                        ? new Set([...blockTargets].map((target) => path.posix.relative(unit.relativePath, target)))
+                        : blockTargets,
+            });
+
+            if (untracked) {
+                const diskState = await compareUntrackedBlocks(rootDir, args.tempDir, unit, merged.contents);
                 if (diskState === "equal") {
                     lockBundle.units[unit.relativePath] = {
                         kind: unit.kind,
                         version: args.bundle.version,
-                        hash: await computeTemplateUnitHash(args.tempDir, unit),
+                        hash,
+                        blocks: merged.blocks,
+                        declinedBlocks: merged.declinedBlocks,
                     };
                     result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
                     continue;
@@ -160,87 +218,40 @@ export async function syncBundle(args: {
                 }
             }
 
-            const hash =
-                unit.kind === "skill"
-                    ? await installSkill(args.tempDir, unit, args.target)
-                    : await installFile(args.tempDir, unit.item, args.target);
-            lockBundle.units[unit.relativePath] = { kind: unit.kind, version: args.bundle.version, hash };
+            if (unit.kind === "skill") {
+                await installSkill(args.tempDir, unit, args.target, { overrides: merged.contents });
+            } else {
+                await installFile(args.tempDir, unit.item, args.target, merged.contents.get(unit.item.target));
+            }
+            lockBundle.units[unit.relativePath] = {
+                kind: unit.kind,
+                version: args.bundle.version,
+                hash,
+                blocks: merged.blocks,
+                declinedBlocks: merged.declinedBlocks,
+            };
             if (current?.origin === "legacy") removedLegacy.add(current.relativePath);
             result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
-            continue;
         }
-
-        // Unit with blocks: merge each block file, then write. A lock block
-        // file that went plain in the template is protected like a whole unit
-        // going plain — mergeUnitBlockFiles would not touch it, installSkill would.
-        if (current?.blocks?.dirty && !args.force && lockUnit) {
-            const lockTargets = new Set(
-                [...Object.keys(lockUnit.blocks ?? {}), ...(lockUnit.declinedBlocks ?? [])].map(
-                    (key) => splitBlockKey(key)[0],
-                ),
-            );
-            if ([...lockTargets].some((target) => !blockFiles.has(target))) {
-                result.skipped.push(status(current));
-                continue;
-            }
-        }
-        const merged = await mergeUnitBlockFiles(args, rootDir, unit, blockFiles, lockUnit, result);
-        const blockTargets = new Set(blockFiles.keys());
-        const hash = await computeTemplateUnitHash(args.tempDir, unit, {
-            blockFiles:
-                unit.kind === "skill"
-                    ? new Set([...blockTargets].map((target) => path.posix.relative(unit.relativePath, target)))
-                    : blockTargets,
-        });
-
-        if (!current) {
-            const diskState = await compareUntrackedBlocks(rootDir, args.tempDir, unit, merged.contents);
-            if (diskState === "equal") {
-                lockBundle.units[unit.relativePath] = {
-                    kind: unit.kind,
-                    version: args.bundle.version,
-                    hash,
-                    blocks: merged.blocks,
-                    declinedBlocks: merged.declinedBlocks,
-                };
-                result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
-                continue;
-            }
-            if (diskState === "modified" && !args.force) {
-                declineForeign(unit);
-                continue;
-            }
-        }
-
-        if (unit.kind === "skill") {
-            await installSkill(args.tempDir, unit, args.target, { overrides: merged.contents });
+    } finally {
+        const oldDeclined = new Set(existingLock?.declined ?? []);
+        lockBundle.declined = [
+            ...new Set([...oldDeclined].filter((unitPath) => !args.selected.has(unitPath)).concat([...args.declined])),
+        ]
+            .filter(
+                (unitPath) =>
+                    manifestUnitPaths.has(unitPath) && !keptPaths.has(unitPath) && !(unitPath in lockBundle.units),
+            )
+            .sort();
+        const legacyRemaining = (args.installed?.units ?? []).some(
+            (unit) => unit.origin === "legacy" && !removedLegacy.has(unit.relativePath),
+        );
+        if (Object.keys(lockBundle.units).length === 0 && !legacyRemaining) {
+            delete args.lock.bundles[args.bundle.name];
         } else {
-            await installFile(args.tempDir, unit.item, args.target, merged.contents.get(unit.item.target));
+            args.lock.bundles[args.bundle.name] = lockBundle;
         }
-        lockBundle.units[unit.relativePath] = {
-            kind: unit.kind,
-            version: args.bundle.version,
-            hash,
-            blocks: merged.blocks,
-            declinedBlocks: merged.declinedBlocks,
-        };
-        if (current?.origin === "legacy") removedLegacy.add(current.relativePath);
-        result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
-    }
-
-    const oldDeclined = new Set(existingLock?.declined ?? []);
-    lockBundle.declined = [
-        ...new Set([...oldDeclined].filter((unitPath) => !args.selected.has(unitPath)).concat([...args.declined])),
-    ]
-        .filter((unitPath) => manifestUnitPaths.has(unitPath) && !keptPaths.has(unitPath))
-        .sort();
-    const legacyRemaining = (args.installed?.units ?? []).some(
-        (unit) => unit.origin === "legacy" && !removedLegacy.has(unit.relativePath),
-    );
-    if (Object.keys(lockBundle.units).length === 0 && !legacyRemaining) {
-        delete args.lock.bundles[args.bundle.name];
-    } else {
-        args.lock.bundles[args.bundle.name] = lockBundle;
+        await writeLock(rootDir, args.lock);
     }
     return result;
 }
@@ -334,21 +345,47 @@ function splitBlockKey(key: string): [string, string] {
     return [key.slice(0, separator), key.slice(separator + 1)];
 }
 
+/**
+ * lstat of the unit path: "absent" when nothing is there, "modified" when the path is
+ * unreachable because an ancestor between the root and the unit is not a directory.
+ */
+async function statUnitPath(
+    rootDir: string,
+    unit: ReturnType<typeof groupTemplateItems>[number],
+): Promise<Stats | "absent" | "modified"> {
+    const unitPath = path.join(rootDir, unit.relativePath);
+    try {
+        return await fs.lstat(unitPath);
+    } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
+        return (await hasBlockedAncestor(rootDir, unitPath)) ? "modified" : "absent";
+    }
+}
+
+async function hasBlockedAncestor(rootDir: string, unitPath: string): Promise<boolean> {
+    const root = path.resolve(rootDir);
+    let dir = path.dirname(path.resolve(unitPath));
+    while (dir.startsWith(`${root}${path.sep}`)) {
+        try {
+            if (!(await fs.stat(dir)).isDirectory()) return true;
+        } catch (error) {
+            const code = (error as NodeJS.ErrnoException).code;
+            if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
+        }
+        dir = path.dirname(dir);
+    }
+    return false;
+}
+
 async function compareUntracked(
     rootDir: string,
     tempDir: string,
     unit: ReturnType<typeof groupTemplateItems>[number],
 ): Promise<"absent" | "equal" | "modified"> {
     const unitPath = path.join(rootDir, unit.relativePath);
-    let stat;
-    try {
-        stat = await fs.lstat(unitPath);
-    } catch (error) {
-        const code = (error as NodeJS.ErrnoException).code;
-        if (code === "ENOENT") return "absent";
-        if (code === "ENOTDIR") return "modified";
-        throw error;
-    }
+    const stat = await statUnitPath(rootDir, unit);
+    if (stat === "absent" || stat === "modified") return stat;
     if ((unit.kind === "file" && !stat.isFile()) || (unit.kind === "skill" && !stat.isDirectory())) return "modified";
     const diskHash =
         unit.kind === "file" ? computeHash(await fs.readFile(unitPath, "utf8")) : await computeSkillTreeHash(unitPath);
@@ -363,15 +400,8 @@ async function compareUntrackedBlocks(
     merged: Map<string, string>,
 ): Promise<"absent" | "equal" | "modified"> {
     const unitPath = path.join(rootDir, unit.relativePath);
-    let stat;
-    try {
-        stat = await fs.lstat(unitPath);
-    } catch (error) {
-        const code = (error as NodeJS.ErrnoException).code;
-        if (code === "ENOENT") return "absent";
-        if (code === "ENOTDIR") return "modified";
-        throw error;
-    }
+    const stat = await statUnitPath(rootDir, unit);
+    if (stat === "absent" || stat === "modified") return stat;
     if ((unit.kind === "file" && !stat.isFile()) || (unit.kind === "skill" && !stat.isDirectory())) return "modified";
     if (unit.kind === "skill") {
         const onDisk = await listRelativeFiles(unitPath);
