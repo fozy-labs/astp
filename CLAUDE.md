@@ -22,6 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     - `manifest.ts` - validate `templates/manifest.json`
     - `fetcher.ts` - download a bundle dir into a temp dir
     - `installer.ts` - write an agent/rule file or a whole skill dir under the install root, path-traversal guard
+    - `path-safety.ts` - shared path guards
     - `blocks.ts` - pure `<astp-block>` parser and per-block merge; also used by `scripts/`
     - `units.ts` - group manifest items: one unit per skill dir, one per other file
     - `skill-tree.ts` - skill dir hash over all its files
@@ -42,7 +43,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `scripts/` - marketplace generator tests
 - `.claude-plugin/marketplace.json` - generated for `npx skills`; never edit by hand
 - `.claude/skills/markdown-craft/` - this repo's own astp-installed copy; edit `templates/docs/...` instead
-- `.github/workflows/` - `ci.yml` checks; `publish.yml` publishes to npm after CI passes on a `v*` tag
 
 ## Architecture
 
