@@ -1,3 +1,4 @@
+import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -269,59 +270,74 @@ function inspectBlockFile(
     if (parsed.outsideText.trim() !== "") info.dirty = true;
 }
 
-async function scanLegacy(rootDir: string, lock: Lock): Promise<Map<string, InstalledUnit[]>> {
-    const markdownPaths = await findMdFiles(rootDir);
-    const ignoredPaths = Object.values(lock.bundles).flatMap((bundle) => Object.keys(bundle.units));
-    const tagged: TaggedMarkdown[] = [];
-    for (const filePath of markdownPaths) {
-        const relativePath = path.relative(rootDir, filePath).split(path.sep).join("/");
-        if (
-            ignoredPaths.some((lockedPath) => relativePath === lockedPath || relativePath.startsWith(`${lockedPath}/`))
-        ) {
-            continue;
-        }
-        const content = await fs.readFile(filePath, "utf8");
-        const metadata = extractAstpMetadata(content);
-        if (metadata) tagged.push({ filePath, relativePath, content, metadata });
-    }
+const LEGACY_FILE_DIRS = ["agents", "rules"];
 
-    const skillFiles = tagged.filter((file) => path.posix.basename(file.relativePath) === "SKILL.md");
-    const rootSkills = skillFiles.filter(
-        (file) =>
-            !skillFiles.some(
-                (candidate) =>
-                    candidate.relativePath !== file.relativePath &&
-                    file.relativePath.startsWith(`${path.posix.dirname(candidate.relativePath)}/`),
-            ),
-    );
-    const skillRoots = new Map(rootSkills.map((file) => [path.posix.dirname(file.relativePath), file]));
+async function scanLegacy(rootDir: string, lock: Lock): Promise<Map<string, InstalledUnit[]>> {
+    const lockedPaths = new Set(Object.values(lock.bundles).flatMap((bundle) => Object.keys(bundle.units)));
     const results = new Map<string, InstalledUnit[]>();
 
-    for (const [relativePath, root] of skillRoots) {
-        const clean = await isCleanLegacySkill(path.dirname(root.filePath), root);
-        addLegacy(results, root.metadata.bundle, {
+    for (const entry of await readdirOrEmpty(path.join(rootDir, "skills"))) {
+        if (!entry.isDirectory()) continue;
+        const relativePath = `skills/${entry.name}`;
+        if (lockedPaths.has(relativePath)) continue;
+        const skillDir = path.join(rootDir, "skills", entry.name);
+        const skillFile = path.join(skillDir, "SKILL.md");
+        let stat;
+        try {
+            stat = await fs.lstat(skillFile);
+        } catch (error) {
+            if (["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) continue;
+            throw error;
+        }
+        if (!stat.isFile()) continue;
+        const content = await fs.readFile(skillFile, "utf8");
+        const metadata = extractAstpMetadata(content);
+        if (!metadata) continue;
+        const clean = await isCleanLegacySkill(skillDir, {
+            filePath: skillFile,
+            relativePath: `${relativePath}/SKILL.md`,
+            content,
+            metadata,
+        });
+        addLegacy(results, metadata.bundle, {
             kind: "skill",
             relativePath,
-            version: root.metadata.version,
+            version: metadata.version,
             origin: "legacy",
             state: clean ? "unmodified" : "modified",
         });
     }
 
-    for (const file of tagged) {
-        if ([...skillRoots.keys()].some((root) => file.relativePath.startsWith(`${root}/`))) continue;
-        addLegacy(results, file.metadata.bundle, {
-            kind: "file",
-            relativePath: file.relativePath,
-            version: file.metadata.version,
-            origin: "legacy",
-            state:
-                file.metadata.hash && computeHash(stripAstpFields(file.content)) === file.metadata.hash
-                    ? "unmodified"
-                    : "modified",
-        });
+    for (const dir of LEGACY_FILE_DIRS) {
+        for (const entry of await readdirOrEmpty(path.join(rootDir, dir))) {
+            if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+            const relativePath = `${dir}/${entry.name}`;
+            if (lockedPaths.has(relativePath)) continue;
+            const content = await fs.readFile(path.join(rootDir, dir, entry.name), "utf8");
+            const metadata = extractAstpMetadata(content);
+            if (!metadata) continue;
+            addLegacy(results, metadata.bundle, {
+                kind: "file",
+                relativePath,
+                version: metadata.version,
+                origin: "legacy",
+                state:
+                    metadata.hash && computeHash(stripAstpFields(content)) === metadata.hash
+                        ? "unmodified"
+                        : "modified",
+            });
+        }
     }
     return results;
+}
+
+async function readdirOrEmpty(dir: string): Promise<Dirent[]> {
+    try {
+        return await fs.readdir(dir, { withFileTypes: true });
+    } catch (error) {
+        if (["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) return [];
+        throw error;
+    }
 }
 
 async function isCleanLegacySkill(skillDir: string, root: TaggedMarkdown): Promise<boolean> {
@@ -345,23 +361,6 @@ function addLegacy(bundles: Map<string, InstalledUnit[]>, bundleName: string, un
     const units = bundles.get(bundleName) ?? [];
     units.push(unit);
     bundles.set(bundleName, units);
-}
-
-async function findMdFiles(dir: string): Promise<string[]> {
-    const results: string[] = [];
-    let entries;
-    try {
-        entries = await fs.readdir(dir, { withFileTypes: true });
-    } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-        return results;
-    }
-    for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) results.push(...(await findMdFiles(fullPath)));
-        else if (entry.isFile() && entry.name.endsWith(".md")) results.push(fullPath);
-    }
-    return results;
 }
 
 async function findRegularFiles(dir: string): Promise<string[]> {
