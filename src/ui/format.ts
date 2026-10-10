@@ -33,7 +33,7 @@ export function shellArg(value: string): string {
     return /\s/.test(value) ? `"${value}"` : value;
 }
 
-/** The `install` retry hint: a selection that forces only what was skipped. */
+/** The `install` retry hint for the given flags. */
 export function installRetry(bundleName: string, flags: string[], target: InstallTargetType, source?: string): string {
-    return `astp install ${bundleName} ${flags.join(" ")} --force${source !== undefined ? ` --source ${shellArg(source)}` : ""} --target ${target}`;
+    return `astp install ${bundleName} ${flags.join(" ")}${source !== undefined ? ` --source ${shellArg(source)}` : ""} --target ${target}`;
 }

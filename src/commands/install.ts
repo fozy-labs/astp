@@ -264,7 +264,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             const retry = (skipped: FileStatus[]) =>
                 installRetry(
                     plan.bundle.name,
-                    skipped.map((status) => `--skill ${status.targetPath}`),
+                    [...skipped.map((status) => `--skill ${status.targetPath}`), "--force"],
                     target.type,
                     options.source,
                 );

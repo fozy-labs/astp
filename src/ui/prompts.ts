@@ -9,6 +9,7 @@ import type { TemplateUnit } from "@/core/units.js";
 import type {
     Bundle,
     FileStatus,
+    ForeignUnit,
     InstalledBundle,
     InstallTarget,
     InstallTargetType,
@@ -649,19 +650,48 @@ export function warnReleased(units: FileStatus[], blockKeys: string[]): void {
 
 export function warnForeign(
     bundleName: string,
-    units: FileStatus[],
+    units: ForeignUnit[],
     blockKeys: string[],
     target: InstallTargetType,
     source?: string,
 ): void {
-    const list = [...units.map((unit) => unit.targetPath), ...blockKeys].map((entry) => `  • ${entry}`).join("\n");
-    const commands = [
-        ...units.map((unit) => `  ${installRetry(bundleName, [`--skill ${unit.targetPath}`], target, source)}`),
-        ...blockKeys.map((key) => `  ${installRetry(bundleName, [`--block ${key}`], target, source)}`),
-    ].join("\n");
-    p.log.warn(
-        `Already present with other content — left untouched, recorded as declined:\n${list}\nTo overwrite, run:\n${commands}`,
+    const owned = units.filter(
+        (unit): unit is ForeignUnit & { owner: { bundle: string; path: string } } => unit.owner !== undefined,
     );
+    const foreign = units.filter((unit) => unit.owner === undefined);
+    if (foreign.length > 0 || blockKeys.length > 0) {
+        const list = [...foreign.map((unit) => unit.targetPath), ...blockKeys]
+            .map((entry) => `  • ${entry}`)
+            .join("\n");
+        const commands = [
+            ...foreign.map(
+                (unit) => `  ${installRetry(bundleName, [`--skill ${unit.targetPath}`, "--force"], target, source)}`,
+            ),
+            ...blockKeys.map((key) => `  ${installRetry(bundleName, [`--block ${key}`, "--force"], target, source)}`),
+        ].join("\n");
+        p.log.warn(
+            `Already present with other content — left untouched, recorded as declined:\n${list}\nTo overwrite, run:\n${commands}`,
+        );
+    }
+    if (owned.length > 0) {
+        const list = owned
+            .map((unit) =>
+                unit.owner.path === unit.targetPath
+                    ? `  • ${unit.targetPath} (${unit.owner.bundle})`
+                    : `  • ${unit.targetPath} (${unit.owner.bundle}: ${unit.owner.path})`,
+            )
+            .join("\n");
+        const deletes = new Set(
+            owned.map((unit) => `  astp delete ${unit.owner.bundle} --skill ${unit.owner.path} --target ${target}`),
+        );
+        const commands = [
+            ...deletes,
+            ...owned.map((unit) => `  ${installRetry(bundleName, [`--skill ${unit.targetPath}`], target, source)}`),
+        ].join("\n");
+        p.log.warn(
+            `Owned by another bundle — left untouched, recorded as declined:\n${list}\nTo move them here, delete them from their bundle, then install them:\n${commands}`,
+        );
+    }
 }
 
 export function warnKeptBlocks(keys: string[]): void {

@@ -2,7 +2,7 @@ import type { Stats } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import type { Bundle, FileStatus, InstalledBundle, InstalledUnit, InstallTarget } from "@/types/index.js";
+import type { Bundle, FileStatus, ForeignUnit, InstalledBundle, InstalledUnit, InstallTarget } from "@/types/index.js";
 
 import type { InstalledBlocks } from "./blocks.js";
 import { mergeBlockFile, parseInstalledBlocks } from "./blocks.js";
@@ -10,7 +10,7 @@ import { computeHash } from "./frontmatter.js";
 import { installFile, installSkill } from "./installer.js";
 import { writeLock } from "./lock.js";
 import type { Lock, LockBundle, LockUnit } from "./lock.js";
-import { assertInsideRoot, nullPrototype } from "./path-safety.js";
+import { assertInsideRoot, foldPath, nullPrototype } from "./path-safety.js";
 import { computeSkillTreeHash, computeTemplateUnitHash } from "./skill-tree.js";
 import type { UnitBlockFile } from "./unit-blocks.js";
 import { readUnitBlockFiles } from "./unit-blocks.js";
@@ -23,8 +23,8 @@ export interface SyncResult {
     kept: FileStatus[];
     /** Units removed upstream but modified locally: left on disk, dropped from the lock. */
     released: FileStatus[];
-    /** Unit paths already on disk with other content: left untouched, recorded as declined. */
-    foreign: FileStatus[];
+    /** Unit paths already on disk with other content, or owned by another bundle in the lock: left untouched, recorded as declined. */
+    foreign: ForeignUnit[];
     /** Block keys kept because they changed locally while deselected. */
     keptBlocks: string[];
     /** Block keys removed upstream but changed locally: text left in the file, dropped from the lock. */
@@ -104,10 +104,18 @@ export async function syncBundle(args: {
         result.removed.push(status(unit));
     };
 
-    const declineForeign = (unit: ReturnType<typeof groupTemplateItems>[number]): void => {
+    const declineForeign = (
+        unit: ReturnType<typeof groupTemplateItems>[number],
+        owner?: { bundle: string; path: string },
+    ): void => {
         delete lockBundle.units[unit.relativePath];
         args.declined.add(unit.relativePath);
-        result.foreign.push({ targetPath: unit.relativePath, kind: unit.kind, state: "modified" });
+        result.foreign.push({
+            targetPath: unit.relativePath,
+            kind: unit.kind,
+            state: "modified",
+            ...(owner ? { owner } : {}),
+        });
     };
 
     try {
@@ -125,6 +133,11 @@ export async function syncBundle(args: {
             if (!args.selected.has(unit.relativePath)) continue;
             const current = currentByPath.get(unit.relativePath);
             const untracked = !current || current.state === "missing";
+            const owner = untracked ? lockOwner(args.lock, args.bundle.name, unit.relativePath) : undefined;
+            if (owner) {
+                declineForeign(unit, owner);
+                continue;
+            }
             const lockUnit = lockBundle.units[unit.relativePath];
             const blockFiles = await readUnitBlockFiles(args.tempDir, unit);
             const templateHasBlocks = blockFiles.size > 0;
@@ -339,6 +352,24 @@ async function mergeUnitBlockFiles(
     }
 
     return { contents, blocks, declinedBlocks: [...new Set(declinedBlocks)] };
+}
+
+/**
+ * Another bundle in the lock that tracks this path, a folder of it, or a path inside it — compared as
+ * Windows and macOS do. Returns the bundle and the tracked unit key as written in the lock.
+ */
+function lockOwner(lock: Lock, bundleName: string, unitPath: string): { bundle: string; path: string } | undefined {
+    const folded = foldPath(unitPath);
+    for (const [name, bundle] of Object.entries(lock.bundles)) {
+        if (name === bundleName) continue;
+        for (const tracked of Object.keys(bundle.units)) {
+            const other = foldPath(tracked);
+            if (folded === other || folded.startsWith(`${other}/`) || other.startsWith(`${folded}/`)) {
+                return { bundle: name, path: tracked };
+            }
+        }
+    }
+    return undefined;
 }
 
 function splitBlockKey(key: string): [string, string] {

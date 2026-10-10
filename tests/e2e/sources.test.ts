@@ -4,9 +4,11 @@ import path from "node:path";
 import { vi } from "vitest";
 
 import { executeCheck } from "@/commands/check.js";
+import { executeDelete } from "@/commands/delete.js";
 import { executeInstall } from "@/commands/install.js";
 import { executeList } from "@/commands/list.js";
 import { executeUpdate } from "@/commands/update.js";
+import { loadInstalled } from "@/core/index.js";
 import type { Bundle, Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { showCheckReport, showInfo, warnForeign, warnModified } from "@/ui/prompts.js";
@@ -203,6 +205,68 @@ describe("E2E: manifest sources", () => {
             "project",
             "./a",
         );
+    });
+
+    it("never lets a second bundle take over a path another bundle owns", async () => {
+        const shared = "---\ndescription: shared\n---\nshared v1\n";
+        const writeSharedSource = async (dir: string, bundleName: string): Promise<void> => {
+            const manifest: Manifest = {
+                schemaVersion: 1,
+                bundles: {
+                    [bundleName]: {
+                        name: bundleName,
+                        version: "1.0.0",
+                        description: bundleName,
+                        default: true,
+                        platforms: ["claude-code"],
+                        items: [
+                            {
+                                source: `${bundleName}/rules/shared.md`,
+                                target: "rules/shared.md",
+                                category: "rule",
+                            },
+                        ],
+                    },
+                },
+            };
+            const rules = path.join(projectDir, dir, "templates", bundleName, "rules");
+            await fs.mkdir(rules, { recursive: true });
+            await fs.writeFile(path.join(rules, "shared.md"), shared);
+            await fs.writeFile(path.join(projectDir, dir, "templates", "manifest.json"), JSON.stringify(manifest));
+        };
+        await writeSharedSource("a", "core");
+        await writeSharedSource("b", "extra");
+
+        await executeInstall({ ...opts, bundle: "core", source: "./a" });
+        await executeInstall({ ...opts, bundle: "extra", source: "./b" });
+
+        expect(vi.mocked(warnForeign)).toHaveBeenCalledWith(
+            "extra",
+            [
+                {
+                    targetPath: "rules/shared.md",
+                    kind: "file",
+                    state: "modified",
+                    owner: { bundle: "core", path: "rules/shared.md" },
+                },
+            ],
+            [],
+            "project",
+            "./b",
+        );
+        let lock = await readLockFixture(rootDir);
+        expect(lock.bundles.extra!.units["rules/shared.md"]).toBeUndefined();
+        expect(lock.bundles.extra!.declined).toEqual(["rules/shared.md"]);
+
+        await executeDelete({ ...opts, bundle: "core" });
+
+        await expect(fs.access(path.join(rootDir, "rules/shared.md"))).rejects.toMatchObject({ code: "ENOENT" });
+        lock = await readLockFixture(rootDir);
+        expect(lock.bundles.core).toBeUndefined();
+        expect(lock.bundles.extra!.units).toEqual({});
+        const installed = await loadInstalled(rootDir);
+        const extra = installed.bundles.find((entry) => entry.bundleName === "extra")!;
+        expect(extra.units.filter((unit) => unit.state === "missing")).toEqual([]);
     });
 
     it("names the bundle and a fix when its lock source is gone", async () => {
