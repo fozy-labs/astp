@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -125,6 +127,47 @@ describe("resolveSource", () => {
     it.each(["gh:not-a-repo", "npm:", "ftp:x/y", "https://github.com/o/r/pulls"])("rejects %s", async (spec) => {
         await expect(resolveSource(spec, cwd)).rejects.toThrow();
     });
+
+    it("rejects a bare owner/repo spec that names an existing local path", async () => {
+        const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "astp-src-"));
+        try {
+            await fs.mkdir(path.join(tmp, "my-skills", "pack"), { recursive: true });
+            await expect(resolveSource("my-skills/pack", tmp)).rejects.toThrow("ambiguous");
+            await expect(resolveSource("my-skills/pack", tmp)).rejects.toThrow("'./my-skills/pack'");
+            await expect(resolveSource("my-skills/pack", tmp)).rejects.toThrow("'gh:my-skills/pack'");
+            await expect(resolveSource("my-skills/pack#v1", tmp)).rejects.toThrow("ambiguous");
+            await expect(resolveSource("my-skills/pack#v1", tmp)).rejects.toThrow("'./my-skills/pack'");
+            await expect(resolveSource("my-skills/pack#v1", tmp)).rejects.toThrow("'gh:my-skills/pack#v1'");
+            await expect(resolveSource("other/repo", tmp)).resolves.toMatchObject({
+                kind: "archive",
+                spec: "gh:other/repo",
+            });
+        } finally {
+            await fs.rm(tmp, { recursive: true, force: true });
+        }
+    });
+
+    it("reports a local-path check failure instead of falling through to GitHub", async () => {
+        const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "astp-src-"));
+        const error = Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+        const spy = vi.spyOn(fs, "lstat").mockRejectedValue(error);
+        try {
+            await expect(resolveSource("team/pack", tmp)).rejects.toThrow(
+                "Cannot check whether source 'team/pack' names a local path",
+            );
+            expect(spy).toHaveBeenCalled();
+        } finally {
+            spy.mockRestore();
+            await fs.rm(tmp, { recursive: true, force: true });
+        }
+    });
+
+    it("treats a leading backslash pair as a local UNC path", async () => {
+        await expect(resolveSource("\\\\server\\share\\pack", cwd)).resolves.toMatchObject({
+            kind: "local",
+            spec: path.resolve(cwd, "\\\\server\\share\\pack"),
+        });
+    });
 });
 
 describe("formatSource", () => {
@@ -151,5 +194,11 @@ describe("formatSource", () => {
 
     it("stores remote specs as resolved", async () => {
         expect(formatSource(await resolveSource("o/r#v1", cwd), project)).toBe("gh:o/r#v1");
+    });
+
+    it.runIf(process.platform === "win32")("keeps a stored //server/share spec resolvable", async () => {
+        const source = await resolveSource("//server/share/pack", cwd);
+        const reread = await resolveSource(formatSource(source, user), user.rootDir);
+        expect(reread).toMatchObject({ kind: "local", spec: source.spec });
     });
 });

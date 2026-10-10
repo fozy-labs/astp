@@ -55,6 +55,16 @@ describe("resolveTarget", () => {
         expect(resolveTarget("claude-code", "user").rootDir).toBe(path.join(os.homedir(), ".claude"));
     });
 
+    it("resolves a relative CLAUDE_CONFIG_DIR against the cwd, as Claude Code does", () => {
+        vi.stubEnv("CLAUDE_CONFIG_DIR", "cfg");
+        expect(resolveTarget("claude-code", "user").rootDir).toBe(path.resolve(process.cwd(), "cfg"));
+    });
+
+    it("keeps a literal ~ in CLAUDE_CONFIG_DIR, as Claude Code does", () => {
+        vi.stubEnv("CLAUDE_CONFIG_DIR", "~/.claude-alt");
+        expect(resolveTarget("claude-code", "user").rootDir).toBe(path.resolve(process.cwd(), "~/.claude-alt"));
+    });
+
     it("leaves the claude-code project target alone when CLAUDE_CONFIG_DIR is set", () => {
         vi.stubEnv("CLAUDE_CONFIG_DIR", path.join(os.tmpdir(), "claude-alt"));
         expect(resolveTarget("claude-code", "project").rootDir).toBe(path.join(process.cwd(), ".claude"));

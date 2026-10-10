@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 
 import type { InstallTarget } from "@/types/index.js";
@@ -10,7 +11,7 @@ const GIT_PROVIDERS = new Set(["gh", "github", "gitlab", "bitbucket", "sourcehut
 const GIT_RE = /^(?<repo>[\w.-]+\/[\w.-]+)(?<path>\/[^#]*)?(?:#(?<ref>[\w./@-]+))?$/;
 const NPM_RE = /^(?<name>(?:@[\w.-]+\/)?[\w.-]+)(?:@(?<version>[\w.+-]+))?$/;
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-const LOCAL_RE = /^(?:\.{1,2}(?:[\\/]|$)|\/|[A-Za-z]:[\\/])/;
+const LOCAL_RE = /^(?:\.{1,2}(?:[\\/]|$)|[\\/]|[A-Za-z]:[\\/])/;
 
 export const ACCEPTED_SOURCES = [
     "./path/manifest.json or ./dir (local)",
@@ -81,7 +82,16 @@ export async function resolveSource(spec: string, baseDir: string): Promise<Mani
         return { kind: "archive", spec: url.href, address: url.href, manifestFile: DEFAULT_MANIFEST, auth: false };
     }
 
-    if (!provider) return gitSource("gh", trimmed, spec);
+    if (!provider) {
+        const source = gitSource("gh", trimmed, spec);
+        const local = trimmed.replace(/#.*$/, "");
+        if (await pathExists(path.resolve(baseDir, local), spec)) {
+            throw new Error(
+                `Source '${spec}' is ambiguous: a local path with that name exists. Use './${local}' for the local path or 'gh:${trimmed}' for GitHub.`,
+            );
+        }
+        return source;
+    }
     throw invalidSource(spec);
 }
 
@@ -156,6 +166,18 @@ async function refExists(repo: string, ref: string): Promise<boolean> {
 
 function isJson(value: string): boolean {
     return value.toLowerCase().endsWith(".json");
+}
+
+/** `false` only when the path is confirmed absent; any other failure is an error, never a silent GitHub fetch. */
+async function pathExists(target: string, spec: string): Promise<boolean> {
+    try {
+        await fs.lstat(target);
+        return true;
+    } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === "ENOENT" || code === "ENOTDIR") return false;
+        throw new Error(`Cannot check whether source '${spec}' names a local path: ${(error as Error).message}`);
+    }
 }
 
 function invalidSource(spec: string): Error {
