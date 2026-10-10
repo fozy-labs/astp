@@ -137,6 +137,11 @@ export interface FileStatus {
 
 export type FileState = "unmodified" | "modified" | "missing" | "legacy" | "new" | "removed";
 
+export interface ForeignUnit extends FileStatus {
+    /** Bundle in the lock that owns this path or one nested with it; absent when the path is a user's. */
+    owner?: string;
+}
+
 // ── Re-exports ───────────────────────────────────────────────────────
 
 export { bundleSupportsPlatform, filterBundlesByPlatform, getBundlePlatforms } from "./platform.js";

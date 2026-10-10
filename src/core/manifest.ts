@@ -1,7 +1,7 @@
 import type { Bundle, ItemCategory, Manifest, Platform } from "@/types/index.js";
 import { ALL_PLATFORMS } from "@/types/index.js";
 
-import { assertSafeName, assertSafeRelativePath, nullPrototype } from "./path-safety.js";
+import { assertSafeName, assertSafeRelativePath, foldPath, nullPrototype } from "./path-safety.js";
 
 const SUPPORTED_SCHEMA_VERSION = 1;
 const VALID_PLATFORMS: ReadonlySet<Platform> = new Set(ALL_PLATFORMS);
@@ -101,7 +101,7 @@ function assertNoCollisions(paths: string[], what: string): void {
         for (let length = 1; length <= segments.length; length++) {
             const prefix = segments.slice(0, length).join("/");
             const file = length === segments.length;
-            const folded = prefix.normalize("NFC").toUpperCase().toLowerCase();
+            const folded = foldPath(prefix);
             const other = seen.get(folded);
             if (other && (other.path !== prefix || other.file || file)) {
                 throw new Error(`${what} ${JSON.stringify(other.path)} and ${JSON.stringify(prefix)} collide`);

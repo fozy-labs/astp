@@ -22,6 +22,11 @@ export function isSafeSegment(segment: string): boolean {
     );
 }
 
+/** The form under which Windows and macOS, ignoring case and Unicode normalization, compare a path. */
+export function foldPath(value: string): string {
+    return value.normalize("NFC").toUpperCase().toLowerCase();
+}
+
 /** Copies a record keyed by untrusted names onto a null prototype, so keys like `constructor` or `__proto__` stay plain data. */
 export function nullPrototype<T>(record: Readonly<Record<string, T>> = {}): Record<string, T> {
     return Object.assign(Object.create(null) as Record<string, T>, record);

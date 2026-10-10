@@ -344,6 +344,30 @@ describe("legacy migration prompts", () => {
         );
     });
 
+    it("warns separately for units owned by another bundle, without --force", () => {
+        vi.mocked(p.log.warn).mockClear();
+        warnForeign(
+            "core",
+            [
+                { targetPath: "rules/r.md", kind: "file", state: "modified", owner: "other" },
+                { targetPath: "rules/x.md", kind: "file", state: "modified" },
+            ],
+            [],
+            "project",
+        );
+
+        const calls = vi.mocked(p.log.warn).mock.calls.map((call) => String(call[0]));
+        expect(calls).toHaveLength(2);
+        const owned = calls.find((text) => text.includes("(other)"))!;
+        expect(owned).toContain("rules/r.md (other)");
+        expect(owned).toContain("astp delete other --skill rules/r.md --target project");
+        expect(owned).toContain("astp install core --skill rules/r.md --target project");
+        expect(owned).not.toContain("--force");
+        const plain = calls.find((text) => !text.includes("(other)"))!;
+        expect(plain).toContain("rules/x.md");
+        expect(plain).toContain("astp install core --skill rules/x.md --force --target project");
+    });
+
     it("shows the force-update command when modified units are skipped", () => {
         vi.mocked(p.log.warn).mockClear();
         warnModified([{ targetPath: "agents/example.md", kind: "file", state: "modified" }], "astp update --force");

@@ -85,6 +85,29 @@ describe("syncBundle", () => {
         });
     }
 
+    async function writeBundlesLock(
+        bundles: Record<string, { units: Record<string, { kind: "file" | "skill"; hash: string }> }>,
+    ) {
+        await writeLock(rootDir, {
+            schemaVersion: 1,
+            bundles: Object.fromEntries(
+                Object.entries(bundles).map(([name, entry]) => [
+                    name,
+                    {
+                        source: "test",
+                        declined: [] as string[],
+                        units: Object.fromEntries(
+                            Object.entries(entry.units).map(([relativePath, unit]) => [
+                                relativePath,
+                                { kind: unit.kind, version: "1.0.0", hash: unit.hash },
+                            ]),
+                        ),
+                    },
+                ]),
+            ),
+        });
+    }
+
     const syncCore = (
         installed: Awaited<ReturnType<typeof loadInstalled>>,
         items: TemplateItem[],
@@ -233,5 +256,81 @@ describe("syncBundle", () => {
         const core = lock.bundles.core!;
         expect(core.units["agents/a.md"]).toEqual({ kind: "file", version: "1.0.0", hash: computeHash(A_V1) });
         expect(core.declined).toEqual(["rules/b.md"]);
+    });
+
+    it("does not adopt a path another bundle tracks, even with equal content", async () => {
+        await writeFiles(rootDir, { "rules/r.md": R_V1 });
+        await writeFiles(tempDir, { "rules/r.md": R_V1 });
+        await writeBundlesLock({
+            other: { units: { "rules/r.md": { kind: "file", hash: computeHash(R_V1) } } },
+        });
+        const installed = await loadInstalled(rootDir);
+
+        const result = await syncCore(installed, [rule("rules/r.md")], {
+            selected: new Set(["rules/r.md"]),
+            declined: new Set(),
+        });
+
+        expect(result.foreign).toEqual([{ targetPath: "rules/r.md", kind: "file", state: "modified", owner: "other" }]);
+        expect(result.installed).toEqual([]);
+        const lock = await readLock(rootDir);
+        const core = lock.bundles.core!;
+        expect(core.units["rules/r.md"]).toBeUndefined();
+        expect(core.declined).toEqual(["rules/r.md"]);
+        expect(lock.bundles.other).toEqual({
+            source: "test",
+            declined: [],
+            units: { "rules/r.md": { kind: "file", version: "1.0.0", hash: computeHash(R_V1) } },
+        });
+    });
+
+    it("does not overwrite a path another bundle tracks, even with --force", async () => {
+        await writeFiles(rootDir, { "rules/r.md": R_V1 });
+        await writeFiles(tempDir, { "rules/r.md": R_V2 });
+        await writeBundlesLock({
+            other: { units: { "rules/r.md": { kind: "file", hash: computeHash(R_V1) } } },
+        });
+        const installed = await loadInstalled(rootDir);
+        const foreign = [{ targetPath: "rules/r.md", kind: "file", state: "modified", owner: "other" }];
+        const forces: ForceScope[] = [true, { units: new Set(["rules/r.md"]), blocks: new Set<string>() }];
+
+        for (const force of forces) {
+            const result = await syncCore(installed, [rule("rules/r.md")], {
+                selected: new Set(["rules/r.md"]),
+                declined: new Set(),
+                force,
+            });
+            expect(result.foreign).toEqual(foreign);
+            expect(result.installed).toEqual([]);
+        }
+
+        expect(await fs.readFile(path.join(rootDir, "rules/r.md"), "utf8")).toBe(R_V1);
+        const after = await loadInstalled(rootDir);
+        const otherUnit = after.bundles
+            .find((entry) => entry.bundleName === "other")!
+            .units.find((unit) => unit.relativePath === "rules/r.md")!;
+        expect(otherUnit.state).toBe("unmodified");
+    });
+
+    it("treats nested paths differing in case as owned", async () => {
+        await writeFiles(rootDir, { "skills/x/SKILL.md": B_V1 });
+        await writeFiles(tempDir, { "skills/X/sub/SKILL.md": A_V1 });
+        await writeBundlesLock({
+            other: { units: { "skills/x": { kind: "skill", hash: computeHash("skills/x") } } },
+        });
+        const installed = await loadInstalled(rootDir);
+
+        const result = await syncCore(
+            installed,
+            [{ source: "core/skills/X/sub/SKILL.md", target: "skills/X/sub/SKILL.md", category: "skill" }],
+            { selected: new Set(["skills/X/sub"]), declined: new Set(), force: true },
+        );
+
+        expect(result.foreign).toEqual([
+            { targetPath: "skills/X/sub", kind: "skill", state: "modified", owner: "other" },
+        ]);
+        expect(result.installed).toEqual([]);
+        await expect(fs.access(path.join(rootDir, "skills/X/sub"))).rejects.toMatchObject({ code: "ENOENT" });
+        await expect(fs.access(path.join(rootDir, "skills/x/sub"))).rejects.toMatchObject({ code: "ENOENT" });
     });
 });
