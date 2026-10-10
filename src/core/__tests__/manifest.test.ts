@@ -152,6 +152,15 @@ describe("validateManifest", () => {
         expect(() => validateManifest(withBundle("core", [item]))).toThrow(`Invalid bundle 'core': ${message}`);
     });
 
+    it("rejects a target ending in an OS clutter file name in any case", () => {
+        for (const target of ["skills/x/desktop.ini", "skills/x/Thumbs.DB", "rules/.DS_Store"]) {
+            const item = { source: `core/${target}`, target, category: "skill" };
+            expect(() => validateManifest(withBundle("core", [item]))).toThrow(
+                `Invalid bundle 'core': items[0].target '${target}' is an OS clutter file name`,
+            );
+        }
+    });
+
     it("accepts the repository's own templates/manifest.json", () => {
         const file = path.resolve(import.meta.dirname, "../../../templates/manifest.json");
         expect(() => validateManifest(JSON.parse(readFileSync(file, "utf8")))).not.toThrow();

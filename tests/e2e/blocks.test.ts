@@ -381,6 +381,28 @@ describe("E2E: blocks", () => {
         expect(mockShowSuccess).not.toHaveBeenCalledWith(expect.stringContaining("Updated"));
     });
 
+    it("update --force removes an edited block that left the template at the same version", async () => {
+        await install();
+        await fillFile();
+        const file = filePath();
+        await fs.writeFile(
+            file,
+            (await fs.readFile(file, "utf8")).replace("Extra ready-made text.", "My own extra."),
+        );
+        contents[RULES_FILE] = tplV1().replace(/<astp-block name="extra">[\s\S]*?<\/astp-block>\n\n?/, "");
+
+        await update(true);
+
+        const content = await fs.readFile(file, "utf8");
+        expect(content).not.toContain("<extra>");
+        expect(content).not.toContain("My own extra.");
+        expect(content).toContain("Filled by the agent.");
+        const lock = await readLockFixture(rootDir());
+        const unit = lock.bundles.blocks.units[RULES_FILE]!;
+        expect(Object.keys(unit.blocks!)).toEqual([`${RULES_FILE}#project_map`]);
+        expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining("Updated"));
+    });
+
     it("non-TTY install brings back a declined non-optional block, keeps a declined optional one", async () => {
         // Interactive install selecting only project_map; extra and code_style declined.
         mockIsInteractive.mockReturnValue(true);

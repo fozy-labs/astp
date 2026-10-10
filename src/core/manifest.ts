@@ -2,6 +2,7 @@ import type { Bundle, ItemCategory, Manifest, Platform } from "@/types/index.js"
 import { ALL_PLATFORMS } from "@/types/index.js";
 
 import { assertSafeName, assertSafeRelativePath, foldPath, nullPrototype } from "./path-safety.js";
+import { isOsClutterName } from "./skill-tree.js";
 
 const SUPPORTED_SCHEMA_VERSION = 1;
 const VALID_PLATFORMS: ReadonlySet<Platform> = new Set(ALL_PLATFORMS);
@@ -68,6 +69,9 @@ function validateBundle(key: string, data: unknown): void {
         if (typeof item !== "object" || item === null) throw new Error(`${at} must be an object`);
         const { source, target, category } = item as Record<string, unknown>;
         assertSafeRelativePath(target, `${at}.target`);
+        if (isOsClutterName(target.split("/").pop()!)) {
+            throw new Error(`${at}.target '${target}' is an OS clutter file name; astp ignores it in skills`);
+        }
         if (source !== `${key}/${target}`) throw new Error(`${at}.source must be '${key}/${target}'`);
         if (!VALID_CATEGORIES.has(category as ItemCategory)) {
             throw new Error(`${at}.category must be one of: ${[...VALID_CATEGORIES].join(", ")}`);

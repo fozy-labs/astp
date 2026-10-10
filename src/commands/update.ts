@@ -12,7 +12,7 @@ import {
     syncBundle,
     validateUnitTargets,
 } from "@/core/index.js";
-import type { BlockSelections } from "@/core/index.js";
+import type { BlockSelections, UnitBlockFile } from "@/core/index.js";
 import type { FileStatus, InstalledBundle, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { describeUnitCounts } from "@/ui/format.js";
@@ -223,15 +223,17 @@ async function hasRestorableEdit(
     installed: InstalledBundle | undefined,
 ): Promise<boolean> {
     const editedKeys = (installed?.units ?? []).flatMap((unit) => unit.blocks?.edited ?? []);
+    if (editedKeys.length === 0) return false;
+    const blockFiles = new Map<string, UnitBlockFile>();
     for (const unit of units) {
-        const blockFiles = await readUnitBlockFiles(tempDir, unit);
-        for (const key of editedKeys) {
-            const hashIndex = key.lastIndexOf("#");
-            const block = blockFiles
-                .get(key.slice(0, hashIndex))
-                ?.blocks.find((candidate) => candidate.name === key.slice(hashIndex + 1));
-            if (block && !hasFillInstruction(block.content)) return true;
-        }
+        for (const [target, file] of await readUnitBlockFiles(tempDir, unit)) blockFiles.set(target, file);
+    }
+    for (const key of editedKeys) {
+        const hashIndex = key.lastIndexOf("#");
+        const block = blockFiles
+            .get(key.slice(0, hashIndex))
+            ?.blocks.find((candidate) => candidate.name === key.slice(hashIndex + 1));
+        if (!block || !hasFillInstruction(block.content)) return true;
     }
     return false;
 }

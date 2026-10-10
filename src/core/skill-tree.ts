@@ -64,6 +64,11 @@ async function computeFileListHash(
 
 const OS_CLUTTER_FILES = new Set([".ds_store", "thumbs.db", "desktop.ini"]);
 
+/** OS clutter file names astp ignores inside skill trees, matched on the lowercased basename. */
+export function isOsClutterName(name: string): boolean {
+    return OS_CLUTTER_FILES.has(name.toLowerCase());
+}
+
 /**
  * Relative `/`-separated paths under a skill dir: regular files, and every other non-directory
  * entry (symlinks, etc.). OS clutter files are skipped. Missing dir → both empty.
@@ -85,7 +90,7 @@ export async function listSkillTree(dir: string): Promise<{ files: string[]; spe
             if (entry.isDirectory()) {
                 await walk(path.join(current, entry.name), `${relative}/`);
             } else if (entry.isFile()) {
-                if (!OS_CLUTTER_FILES.has(entry.name.toLowerCase())) files.push(relative);
+                if (!isOsClutterName(entry.name)) files.push(relative);
             } else {
                 special.push(relative);
             }
