@@ -115,7 +115,7 @@ export async function assertBundleSources(tempDir: string, bundleName: string, u
     for (const unit of units) {
         for (const item of unit.kind === "skill" ? unit.items : [unit.item]) {
             try {
-                if (!(await fs.stat(path.join(tempDir, item.target))).isFile()) missing.push(item.target);
+                if (!(await fs.lstat(path.join(tempDir, item.target))).isFile()) missing.push(item.target);
             } catch (error) {
                 const code = (error as NodeJS.ErrnoException).code;
                 if (code !== "ENOENT" && code !== "ENOTDIR") throw error;

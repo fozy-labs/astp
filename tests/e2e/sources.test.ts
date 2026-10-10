@@ -152,6 +152,23 @@ describe("E2E: manifest sources", () => {
         expect([extra.version, extra.source]).toEqual([null, "../tests/test.manifest.json"]);
     });
 
+    it("fails on a linked directory in a local bundle without copying what it points to", async () => {
+        const outside = path.join(projectDir, "outside");
+        await fs.mkdir(outside);
+        await fs.writeFile(path.join(outside, "core.md"), "---\ndescription: core\n---\nSECRET\n");
+        const rules = path.join(projectDir, "a/templates/core/rules");
+        await fs.rm(rules, { recursive: true });
+        await fs.symlink(outside, rules, "junction");
+
+        await expect(executeInstall({ ...opts, bundle: "core", source: "./a" })).rejects.toThrow(
+            "Downloaded bundle 'core' is missing files listed in the manifest: rules/core.md",
+        );
+        const installed = await fs.readdir(rootDir, { recursive: true, withFileTypes: true }).catch(() => []);
+        for (const entry of installed.filter((entry) => entry.isFile())) {
+            expect(await fs.readFile(path.join(entry.parentPath, entry.name), "utf8")).not.toContain("SECRET");
+        }
+    });
+
     it("names the bundle and a fix when its lock source is gone", async () => {
         await executeInstall({ ...opts, bundle: "core", source: "./a" });
         await fs.rm(path.join(projectDir, "a"), { recursive: true });

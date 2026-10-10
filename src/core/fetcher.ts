@@ -21,6 +21,12 @@ export async function fetchManifest(source: ManifestSource): Promise<Manifest> {
                 ? source.manifestPath
                 : path.join(await downloadArchive(source), source.manifestFile);
         try {
+            if (source.kind === "archive" && !(await isInsideDownload(source, path.dirname(manifestPath)))) {
+                throw new Error(`Manifest directory of source '${source.spec}' resolves outside the downloaded source`);
+            }
+            if (!(await fs.lstat(manifestPath)).isFile()) {
+                throw new Error(`Manifest at source '${source.spec}' is not a regular file`);
+            }
             text = await fs.readFile(manifestPath, "utf8");
         } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
@@ -66,7 +72,10 @@ export async function downloadBundle(source: ManifestSource, bundle: Bundle): Pr
                 : path.dirname(path.join(await downloadArchive(source), source.manifestFile));
         const bundleDir = path.join(manifestRoot, bundle.name);
         try {
-            await fs.cp(bundleDir, tempDir, { recursive: true });
+            if (source.kind === "archive" && !(await isInsideDownload(source, bundleDir))) {
+                throw new Error("bundle directory resolves outside the downloaded source");
+            }
+            await fs.cp(bundleDir, tempDir, { recursive: true, filter: isPlainEntry });
         } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
             throw new Error(`bundle directory not found: ${source.kind === "local" ? bundleDir : bundle.name}`);
@@ -77,6 +86,19 @@ export async function downloadBundle(source: ManifestSource, bundle: Bundle): Pr
         const message = error instanceof Error ? error.message : String(error);
         throw new Error(`Failed to download bundle '${bundle.name}' from '${source.spec}': ${message}`);
     }
+}
+
+/** Copies only regular files and directories; links and special files never leave the source. */
+async function isPlainEntry(src: string): Promise<boolean> {
+    const stat = await fs.lstat(src);
+    return stat.isFile() || stat.isDirectory();
+}
+
+/** False when a linked directory leads `dir` out of the download. */
+async function isInsideDownload(source: Extract<ManifestSource, { kind: "archive" }>, dir: string): Promise<boolean> {
+    const [root, real] = await Promise.all([fs.realpath(await downloadArchive(source)), fs.realpath(dir)]);
+    const relative = path.relative(root, real);
+    return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
 
 /** Removes the archive download kept for the life of a command. */
