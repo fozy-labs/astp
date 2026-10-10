@@ -99,7 +99,7 @@ export function compareVersions(installed: InstalledBundle[], manifest: Manifest
         }
 
         const units = classifyUnits(bundle, manifestBundle);
-        const cmp = bundle.version ? compareSemver(bundle.version, manifestBundle.version) : 0;
+        const cmp = bundle.units.length === 0 ? 0 : compareSemver(bundle.version, manifestBundle.version);
         const diverged =
             units.some((unit) => ["missing", "new", "removed"].includes(unit.state)) ||
             bundle.units.some((unit) => unit.blocks?.missing);
