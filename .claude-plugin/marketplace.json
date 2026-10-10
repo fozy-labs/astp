@@ -40,7 +40,7 @@
             "name": "fozy-labs",
             "source": "./templates/fozy-labs",
             "description": "Fozy Labs stack skills — DI, FSD, rx-api, signals",
-            "version": "1.5.0",
+            "version": "1.5.3",
             "skills": [
                 "./skills/fozy-labs-di",
                 "./skills/fozy-labs-fsd",
