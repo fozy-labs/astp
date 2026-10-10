@@ -235,9 +235,7 @@ export async function syncBundle(args: {
         }
     } finally {
         const oldDeclined = new Set(existingLock?.declined ?? []);
-        lockBundle.declined = [
-            ...new Set([...oldDeclined].filter((unitPath) => !args.selected.has(unitPath)).concat([...args.declined])),
-        ]
+        lockBundle.declined = [...new Set([...oldDeclined].concat([...args.declined]))]
             .filter(
                 (unitPath) =>
                     manifestUnitPaths.has(unitPath) && !keptPaths.has(unitPath) && !(unitPath in lockBundle.units),
@@ -246,7 +244,7 @@ export async function syncBundle(args: {
         const legacyRemaining = (args.installed?.units ?? []).some(
             (unit) => unit.origin === "legacy" && !removedLegacy.has(unit.relativePath),
         );
-        if (Object.keys(lockBundle.units).length === 0 && !legacyRemaining) {
+        if (Object.keys(lockBundle.units).length === 0 && lockBundle.declined.length === 0 && !legacyRemaining) {
             delete args.lock.bundles[args.bundle.name];
         } else {
             args.lock.bundles[args.bundle.name] = lockBundle;
@@ -460,7 +458,11 @@ export async function removeEmptyDirectories(startDir: string, rootDir: string):
             return;
         }
         if (entries.length > 0) return;
-        await fs.rmdir(currentDir);
+        try {
+            await fs.rmdir(currentDir);
+        } catch {
+            return;
+        }
         currentDir = path.dirname(currentDir);
     }
 }

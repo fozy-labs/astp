@@ -66,13 +66,13 @@ describe("syncBundle", () => {
         }
     }
 
-    async function writeV1Lock(units: Record<string, string>, version = "1.0.0") {
+    async function writeV1Lock(units: Record<string, string>, version = "1.0.0", declined: string[] = []) {
         await writeLock(rootDir, {
             schemaVersion: 1,
             bundles: {
                 core: {
                     source: "test",
-                    declined: [],
+                    declined,
                     units: Object.fromEntries(
                         Object.entries(units).map(([relativePath, content]) => [
                             relativePath,
@@ -175,5 +175,45 @@ describe("syncBundle", () => {
         expect(core.units["rules/r.md"]).toBeUndefined();
         expect(core.declined).toEqual(["rules/r.md"]);
         expect(await fs.readFile(path.join(rootDir, "rules"), "utf8")).toBe("mine");
+    });
+
+    it("keeps a bundle entry that holds only declined units", async () => {
+        await writeV1Lock({ "rules/r.md": R_V1 });
+        await fs.writeFile(path.join(rootDir, "rules"), "mine");
+        await writeFiles(tempDir, { "rules/r.md": R_V2 });
+        const installed = await loadInstalled(rootDir);
+
+        await syncCore(installed, [rule("rules/r.md")], {
+            selected: new Set(["rules/r.md"]),
+            declined: new Set(),
+        });
+
+        const lock = await readLock(rootDir);
+        const core = lock.bundles.core!;
+        expect(core.source).toBe("test");
+        expect(core.units).toEqual({});
+        expect(core.declined).toEqual(["rules/r.md"]);
+        const after = await loadInstalled(rootDir);
+        expect(after.bundles.find((entry) => entry.bundleName === "core")).toBeDefined();
+    });
+
+    it("keeps an earlier decline when a later unit fails", async () => {
+        await writeFiles(rootDir, { "agents/a.md": A_V1 });
+        await writeFiles(tempDir, { "agents/a.md": A_V2, "rules/b.md": B_V1 });
+        await writeV1Lock({ "agents/a.md": A_V1 }, "1.0.0", ["rules/b.md"]);
+        const installed = await loadInstalled(rootDir);
+        mocks.failOn = "agents/a.md";
+
+        await expect(
+            syncCore(installed, [agent("agents/a.md"), rule("rules/b.md")], {
+                selected: new Set(["agents/a.md", "rules/b.md"]),
+                declined: new Set(),
+            }),
+        ).rejects.toThrow("boom");
+
+        const lock = await readLock(rootDir);
+        const core = lock.bundles.core!;
+        expect(core.units["agents/a.md"]).toEqual({ kind: "file", version: "1.0.0", hash: computeHash(A_V1) });
+        expect(core.declined).toEqual(["rules/b.md"]);
     });
 });
