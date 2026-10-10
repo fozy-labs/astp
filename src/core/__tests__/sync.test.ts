@@ -271,7 +271,14 @@ describe("syncBundle", () => {
             declined: new Set(),
         });
 
-        expect(result.foreign).toEqual([{ targetPath: "rules/r.md", kind: "file", state: "modified", owner: "other" }]);
+        expect(result.foreign).toEqual([
+            {
+                targetPath: "rules/r.md",
+                kind: "file",
+                state: "modified",
+                owner: { bundle: "other", path: "rules/r.md" },
+            },
+        ]);
         expect(result.installed).toEqual([]);
         const lock = await readLock(rootDir);
         const core = lock.bundles.core!;
@@ -291,7 +298,14 @@ describe("syncBundle", () => {
             other: { units: { "rules/r.md": { kind: "file", hash: computeHash(R_V1) } } },
         });
         const installed = await loadInstalled(rootDir);
-        const foreign = [{ targetPath: "rules/r.md", kind: "file", state: "modified", owner: "other" }];
+        const foreign = [
+            {
+                targetPath: "rules/r.md",
+                kind: "file",
+                state: "modified",
+                owner: { bundle: "other", path: "rules/r.md" },
+            },
+        ];
         const forces: ForceScope[] = [true, { units: new Set(["rules/r.md"]), blocks: new Set<string>() }];
 
         for (const force of forces) {
@@ -327,7 +341,12 @@ describe("syncBundle", () => {
         );
 
         expect(result.foreign).toEqual([
-            { targetPath: "skills/X/sub", kind: "skill", state: "modified", owner: "other" },
+            {
+                targetPath: "skills/X/sub",
+                kind: "skill",
+                state: "modified",
+                owner: { bundle: "other", path: "skills/x" },
+            },
         ]);
         expect(result.installed).toEqual([]);
         await expect(fs.access(path.join(rootDir, "skills/X/sub"))).rejects.toMatchObject({ code: "ENOENT" });

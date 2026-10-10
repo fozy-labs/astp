@@ -104,7 +104,10 @@ export async function syncBundle(args: {
         result.removed.push(status(unit));
     };
 
-    const declineForeign = (unit: ReturnType<typeof groupTemplateItems>[number], owner?: string): void => {
+    const declineForeign = (
+        unit: ReturnType<typeof groupTemplateItems>[number],
+        owner?: { bundle: string; path: string },
+    ): void => {
         delete lockBundle.units[unit.relativePath];
         args.declined.add(unit.relativePath);
         result.foreign.push({
@@ -351,14 +354,19 @@ async function mergeUnitBlockFiles(
     return { contents, blocks, declinedBlocks: [...new Set(declinedBlocks)] };
 }
 
-/** Another bundle in the lock that tracks this path, a folder of it, or a path inside it — compared as Windows and macOS do. */
-function lockOwner(lock: Lock, bundleName: string, unitPath: string): string | undefined {
+/**
+ * Another bundle in the lock that tracks this path, a folder of it, or a path inside it — compared as
+ * Windows and macOS do. Returns the bundle and the tracked unit key as written in the lock.
+ */
+function lockOwner(lock: Lock, bundleName: string, unitPath: string): { bundle: string; path: string } | undefined {
     const folded = foldPath(unitPath);
     for (const [name, bundle] of Object.entries(lock.bundles)) {
         if (name === bundleName) continue;
         for (const tracked of Object.keys(bundle.units)) {
             const other = foldPath(tracked);
-            if (folded === other || folded.startsWith(`${other}/`) || other.startsWith(`${folded}/`)) return name;
+            if (folded === other || folded.startsWith(`${other}/`) || other.startsWith(`${folded}/`)) {
+                return { bundle: name, path: tracked };
+            }
         }
     }
     return undefined;

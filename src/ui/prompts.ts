@@ -655,7 +655,9 @@ export function warnForeign(
     target: InstallTargetType,
     source?: string,
 ): void {
-    const owned = units.filter((unit) => unit.owner !== undefined);
+    const owned = units.filter(
+        (unit): unit is ForeignUnit & { owner: { bundle: string; path: string } } => unit.owner !== undefined,
+    );
     const foreign = units.filter((unit) => unit.owner === undefined);
     if (foreign.length > 0 || blockKeys.length > 0) {
         const list = [...foreign.map((unit) => unit.targetPath), ...blockKeys]
@@ -672,15 +674,22 @@ export function warnForeign(
         );
     }
     if (owned.length > 0) {
-        const list = owned.map((unit) => `  • ${unit.targetPath} (${unit.owner})`).join("\n");
-        const commands = owned
-            .flatMap((unit) => [
-                `  astp delete ${unit.owner} --skill ${unit.targetPath} --target ${target}`,
-                `  ${installRetry(bundleName, [`--skill ${unit.targetPath}`], target, source)}`,
-            ])
+        const list = owned
+            .map((unit) =>
+                unit.owner.path === unit.targetPath
+                    ? `  • ${unit.targetPath} (${unit.owner.bundle})`
+                    : `  • ${unit.targetPath} (${unit.owner.bundle}: ${unit.owner.path})`,
+            )
             .join("\n");
+        const deletes = new Set(
+            owned.map((unit) => `  astp delete ${unit.owner.bundle} --skill ${unit.owner.path} --target ${target}`),
+        );
+        const commands = [
+            ...deletes,
+            ...owned.map((unit) => `  ${installRetry(bundleName, [`--skill ${unit.targetPath}`], target, source)}`),
+        ].join("\n");
         p.log.warn(
-            `Owned by another bundle — left untouched, recorded as declined:\n${list}\nTo move one here, delete it from its bundle, then install it:\n${commands}`,
+            `Owned by another bundle — left untouched, recorded as declined:\n${list}\nTo move them here, delete them from their bundle, then install them:\n${commands}`,
         );
     }
 }

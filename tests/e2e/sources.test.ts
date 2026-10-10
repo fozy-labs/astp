@@ -242,7 +242,14 @@ describe("E2E: manifest sources", () => {
 
         expect(vi.mocked(warnForeign)).toHaveBeenCalledWith(
             "extra",
-            [{ targetPath: "rules/shared.md", kind: "file", state: "modified", owner: "core" }],
+            [
+                {
+                    targetPath: "rules/shared.md",
+                    kind: "file",
+                    state: "modified",
+                    owner: { bundle: "core", path: "rules/shared.md" },
+                },
+            ],
             [],
             "project",
             "./b",

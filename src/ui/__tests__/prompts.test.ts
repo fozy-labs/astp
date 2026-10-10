@@ -349,7 +349,18 @@ describe("legacy migration prompts", () => {
         warnForeign(
             "core",
             [
-                { targetPath: "rules/r.md", kind: "file", state: "modified", owner: "other" },
+                {
+                    targetPath: "rules/r.md",
+                    kind: "file",
+                    state: "modified",
+                    owner: { bundle: "other", path: "rules/r.md" },
+                },
+                {
+                    targetPath: "skills/X/sub",
+                    kind: "skill",
+                    state: "modified",
+                    owner: { bundle: "other", path: "skills/x" },
+                },
                 { targetPath: "rules/x.md", kind: "file", state: "modified" },
             ],
             [],
@@ -358,12 +369,15 @@ describe("legacy migration prompts", () => {
 
         const calls = vi.mocked(p.log.warn).mock.calls.map((call) => String(call[0]));
         expect(calls).toHaveLength(2);
-        const owned = calls.find((text) => text.includes("(other)"))!;
+        const owned = calls.find((text) => text.includes("(other"))!;
         expect(owned).toContain("rules/r.md (other)");
+        expect(owned).toContain("skills/X/sub (other: skills/x)");
         expect(owned).toContain("astp delete other --skill rules/r.md --target project");
-        expect(owned).toContain("astp install core --skill rules/r.md --target project");
+        expect(owned).toContain("astp delete other --skill skills/x --target project");
+        expect(owned).not.toContain("astp delete other --skill skills/X/sub");
+        expect(owned).toContain("astp install core --skill skills/X/sub --target project");
         expect(owned).not.toContain("--force");
-        const plain = calls.find((text) => !text.includes("(other)"))!;
+        const plain = calls.find((text) => !text.includes("(other"))!;
         expect(plain).toContain("rules/x.md");
         expect(plain).toContain("astp install core --skill rules/x.md --force --target project");
     });
