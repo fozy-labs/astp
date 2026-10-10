@@ -74,6 +74,7 @@ The same `target` path lands under the platform's own root, so write bundle item
 
 - `source` paths follow the pattern `<bundleName>/<category>/<filename>`.
 - `target` paths equal `source` with the bundle name prefix stripped.
+- Bundle names and every `/`-separated `target` segment must be valid file names on Windows, macOS and Linux: at most 255 UTF-8 bytes, no `\ : * ? " < > |`, control or bidi characters, no trailing dot or space, no reserved device names (`con`, `nul`, `com1`…) or short names like `NAME~1`. No two bundle names, and no two targets or folders in a bundle, may differ only in letter case or Unicode normalization.
 
 ## How to Add a New Bundle
 

@@ -129,19 +129,22 @@ describe("fetcher", () => {
             vi.fn(async (url: URL) => new Response(`file ${url.pathname}`)),
         );
         const source = await resolveSource("https://host/m/manifest.json", work);
-        const odd = { ...bundle, items: [{ ...bundle.items[0]!, target: "rules/a#1?%.md" }] };
+        const odd = { ...bundle, items: [{ ...bundle.items[0]!, target: "rules/a#1%.md" }] };
         const dir = await downloadBundle(source, odd);
         tempDirs.push(dir);
-        expect(await fs.readFile(path.join(dir, "rules/a#1?%.md"), "utf8")).toBe("file /m/docs/rules/a%231%3F%25.md");
+        expect(await fs.readFile(path.join(dir, "rules/a#1%.md"), "utf8")).toBe("file /m/docs/rules/a%231%25.md");
     });
 
-    it("rejects a URL item outside the manifest directory", async () => {
-        vi.stubGlobal(
-            "fetch",
-            vi.fn(async () => new Response("x")),
-        );
-        const source = await resolveSource("https://host/m/manifest.json", work);
-        const escaping = { ...bundle, items: [{ ...bundle.items[0]!, target: "../../../x.md" }] };
-        await expect(downloadBundle(source, escaping)).rejects.toThrow("outside the manifest directory");
-    });
+    it.each(["../../../x.md", "agents/..\\..\\..\\x.txt"])(
+        "rejects URL item %j before fetching or writing outside the temp dir",
+        async (target) => {
+            const fetchMock = vi.fn(async () => new Response("x"));
+            vi.stubGlobal("fetch", fetchMock);
+            const source = await resolveSource("https://host/m/manifest.json", work);
+            const escaping = { ...bundle, items: [{ ...bundle.items[0]!, target }] };
+            await expect(downloadBundle(source, escaping)).rejects.toThrow("safe relative path");
+            expect(fetchMock).not.toHaveBeenCalled();
+            await expect(fs.stat(path.resolve(os.tmpdir(), "../x.txt"))).rejects.toMatchObject({ code: "ENOENT" });
+        },
+    );
 });
