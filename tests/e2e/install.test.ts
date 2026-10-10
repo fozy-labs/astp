@@ -10,9 +10,8 @@ import { resolveTarget } from "@/types/index.js";
 import {
     confirmInstall,
     isInteractive,
-    selectBundles,
+    selectBundleItems,
     selectNewUnits,
-    selectUnits,
     warnForeign,
     warnKeptRemoved,
     warnLegacyModified,
@@ -48,9 +47,9 @@ vi.mock("@/ui/prompts.js", () => ({
     requireTerminal: vi.fn(),
     selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
-    selectBundles: vi.fn(),
+    selectBundleItems: vi.fn(),
+    cancelNoBundles: vi.fn(),
     selectBlocks: vi.fn(),
-    selectUnits: vi.fn(),
     selectNewUnits: vi.fn(),
     confirmInstall: vi.fn(),
     showSuccess: vi.fn(),
@@ -74,8 +73,7 @@ const mockConfirmInstall = vi.mocked(confirmInstall);
 const mockWarnModified = vi.mocked(warnModified);
 const mockWarnForeign = vi.mocked(warnForeign);
 const mockIsInteractive = vi.mocked(isInteractive);
-const mockSelectBundles = vi.mocked(selectBundles);
-const mockSelectUnits = vi.mocked(selectUnits);
+const mockSelectBundleItems = vi.mocked(selectBundleItems);
 const mockSelectNewUnits = vi.mocked(selectNewUnits);
 
 describe("E2E: install", () => {
@@ -263,10 +261,18 @@ describe("E2E: install", () => {
     });
 
     it("installs all bundles selected in the interactive wizard", async () => {
-        const pipeline = manifest.bundles.pipeline;
         mockIsInteractive.mockReturnValue(true);
-        mockSelectBundles.mockResolvedValue([manifest.bundles.core!, pipeline]);
-        mockSelectUnits.mockImplementation(async (_bundle, units) => units.map((unit) => unit.relativePath));
+        mockSelectBundleItems.mockImplementation(
+            async (entries) =>
+                new Map(
+                    entries
+                        .filter((entry) => ["core", "pipeline"].includes(entry.bundle.name))
+                        .map((entry) => [
+                            entry.bundle.name,
+                            { units: entry.units.map((unit) => unit.relativePath), blocks: entry.blockDefaults },
+                        ]),
+                ),
+        );
         mockDownloadBundle.mockImplementation(async (_source, { name: bundleName }) => {
             const dir = await setupTemplateDir(manifest, bundleName);
             templateDirs.push(dir);

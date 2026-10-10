@@ -1,3 +1,7 @@
+import { styleText } from "node:util";
+
+import { Prompt, wrapTextWithPrefix } from "@clack/core";
+import type { PromptOptions } from "@clack/core";
 import * as p from "@clack/prompts";
 
 import { groupTemplateItems } from "@/core/index.js";
@@ -8,13 +12,12 @@ import type {
     InstalledBundle,
     InstallTarget,
     InstallTargetType,
-    Manifest,
     Platform,
     UpdateReport,
 } from "@/types/index.js";
-import { ALL_PLATFORMS, describeTarget, filterBundlesByPlatform, resolveTarget } from "@/types/index.js";
+import { ALL_PLATFORMS, describeTarget, resolveTarget } from "@/types/index.js";
 
-import { describeUnitCounts } from "./format.js";
+import { describeUnitCounts, formatCount, UNIT_COUNT_KINDS, unitCountKind } from "./format.js";
 
 // Re-export intro/outro for wizard usage
 export const intro = p.intro;
@@ -94,39 +97,379 @@ export async function selectTarget(platform: Platform): Promise<InstallTarget> {
     return resolveTarget(platform, type as InstallTargetType);
 }
 
-export async function selectBundles(manifest: Manifest, platform: Platform): Promise<Bundle[]> {
-    const available = filterBundlesByPlatform(manifest, platform);
-    if (available.length === 0) {
-        p.cancel(`No bundles available for platform '${platform}'.`);
-        process.exit(0);
+export interface BlockOption {
+    /** `<file target>#<name>`. */
+    key: string;
+    name: string;
+    file: string;
+    /** Unchecked in a fresh install. */
+    optional: boolean;
+}
+
+export interface BundleEntry {
+    /** Resolved bundle (items from its lock source). */
+    bundle: Bundle;
+    /** `groupTemplateItems(bundle.items)`. */
+    units: TemplateUnit[];
+    /** Unit paths Space selects on an empty bundle: all minus the lock's declines. */
+    defaults: string[];
+    /** Initially selected with `defaults`. */
+    preselected: boolean;
+    /** Unit path → its selectable blocks; units without blocks are absent. */
+    blocks: Map<string, BlockOption[]>;
+    /** Block keys checked at start: lock choices, else the non-optional blocks. */
+    blockDefaults: string[];
+}
+
+/** What the tree returns per chosen bundle. */
+export interface BundleChoice {
+    units: string[];
+    /** Chosen block keys of the chosen units. */
+    blocks: string[];
+}
+
+interface TreeRow {
+    entry: BundleEntry;
+    /** Present on item and block rows, absent on bundle rows. */
+    unit?: TemplateUnit;
+    /** Present on block rows. */
+    block?: BlockOption;
+}
+
+type OptionRenderState = "active" | "selected" | "cancelled" | "active-selected" | "submitted" | "inactive";
+
+// Mirrors @clack/prompts 1.1.0 multiselect's option render so the tree rows
+// look identical to the other prompts.
+function renderBundleOption(
+    option: { value: string; label?: string; hint?: string },
+    state: OptionRenderState,
+): string {
+    const label = option.label ?? String(option.value);
+    const mapLines = (text: string, format: (line: string) => string) => text.split("\n").map(format).join("\n");
+    const hint = option.hint ? ` ${styleText("dim", `(${option.hint})`)}` : "";
+    switch (state) {
+        case "active":
+            return `${styleText("cyan", p.S_CHECKBOX_ACTIVE)} ${label}${hint}`;
+        case "selected":
+            return `${styleText("green", p.S_CHECKBOX_SELECTED)} ${mapLines(label, (line) => styleText("dim", line))}${hint}`;
+        case "cancelled":
+            return mapLines(label, (line) => styleText(["strikethrough", "dim"], line));
+        case "active-selected":
+            return `${styleText("green", p.S_CHECKBOX_SELECTED)} ${label}${hint}`;
+        case "submitted":
+            return mapLines(label, (line) => styleText("dim", line));
+        default:
+            return `${styleText("dim", p.S_CHECKBOX_INACTIVE)} ${mapLines(label, (line) => styleText("dim", line))}`;
+    }
+}
+
+function rowState(active: boolean, selected: boolean): OptionRenderState {
+    return active && selected ? "active-selected" : selected ? "selected" : active ? "active" : "inactive";
+}
+
+/**
+ * Bundle, item and block selection on one screen: a collapsed tree of
+ * bundles → items → blocks whose child rows appear under → and hide under ←.
+ * A single bundle starts expanded. Extends the base Prompt — the MultiSelect
+ * subclasses own the `cursor` event over a flat list, which fights hidden rows.
+ */
+export class BundleTreePrompt extends Prompt<Map<string, BundleChoice>> {
+    /** Bundle names whose item rows are visible. */
+    readonly expanded = new Set<string>();
+    /** `unitKey` of items whose block rows are visible. */
+    readonly expandedUnits = new Set<string>();
+    /** Bundle name → chosen unit paths (every entry is present, possibly empty). */
+    readonly chosen = new Map<string, Set<string>>();
+    /** Bundle name → checked block keys, kept while their item is deselected. */
+    readonly chosenBlocks = new Map<string, Set<string>>();
+    cursor = 0;
+
+    readonly entries: BundleEntry[];
+
+    constructor(opts: PromptOptions<Map<string, BundleChoice>, BundleTreePrompt> & { entries: BundleEntry[] }) {
+        super(opts, false);
+        this.entries = opts.entries;
+        for (const entry of this.entries) {
+            this.chosen.set(entry.bundle.name, new Set(entry.preselected ? entry.defaults : []));
+            this.chosenBlocks.set(entry.bundle.name, new Set(entry.blockDefaults));
+        }
+        const [only] = this.entries;
+        if (this.entries.length === 1 && only) this.expanded.add(only.bundle.name);
+        this.refreshValue();
+        this.on("cursor", (key) => this.move(key));
     }
 
-    const options = available.map((bundle) => {
-        const units = groupTemplateItems(bundle.items);
-        return {
-            value: bundle.name,
-            label: `${bundle.name} — ${bundle.description} (${describeUnitCounts(
-                units.filter((unit) => unit.kind === "file").length,
-                units.filter((unit) => unit.kind === "skill").length,
-            )})`,
-        };
+    /** Bundle rows plus the item and block rows of expanded ones, in manifest order. */
+    get rows(): TreeRow[] {
+        const rows: TreeRow[] = [];
+        for (const entry of this.entries) {
+            rows.push({ entry });
+            if (!this.expanded.has(entry.bundle.name)) continue;
+            for (const unit of entry.units) {
+                rows.push({ entry, unit });
+                if (!this.expandedUnits.has(unitKey(entry, unit))) continue;
+                for (const block of entry.blocks.get(unit.relativePath) ?? []) rows.push({ entry, unit, block });
+            }
+        }
+        return rows;
+    }
+
+    renderRow(row: TreeRow, active: boolean): string {
+        const set = this.chosen.get(row.entry.bundle.name)!;
+        const blockSet = this.chosenBlocks.get(row.entry.bundle.name)!;
+        if (row.unit && row.block) {
+            const blocks = row.entry.blocks.get(row.unit.relativePath)!;
+            const severalFiles = new Set(blocks.map((block) => block.file)).size > 1;
+            const option = {
+                value: row.block.key,
+                label: row.block.name,
+                hint: severalFiles ? row.block.file : undefined,
+            };
+            const selected = set.has(row.unit.relativePath) && blockSet.has(row.block.key);
+            return `    ${renderBundleOption(option, rowState(active, selected))}`;
+        }
+        if (row.unit) {
+            const selected = set.has(row.unit.relativePath);
+            const blocks = row.entry.blocks.get(row.unit.relativePath) ?? [];
+            const option = {
+                value: row.unit.relativePath,
+                label: pathLabel(row.unit.relativePath),
+                hint: row.unit.relativePath,
+            };
+            const line = `  ${renderBundleOption(option, rowState(active, selected))}`;
+            if (blocks.length === 0 || this.expandedUnits.has(unitKey(row.entry, row.unit))) return line;
+            const checked = selected ? blocks.filter((block) => blockSet.has(block.key)).length : blocks.length;
+            const customized = selected && this.blocksCustomized(row.entry, row.unit);
+            return `${line}\n    ${summaryLine(formatCount("block", checked, blocks.length, customizedMark(customized)))}`;
+        }
+        const { bundle } = row.entry;
+        const option = { value: bundle.name, label: `${bundle.name} — ${bundle.description}` };
+        const line = renderBundleOption(option, rowState(active, set.size > 0));
+        if (this.expanded.has(bundle.name)) return line;
+        return `${line}\n  ${summaryLine(this.bundleCounts(row.entry))}`;
+    }
+
+    /** Per kind: `4 skills`; `3/4* skills` when an item is unchecked; `1* rule` when its blocks differ from the template's. */
+    private bundleCounts(entry: BundleEntry): string {
+        const set = this.chosen.get(entry.bundle.name)!;
+        const picked = set.size > 0;
+        const groups = new Map<string, { chosen: number; total: number; customized: boolean }>();
+        for (const unit of entry.units) {
+            const kind = unitCountKind({ kind: unit.kind, path: unit.relativePath });
+            const group = groups.get(kind) ?? { chosen: 0, total: 0, customized: false };
+            group.total += 1;
+            const unitChosen = !picked || set.has(unit.relativePath);
+            if (unitChosen) group.chosen += 1;
+            if (picked && (!unitChosen || this.blocksCustomized(entry, unit))) group.customized = true;
+            groups.set(kind, group);
+        }
+        return (
+            UNIT_COUNT_KINDS.flatMap((kind) => {
+                const group = groups.get(kind);
+                return group ? [formatCount(kind, group.chosen, group.total, customizedMark(group.customized))] : [];
+            }).join(", ") || describeUnitCounts([])
+        );
+    }
+
+    /** A checked optional or an unchecked non-optional block. */
+    private blocksCustomized(entry: BundleEntry, unit: TemplateUnit): boolean {
+        const blockSet = this.chosenBlocks.get(entry.bundle.name)!;
+        return (entry.blocks.get(unit.relativePath) ?? []).some((block) => blockSet.has(block.key) === block.optional);
+    }
+
+    private refreshValue(): void {
+        const result = new Map<string, BundleChoice>();
+        for (const entry of this.entries) {
+            const set = this.chosen.get(entry.bundle.name)!;
+            const blockSet = this.chosenBlocks.get(entry.bundle.name)!;
+            if (set.size === 0) continue;
+            const units = entry.units.filter((unit) => set.has(unit.relativePath)).map((unit) => unit.relativePath);
+            const blocks = units.flatMap((unitPath) =>
+                (entry.blocks.get(unitPath) ?? []).filter((block) => blockSet.has(block.key)).map((block) => block.key),
+            );
+            result.set(entry.bundle.name, { units, blocks });
+        }
+        this.value = result;
+    }
+
+    private move(key?: string): void {
+        const rows = this.rows;
+        const row = rows[this.cursor];
+        switch (key) {
+            case "up":
+                this.cursor = (this.cursor - 1 + rows.length) % rows.length;
+                break;
+            case "down":
+                this.cursor = (this.cursor + 1) % rows.length;
+                break;
+            case "right":
+                if (!row || row.block) break;
+                if (row.unit) {
+                    if (row.entry.blocks.has(row.unit.relativePath))
+                        this.expandedUnits.add(unitKey(row.entry, row.unit));
+                } else if (row.entry.units.length > 0) {
+                    this.expanded.add(row.entry.bundle.name);
+                }
+                break;
+            case "left":
+                if (!row) break;
+                if (row.unit && row.block) {
+                    this.expandedUnits.delete(unitKey(row.entry, row.unit));
+                    this.cursor = this.rows.findIndex((r) => r.unit === row.unit && !r.block);
+                } else if (row.unit) {
+                    this.expanded.delete(row.entry.bundle.name);
+                    this.cursor = this.rows.findIndex((r) => r.entry === row.entry && !r.unit);
+                } else {
+                    this.expanded.delete(row.entry.bundle.name);
+                }
+                break;
+            case "space": {
+                if (!row) break;
+                const set = this.chosen.get(row.entry.bundle.name)!;
+                if (row.unit && row.block) {
+                    const blockSet = this.chosenBlocks.get(row.entry.bundle.name)!;
+                    if (!set.has(row.unit.relativePath)) {
+                        set.add(row.unit.relativePath);
+                        blockSet.add(row.block.key);
+                    } else if (blockSet.has(row.block.key)) {
+                        blockSet.delete(row.block.key);
+                    } else {
+                        blockSet.add(row.block.key);
+                    }
+                } else if (row.unit) {
+                    if (set.has(row.unit.relativePath)) set.delete(row.unit.relativePath);
+                    else set.add(row.unit.relativePath);
+                } else if (set.size === 0) {
+                    const paths =
+                        row.entry.defaults.length > 0
+                            ? row.entry.defaults
+                            : row.entry.units.map((unit) => unit.relativePath);
+                    for (const unitPath of paths) set.add(unitPath);
+                } else {
+                    set.clear();
+                }
+                break;
+            }
+        }
+        this.refreshValue();
+    }
+}
+
+function summaryLine(text: string): string {
+    return styleText("dim", `└ ${text}`);
+}
+
+function customizedMark(customized: boolean): string {
+    return customized ? styleText("yellow", "*") : "";
+}
+
+function unitKey(entry: BundleEntry, unit: TemplateUnit): string {
+    return `${entry.bundle.name}\n${unit.relativePath}`;
+}
+
+export function cancelNoBundles(platform: Platform): never {
+    p.cancel(`No bundles available for platform '${platform}'.`);
+    process.exit(0);
+}
+
+export async function selectBundleItems(entries: BundleEntry[]): Promise<Map<string, BundleChoice>> {
+    const message = "Select bundles and items:\n(Space = toggle, → = expand, ← = collapse, Enter = confirm)";
+
+    const prompt = new BundleTreePrompt({
+        entries,
+        validate: (value) => {
+            if (!value || value.size === 0) {
+                return `Please select at least one option.\n${styleText(
+                    "reset",
+                    styleText(
+                        "dim",
+                        `Press ${styleText(["gray", "bgWhite", "inverse"], " space ")} to select, ${styleText("gray", styleText("bgWhite", styleText("inverse", " enter ")))} to submit`,
+                    ),
+                )}`;
+            }
+        },
+        render() {
+            const title = `${styleText("gray", p.S_BAR)}\n${wrapTextWithPrefix(
+                undefined,
+                message,
+                `${p.symbolBar(this.state)}  `,
+                `${p.symbol(this.state)}  `,
+            )}\n`;
+            const rows = this.rows;
+            const styleRow = (row: TreeRow, active: boolean): string => this.renderRow(row, active);
+            const chosenBundles = this.entries.filter((entry) => this.chosen.get(entry.bundle.name)!.size > 0);
+            switch (this.state) {
+                case "submit": {
+                    const submitted =
+                        chosenBundles
+                            .map((entry) => {
+                                const set = this.chosen.get(entry.bundle.name)!;
+                                const partial =
+                                    set.size < entry.units.length ? ` (${set.size}/${entry.units.length})` : "";
+                                return renderBundleOption(
+                                    { value: entry.bundle.name, label: `${entry.bundle.name}${partial}` },
+                                    "submitted",
+                                );
+                            })
+                            .join(styleText("dim", ", ")) || styleText("dim", "none");
+                    return `${title}${wrapTextWithPrefix(undefined, submitted, `${styleText("gray", p.S_BAR)}  `)}`;
+                }
+                case "cancel": {
+                    const cancelled = chosenBundles
+                        .map((entry) => renderBundleOption({ value: entry.bundle.name }, "cancelled"))
+                        .join(styleText("dim", ", "));
+                    if (cancelled.trim() === "") return `${title}${styleText("gray", p.S_BAR)}`;
+                    return `${title}${wrapTextWithPrefix(undefined, cancelled, `${styleText("gray", p.S_BAR)}  `)}\n${styleText("gray", p.S_BAR)}`;
+                }
+                case "error": {
+                    const bar = `${styleText("yellow", p.S_BAR)}  `;
+                    const errorText = this.error
+                        .split("\n")
+                        .map((line, index) =>
+                            index === 0
+                                ? `${styleText("yellow", p.S_BAR_END)}  ${styleText("yellow", line)}`
+                                : `   ${line}`,
+                        )
+                        .join("\n");
+                    const titleLines = title.split("\n").length;
+                    const errorLines = errorText.split("\n").length + 1;
+                    return `${title}${bar}${p
+                        .limitOptions({
+                            output: undefined,
+                            options: rows,
+                            cursor: this.cursor,
+                            columnPadding: bar.length,
+                            rowPadding: titleLines + errorLines,
+                            style: styleRow,
+                        })
+                        .join(`\n${bar}`)}\n${errorText}\n`;
+                }
+                default: {
+                    const bar = `${styleText("cyan", p.S_BAR)}  `;
+                    const titleLines = title.split("\n").length;
+                    return `${title}${bar}${p
+                        .limitOptions({
+                            output: undefined,
+                            options: rows,
+                            cursor: this.cursor,
+                            columnPadding: bar.length,
+                            rowPadding: titleLines + 2,
+                            style: styleRow,
+                        })
+                        .join(`\n${bar}`)}\n${styleText("cyan", p.S_BAR_END)}\n`;
+                }
+            }
+        },
     });
 
-    const initialValues = available.filter((b) => b.default).map((b) => b.name);
-
-    const selected = await p.multiselect({
-        message: "Select bundles to install:\n(Space = toggle, Enter = confirm)",
-        options,
-        initialValues,
-        required: true,
-    });
+    const selected = await prompt.prompt();
 
     if (p.isCancel(selected)) {
         p.cancel("Cancelled.");
         process.exit(0);
     }
 
-    return (selected as string[]).map((name) => manifest.bundles[name]);
+    return selected as Map<string, BundleChoice>;
 }
 
 export async function confirmInstall(
@@ -135,12 +478,12 @@ export async function confirmInstall(
     selectedUnits?: TemplateUnit[],
 ): Promise<boolean> {
     const units = selectedUnits ?? bundles.flatMap((bundle) => groupTemplateItems(bundle.items));
-    const fileCount = units.filter((unit) => unit.kind === "file").length;
-    const skillCount = units.filter((unit) => unit.kind === "skill").length;
     const targetLabel = describeTarget(target);
 
     const confirmed = await p.confirm({
-        message: `Install ${bundles.length} bundle${bundles.length === 1 ? "" : "s"} (${describeUnitCounts(fileCount, skillCount)}) to ${targetLabel}?`,
+        message: `Install ${bundles.length} bundle${bundles.length === 1 ? "" : "s"} (${describeUnitCounts(
+            units.map((unit) => ({ kind: unit.kind, path: unit.relativePath })),
+        )}) to ${targetLabel}?`,
     });
 
     if (p.isCancel(confirmed)) {
@@ -151,27 +494,9 @@ export async function confirmInstall(
     return confirmed;
 }
 
-export async function selectUnits(bundle: Bundle, units: TemplateUnit[], initial: string[]): Promise<string[]> {
-    const selected = await p.multiselect({
-        message: `Select units from ${bundle.name}:\n(Space = toggle, Enter = confirm)`,
-        options: units.map((unit) => ({
-            value: unit.relativePath,
-            label: pathLabel(unit.relativePath),
-            hint: unit.relativePath,
-        })),
-        initialValues: initial,
-        required: true,
-    });
-    if (p.isCancel(selected)) {
-        p.cancel("Cancelled.");
-        process.exit(0);
-    }
-    return selected as string[];
-}
-
 export async function selectNewUnits(bundleName: string, units: TemplateUnit[]): Promise<string[]> {
     const selected = await p.multiselect({
-        message: `Select new units from ${bundleName}:\n(Space = toggle, Enter = confirm)`,
+        message: `Select new items from ${bundleName}:\n(Space = toggle, Enter = confirm)`,
         options: units.map((unit) => ({
             value: unit.relativePath,
             label: pathLabel(unit.relativePath),
@@ -185,13 +510,6 @@ export async function selectNewUnits(bundleName: string, units: TemplateUnit[]):
         process.exit(0);
     }
     return selected as string[];
-}
-
-export interface BlockOption {
-    /** `<file target>#<name>`. */
-    key: string;
-    name: string;
-    file: string;
 }
 
 export async function selectBlocks(unitPath: string, blocks: BlockOption[], initial: string[]): Promise<string[]> {
@@ -218,8 +536,7 @@ export async function selectInstalledBundles(installed: InstalledBundle[]): Prom
         options: installed.map((bundle) => ({
             value: bundle.bundleName,
             label: `${bundle.bundleName} (${describeUnitCounts(
-                bundle.units.filter((unit) => unit.kind === "file").length,
-                bundle.units.filter((unit) => unit.kind === "skill").length,
+                bundle.units.map((unit) => ({ kind: unit.kind, path: unit.relativePath })),
             )})`,
         })),
         required: true,
@@ -239,18 +556,13 @@ export async function confirmDelete(
     target: InstallTarget,
     force: boolean,
 ): Promise<boolean> {
-    const fileCount = bundles.reduce(
-        (sum, bundle) => sum + bundle.units.filter((unit) => unit.kind === "file").length,
-        0,
-    );
-    const skillCount = bundles.reduce(
-        (sum, bundle) => sum + bundle.units.filter((unit) => unit.kind === "skill").length,
-        0,
-    );
+    const units = bundles.flatMap((bundle) => bundle.units);
     const targetLabel = describeTarget(target);
 
     const confirmed = await p.confirm({
-        message: `Delete ${bundles.length} bundle${bundles.length === 1 ? "" : "s"} (${describeUnitCounts(fileCount, skillCount)}) from ${targetLabel}${force ? " with --force" : ""}?`,
+        message: `Delete ${bundles.length} bundle${bundles.length === 1 ? "" : "s"} (${describeUnitCounts(
+            units.map((unit) => ({ kind: unit.kind, path: unit.relativePath })),
+        )}) from ${targetLabel}${force ? " with --force" : ""}?`,
     });
 
     if (p.isCancel(confirmed)) {
@@ -301,9 +613,7 @@ export function showUpdateReport(report: UpdateReport): void {
     const lines: string[] = [];
 
     for (const update of report.updates) {
-        const skillCount = update.units.filter((unit) => unit.kind === "skill").length;
-        const fileCount = update.units.filter((unit) => unit.kind === "file").length;
-        const counts = describeUnitCounts(fileCount, skillCount);
+        const counts = describeUnitCounts(update.units.map((unit) => ({ kind: unit.kind, path: unit.targetPath })));
         lines.push(
             update.installedVersion === update.availableVersion
                 ? `${update.bundleName}: ${update.installedVersion} out of sync (${counts})`
@@ -320,19 +630,15 @@ export function showUpdateReport(report: UpdateReport): void {
 
 export function warnModified(files: FileStatus[], command: string): void {
     const paths = files.map((f) => `  • ${f.targetPath}`).join("\n");
-    const skillCount = files.filter((file) => file.kind === "skill").length;
-    const fileCount = files.filter((file) => file.kind === "file").length;
     p.log.warn(
-        `${describeUnitCounts(fileCount, skillCount)} modified locally — skipped:\n${paths}\nRun \`${command}\` to overwrite them.`,
+        `${describeUnitCounts(files.map((file) => ({ kind: file.kind, path: file.targetPath })))} modified locally — skipped:\n${paths}\nRun \`${command}\` to overwrite them.`,
     );
 }
 
 export function warnKeptRemoved(units: FileStatus[]): void {
     const paths = units.map((unit) => `  • ${unit.targetPath}`).join("\n");
-    const skillCount = units.filter((unit) => unit.kind === "skill").length;
-    const fileCount = units.filter((unit) => unit.kind === "file").length;
     p.log.warn(
-        `${describeUnitCounts(fileCount, skillCount)} not selected or removed upstream but modified locally — kept:\n${paths}\nUse --force to delete them.`,
+        `${describeUnitCounts(units.map((unit) => ({ kind: unit.kind, path: unit.targetPath })))} not selected or removed upstream but modified locally — kept:\n${paths}\nUse --force to delete them.`,
     );
 }
 

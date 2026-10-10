@@ -18,10 +18,9 @@ import { resolveTarget } from "@/types/index.js";
 import {
     confirmInstall,
     isInteractive,
-    selectBundles,
+    selectBundleItems,
     selectPlatform,
     selectTarget,
-    selectUnits,
     showSuccess,
 } from "@/ui/prompts.js";
 
@@ -47,12 +46,12 @@ vi.mock("@/core/index.js", async (importOriginal) => {
 vi.mock("@/ui/prompts.js", () => ({
     selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
-    selectBundles: vi.fn(),
+    selectBundleItems: vi.fn(),
+    cancelNoBundles: vi.fn(),
     confirmInstall: vi.fn(),
     isInteractive: vi.fn(),
     requireTerminal: vi.fn(),
     selectBlocks: vi.fn(),
-    selectUnits: vi.fn(),
     showSuccess: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
@@ -70,11 +69,10 @@ const mockSyncBundle = vi.mocked(syncBundle);
 const mockWriteLock = vi.mocked(writeLock);
 const mockSelectPlatform = vi.mocked(selectPlatform);
 const mockSelectTarget = vi.mocked(selectTarget);
-const mockSelectBundles = vi.mocked(selectBundles);
+const mockSelectBundleItems = vi.mocked(selectBundleItems);
 const mockConfirmInstall = vi.mocked(confirmInstall);
 const mockShowSuccess = vi.mocked(showSuccess);
 const mockIsInteractive = vi.mocked(isInteractive);
-const mockSelectUnits = vi.mocked(selectUnits);
 const mockResolveTarget = vi.mocked(resolveTarget);
 
 const temporaryRoots: string[] = [];
@@ -159,7 +157,7 @@ describe("executeInstall", () => {
 
         expect(mockSelectPlatform).not.toHaveBeenCalled();
         expect(mockSelectTarget).not.toHaveBeenCalled();
-        expect(mockSelectBundles).not.toHaveBeenCalled();
+        expect(mockSelectBundleItems).not.toHaveBeenCalled();
         expect(mockConfirmInstall).not.toHaveBeenCalled();
         expect(mockResolveBundle).toHaveBeenCalledWith(testManifest, "core");
         expect(mockDownloadBundle).toHaveBeenCalledWith(
@@ -191,14 +189,16 @@ describe("executeInstall", () => {
         mockIsInteractive.mockReturnValue(true);
         mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockResolvedValue(testTarget);
-        mockSelectBundles.mockResolvedValue([testBundle]);
-        mockSelectUnits.mockResolvedValue(["skills/orchestrate"]);
+        mockSelectBundleItems.mockResolvedValue(new Map([["core", { units: ["skills/orchestrate"], blocks: [] }]]));
+        mockResolveBundle.mockImplementation((manifest, name) => manifest.bundles[name]!);
 
         await executeInstall({});
 
         expect(mockSelectPlatform).toHaveBeenCalled();
         expect(mockSelectTarget).toHaveBeenCalledWith("claude-code");
-        expect(mockSelectBundles).toHaveBeenCalledWith(testManifest, "claude-code");
+        expect(mockSelectBundleItems).toHaveBeenCalledWith(
+            expect.arrayContaining([expect.objectContaining({ bundle: testBundle })]),
+        );
         expect(mockConfirmInstall).toHaveBeenCalledWith([testBundle], testTarget, [
             { kind: "skill", relativePath: "skills/orchestrate", items: [testItem] },
         ]);
@@ -228,7 +228,8 @@ describe("executeInstall", () => {
         mockIsInteractive.mockReturnValue(true);
         mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockResolvedValue(testTarget);
-        mockSelectBundles.mockResolvedValue([testBundle]);
+        mockSelectBundleItems.mockResolvedValue(new Map([["core", { units: ["skills/orchestrate"], blocks: [] }]]));
+        mockResolveBundle.mockReturnValue(testBundle);
         mockConfirmInstall.mockResolvedValue(false);
 
         await executeInstall({});
@@ -249,32 +250,239 @@ describe("executeInstall", () => {
     });
 
     it("shows success with correct file count", async () => {
+        mockIsInteractive.mockReturnValue(true);
         mockSelectPlatform.mockResolvedValue("claude-code");
         mockSelectTarget.mockResolvedValue(testTarget);
-        mockSelectBundles.mockResolvedValue([testBundle]);
+        mockSelectBundleItems.mockResolvedValue(new Map([["core", { units: ["skills/orchestrate"], blocks: [] }]]));
+        mockResolveBundle.mockImplementation((manifest, name) => manifest.bundles[name]!);
 
         await executeInstall({});
 
         expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining("1 skill"));
     });
 
-    it("prompts for unit selection in an interactive install", async () => {
-        mockSelectPlatform.mockResolvedValue("claude-code");
-        mockSelectTarget.mockResolvedValue(testTarget);
-        mockSelectBundles.mockResolvedValue([testBundle]);
+    it("shows the tree with only the named bundle, preselected, when installing it interactively", async () => {
         mockIsInteractive.mockReturnValue(true);
-        mockSelectUnits.mockResolvedValue([]);
+        mockSelectBundleItems.mockResolvedValue(new Map([["core", { units: [], blocks: [] }]]));
+        mockResolveBundle.mockReturnValue(testBundle);
 
-        await executeInstall({});
+        await executeInstall({ bundle: "core", platform: "claude-code", target: "project" });
 
-        expect(mockSelectUnits).toHaveBeenCalledWith(
-            testBundle,
-            [{ kind: "skill", relativePath: "skills/orchestrate", items: [testItem] }],
-            ["skills/orchestrate"],
-        );
+        expect(mockSelectBundleItems).toHaveBeenCalledWith([
+            expect.objectContaining({
+                bundle: testBundle,
+                units: [{ kind: "skill", relativePath: "skills/orchestrate", items: [testItem] }],
+                defaults: ["skills/orchestrate"],
+                preselected: true,
+            }),
+        ]);
         expect(mockConfirmInstall).toHaveBeenCalledWith([testBundle], testTarget, []);
         expect(mockSyncBundle).toHaveBeenCalledWith(
             expect.objectContaining({ selected: new Set(), declined: new Set(["skills/orchestrate"]) }),
+        );
+    });
+
+    it("installs --skill without the tree in a terminal", async () => {
+        mockIsInteractive.mockReturnValue(true);
+        mockResolveBundle.mockReturnValue(testBundle);
+
+        await executeInstall({ bundle: "core", skills: ["orchestrate"], platform: "claude-code", target: "project" });
+
+        expect(mockSelectBundleItems).not.toHaveBeenCalled();
+        expect(mockSyncBundle).toHaveBeenCalledWith(
+            expect.objectContaining({ selected: new Set(["skills/orchestrate"]) }),
+        );
+    });
+});
+
+describe("interactive bundle tree selection", () => {
+    const bundleA: Bundle = {
+        name: "a",
+        version: "1.0.0",
+        description: "Bundle A",
+        default: true,
+        platforms: ["claude-code"],
+        items: [
+            { source: "a/agents/a1.md", target: "agents/a1.md", category: "agent" },
+            { source: "a/rules/r1.md", target: "rules/r1.md", category: "rule" },
+        ],
+    };
+    const bundleB: Bundle = {
+        name: "b",
+        version: "1.0.0",
+        description: "Bundle B",
+        default: false,
+        platforms: ["claude-code"],
+        items: [
+            { source: "b/skills/s1/SKILL.md", target: "skills/s1/SKILL.md", category: "skill" },
+            { source: "b/skills/s2/SKILL.md", target: "skills/s2/SKILL.md", category: "skill" },
+            { source: "b/agents/b1.md", target: "agents/b1.md", category: "agent" },
+        ],
+    };
+    const abManifest: Manifest = {
+        schemaVersion: 1,
+        repository: "fozy-labs/astp",
+        bundles: { a: bundleA, b: bundleB },
+    };
+
+    beforeEach(() => {
+        mockIsInteractive.mockReturnValue(true);
+        mockSelectPlatform.mockResolvedValue("claude-code");
+        mockSelectTarget.mockResolvedValue(testTarget);
+        mockFetchManifest.mockResolvedValue(abManifest);
+        mockResolveBundle.mockImplementation((manifest, name) => manifest.bundles[name]!);
+    });
+
+    it("installs the chosen subset per bundle and declines the rest", async () => {
+        mockSelectBundleItems.mockResolvedValue(
+            new Map([
+                ["a", { units: ["agents/a1.md", "rules/r1.md"], blocks: [] }],
+                ["b", { units: ["skills/s1"], blocks: [] }],
+            ]),
+        );
+
+        await executeInstall({});
+
+        expect(mockSyncBundle).toHaveBeenCalledWith(
+            expect.objectContaining({
+                bundle: bundleA,
+                selected: new Set(["agents/a1.md", "rules/r1.md"]),
+                declined: new Set(),
+            }),
+        );
+        expect(mockSyncBundle).toHaveBeenCalledWith(
+            expect.objectContaining({
+                bundle: bundleB,
+                selected: new Set(["skills/s1"]),
+                declined: new Set(["skills/s2", "agents/b1.md"]),
+            }),
+        );
+    });
+
+    it("builds entries from each bundle's lock source and opens it once", async () => {
+        const altBundleB: Bundle = {
+            ...bundleB,
+            items: [
+                ...bundleB.items,
+                { source: "b/skills/s3/SKILL.md", target: "skills/s3/SKILL.md", category: "skill" },
+            ],
+        };
+        const altManifest: Manifest = { ...abManifest, bundles: { a: bundleA, b: altBundleB } };
+        mockFetchManifest.mockResolvedValueOnce(abManifest).mockResolvedValueOnce(altManifest);
+        mockLoadInstalled.mockResolvedValue({
+            lock: {
+                schemaVersion: 1,
+                bundles: {
+                    b: {
+                        source: "gh:other/repo",
+                        units: { "skills/s1": { kind: "skill", version: "1.0.0", hash: "h" } },
+                        declined: [],
+                    },
+                },
+            },
+            bundles: [
+                {
+                    bundleName: "b",
+                    version: "1.0.0",
+                    units: [
+                        {
+                            relativePath: "skills/s1",
+                            kind: "skill",
+                            version: "1.0.0",
+                            origin: "lock",
+                            state: "unmodified",
+                        },
+                    ],
+                    declined: [],
+                },
+            ],
+        });
+        mockSelectBundleItems.mockResolvedValue(new Map([["b", { units: ["skills/s3"], blocks: [] }]]));
+
+        await executeInstall({});
+
+        // Primary manifest plus b's lock source — b is not opened a second time.
+        expect(mockFetchManifest).toHaveBeenCalledTimes(2);
+        const entries = mockSelectBundleItems.mock.calls[0]![0];
+        const entryB = entries.find((entry) => entry.bundle.name === "b")!;
+        expect(entryB.bundle).toBe(altBundleB);
+        expect(entryB.units.map((unit) => unit.relativePath)).toEqual([
+            "skills/s1",
+            "skills/s2",
+            "agents/b1.md",
+            "skills/s3",
+        ]);
+        expect(mockSyncBundle).toHaveBeenCalledWith(
+            expect.objectContaining({
+                bundle: altBundleB,
+                source: expect.stringContaining("other/repo"),
+                selected: new Set(["skills/s3"]),
+            }),
+        );
+    });
+
+    it("passes defaults without lock-declined paths and preselected from the default flag", async () => {
+        mockLoadInstalled.mockResolvedValue({
+            lock: {
+                schemaVersion: 1,
+                bundles: {
+                    a: {
+                        source: "gh:fozy-labs/astp",
+                        units: { "agents/a1.md": { kind: "file", version: "1.0.0", hash: "h" } },
+                        declined: ["rules/r1.md"],
+                    },
+                },
+            },
+            bundles: [
+                {
+                    bundleName: "a",
+                    version: "1.0.0",
+                    units: [
+                        {
+                            relativePath: "agents/a1.md",
+                            kind: "file",
+                            version: "1.0.0",
+                            origin: "lock",
+                            state: "unmodified",
+                        },
+                    ],
+                    declined: ["rules/r1.md"],
+                },
+            ],
+        });
+        mockSelectBundleItems.mockResolvedValue(
+            new Map([["a", { units: ["agents/a1.md", "rules/r1.md"], blocks: [] }]]),
+        );
+
+        await executeInstall({});
+
+        const entries = mockSelectBundleItems.mock.calls[0]![0];
+        expect(entries).toEqual([
+            expect.objectContaining({
+                bundle: bundleA,
+                defaults: ["agents/a1.md"],
+                preselected: true,
+            }),
+            expect.objectContaining({
+                bundle: bundleB,
+                defaults: ["skills/s1", "skills/s2", "agents/b1.md"],
+                preselected: false,
+            }),
+        ]);
+    });
+
+    it("does not install bundles absent from the prompt result", async () => {
+        mockSelectBundleItems.mockResolvedValue(new Map([["a", { units: ["agents/a1.md"], blocks: [] }]]));
+
+        await executeInstall({});
+
+        expect(mockSyncBundle).toHaveBeenCalledTimes(1);
+        expect(mockSyncBundle).toHaveBeenCalledWith(
+            expect.objectContaining({
+                bundle: bundleA,
+                selected: new Set(["agents/a1.md"]),
+                declined: new Set(["rules/r1.md"]),
+            }),
         );
     });
 });

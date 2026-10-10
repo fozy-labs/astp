@@ -338,7 +338,7 @@ describe("executeUpdate", () => {
         expect(mockWarnKeptRemoved).toHaveBeenCalledWith([
             { targetPath: keptUnit.relativePath, kind: "file", state: "modified" },
         ]);
-        expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining("removed 1 file"));
+        expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining("removed 1 agent"));
     });
 
     it("migrates only matching clean legacy units when the bundle version is current", async () => {

@@ -1,6 +1,27 @@
-export function describeUnitCounts(fileCount: number, skillCount: number): string {
-    const counts: string[] = [];
-    if (skillCount > 0) counts.push(`${skillCount} skill${skillCount === 1 ? "" : "s"}`);
-    if (fileCount > 0) counts.push(`${fileCount} file${fileCount === 1 ? "" : "s"}`);
-    return counts.join(", ") || "0 files";
+/**
+ * Labels a set of units by what they install: skills are whole directories,
+ * files are grouped by their top-level install dir (`agents/`, `rules/`).
+ */
+export function describeUnitCounts(units: ReadonlyArray<{ kind: "file" | "skill"; path: string }>): string {
+    const counts = { skill: 0, agent: 0, rule: 0, file: 0 };
+    for (const unit of units) counts[unitCountKind(unit)] += 1;
+    return (
+        UNIT_COUNT_KINDS.filter((kind) => counts[kind] > 0)
+            .map((kind) => formatCount(kind, counts[kind], counts[kind]))
+            .join(", ") || "0 files"
+    );
+}
+
+export const UNIT_COUNT_KINDS = ["skill", "agent", "rule", "file"] as const;
+
+export function unitCountKind(unit: { kind: "file" | "skill"; path: string }): (typeof UNIT_COUNT_KINDS)[number] {
+    if (unit.kind === "skill") return "skill";
+    if (unit.path.startsWith("agents/")) return "agent";
+    if (unit.path.startsWith("rules/")) return "rule";
+    return "file";
+}
+
+/** `9 blocks`, or `8/9 blocks` when only part is chosen; `mark` follows the number. */
+export function formatCount(label: string, chosen: number, total: number, mark = ""): string {
+    return `${chosen < total ? `${chosen}/${total}` : total}${mark} ${label}${total === 1 ? "" : "s"}`;
 }

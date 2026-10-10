@@ -3,7 +3,6 @@ import type { BlockOption } from "@/ui/prompts.js";
 import { isInteractive, selectBlocks } from "@/ui/prompts.js";
 
 interface BlockEntry extends BlockOption {
-    optional: boolean;
     required: boolean;
 }
 
@@ -69,54 +68,57 @@ export function resolveBlockKeys(
     return resolved;
 }
 
+/** Blocks the install tree offers for a unit: every block except required ones. */
+export function installBlockOptions(blockFiles: Map<string, UnitBlockFile>): BlockOption[] {
+    return unitBlockEntries(blockFiles)
+        .filter((entry) => !entry.required)
+        .map(({ key, name, file, optional }) => ({ key, name, file, optional }));
+}
+
 /**
- * `install`: required blocks are always selected and never shown; the wizard
- * pre-checks lock selections plus new non-optional blocks (a unit without lock
- * blocks starts with all non-optional). Non-TTY installs all non-optional
- * blocks plus optional ones already in the lock; with `additive` (--skill or
- * --block) it keeps lock declines instead. `requested` keys are always selected.
+ * Blocks pre-checked in the install tree: lock selections plus new
+ * non-optional blocks (a unit without lock blocks starts with all non-optional).
  */
-export async function selectInstallBlocks(
-    unitPath: string,
+export function initialInstallBlocks(blockFiles: Map<string, UnitBlockFile>, lockUnit: LockUnit | undefined): string[] {
+    const lockSelected = new Set(Object.keys(lockUnit?.blocks ?? {}));
+    const lockDeclined = new Set(lockUnit?.declinedBlocks ?? []);
+    const tracked = Boolean(lockUnit?.blocks || lockUnit?.declinedBlocks);
+    return unitBlockEntries(blockFiles)
+        .filter(
+            (entry) =>
+                !entry.required &&
+                (tracked
+                    ? lockSelected.has(entry.key) || (!lockDeclined.has(entry.key) && !entry.optional)
+                    : !entry.optional),
+        )
+        .map((entry) => entry.key);
+}
+
+/**
+ * `install`: required blocks are always selected. `chosen` holds the keys
+ * picked in the install tree. Without it (non-TTY, --skill or --block) all
+ * non-optional blocks plus optional ones already in the lock are selected;
+ * with `additive` lock declines are kept instead. `requested` keys are always selected.
+ */
+export function selectInstallBlocks(
     blockFiles: Map<string, UnitBlockFile>,
     lockUnit: LockUnit | undefined,
-    options: { additive: boolean; requested?: Set<string> } = { additive: false },
-): Promise<BlockSelections> {
+    options: { additive: boolean; requested?: Set<string>; chosen?: Set<string> },
+): BlockSelections {
     const entries = unitBlockEntries(blockFiles);
     const requested = options.requested ?? new Set<string>();
-    const selectable = entries.filter((entry) => !entry.required);
     const selectedKeys = new Set(
         entries.filter((entry) => entry.required || requested.has(entry.key)).map((entry) => entry.key),
     );
     const lockSelected = new Set(Object.keys(lockUnit?.blocks ?? {}));
     const lockDeclined = new Set(lockUnit?.declinedBlocks ?? []);
+    const keepDeclines = options.additive && Boolean(lockUnit?.blocks || lockUnit?.declinedBlocks);
 
-    if (selectable.length > 0) {
-        if (isInteractive()) {
-            const templateKeys = new Set(selectable.map((entry) => entry.key));
-            const initial =
-                lockUnit?.blocks || lockUnit?.declinedBlocks
-                    ? selectable
-                          .filter(
-                              (entry) =>
-                                  lockSelected.has(entry.key) || (!lockDeclined.has(entry.key) && !entry.optional),
-                          )
-                          .map((entry) => entry.key)
-                    : selectable.filter((entry) => !entry.optional).map((entry) => entry.key);
-            for (const key of await selectBlocks(
-                unitPath,
-                selectable,
-                [...new Set([...initial, ...requested])].filter((key) => templateKeys.has(key)),
-            )) {
-                selectedKeys.add(key);
-            }
-        } else {
-            const keepDeclines = options.additive && Boolean(lockUnit?.blocks || lockUnit?.declinedBlocks);
-            for (const entry of selectable) {
-                const declined = keepDeclines && lockDeclined.has(entry.key);
-                if ((!entry.optional && !declined) || lockSelected.has(entry.key)) selectedKeys.add(entry.key);
-            }
-        }
+    for (const entry of entries.filter((entry) => !entry.required)) {
+        const selected = options.chosen
+            ? options.chosen.has(entry.key)
+            : (!entry.optional && !(keepDeclines && lockDeclined.has(entry.key))) || lockSelected.has(entry.key);
+        if (selected) selectedKeys.add(entry.key);
     }
     return toSelections(entries, selectedKeys);
 }

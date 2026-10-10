@@ -39,6 +39,7 @@
         "check:all": "npm run ts-check && npm run lint && npm run format:check && npm run generate:skills:check && npm run test"
     },
     "dependencies": {
+        "@clack/core": "1.1.0",
         "@clack/prompts": "^1.1.0",
         "commander": "^14.0.0",
         "giget": "^2.0.0"
