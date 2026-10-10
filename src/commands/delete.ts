@@ -3,7 +3,7 @@ import path from "node:path";
 
 import {
     assertInsideRoot,
-    extractAstpMetadata,
+    DEFAULT_SOURCE,
     loadInstalled,
     removeEmptyDirectories,
     resolveUnitPaths,
@@ -73,7 +73,7 @@ export async function executeDelete(options: DeleteOptions): Promise<void> {
         let lockBundle = installedState.lock.bundles[bundle.bundleName];
         if (!lockBundle) {
             lockBundle = {
-                source: await readLegacySource(target.rootDir, bundle.units),
+                source: DEFAULT_SOURCE,
                 declined: [],
                 units: {},
             };
@@ -122,20 +122,6 @@ function resolveInstalledBundle(installed: InstalledBundle[], bundleName: string
         );
     }
     return bundle;
-}
-
-async function readLegacySource(rootDir: string, units: InstalledUnit[]): Promise<string> {
-    const legacy = units.find((unit) => unit.origin === "legacy");
-    if (!legacy) return "";
-    const metadataPath =
-        legacy.kind === "skill"
-            ? path.join(rootDir, legacy.relativePath, "SKILL.md")
-            : path.join(rootDir, legacy.relativePath);
-    try {
-        return extractAstpMetadata(await fs.readFile(metadataPath, "utf8"))?.source ?? "";
-    } catch {
-        return "";
-    }
 }
 
 function toStatus(unit: InstalledUnit): FileStatus {

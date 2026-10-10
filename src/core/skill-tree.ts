@@ -13,9 +13,8 @@ export interface TreeHashOptions {
 }
 
 export async function computeSkillTreeHash(skillDir: string, options: TreeHashOptions = {}): Promise<string> {
-    const files = await findRegularFiles(skillDir);
-    const relativePaths = files.map((filePath) => path.relative(skillDir, filePath).split(path.sep).join("/"));
-    return computeFileListHash(skillDir, relativePaths, options);
+    const { files, special } = await listSkillTree(skillDir);
+    return computeFileListHash(skillDir, files, options, special);
 }
 
 export async function computeTemplateUnitHash(
@@ -37,8 +36,12 @@ async function computeFileListHash(
     rootDir: string,
     relativePaths: string[],
     options: TreeHashOptions = {},
+    specialPaths: string[] = [],
 ): Promise<string> {
-    const lines: Array<{ path: string; line: string }> = [];
+    const lines: Array<{ path: string; line: string }> = specialPaths.map((specialPath) => ({
+        path: specialPath,
+        line: `-  ${specialPath}\n`,
+    }));
     for (const relativePath of relativePaths) {
         const filePath = path.join(rootDir, relativePath);
         const fileBytes = await fs.readFile(filePath);
@@ -59,26 +62,38 @@ async function computeFileListHash(
         .digest("hex");
 }
 
-async function findRegularFiles(dir: string): Promise<string[]> {
+const OS_CLUTTER_FILES = new Set([".ds_store", "thumbs.db", "desktop.ini"]);
+
+/**
+ * Relative `/`-separated paths under a skill dir: regular files, and every other non-directory
+ * entry (symlinks, etc.). OS clutter files are skipped. Missing dir → both empty.
+ */
+export async function listSkillTree(dir: string): Promise<{ files: string[]; special: string[] }> {
     const files: string[] = [];
-    let entries;
-    try {
-        entries = await fs.readdir(dir, { withFileTypes: true });
-    } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-        return files;
-    }
+    const special: string[] = [];
 
-    for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-            files.push(...(await findRegularFiles(fullPath)));
-        } else if (entry.isFile()) {
-            files.push(fullPath);
+    const walk = async (current: string, prefix: string): Promise<void> => {
+        let entries;
+        try {
+            entries = await fs.readdir(current, { withFileTypes: true });
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+            return;
         }
-    }
+        for (const entry of entries) {
+            const relative = `${prefix}${entry.name}`;
+            if (entry.isDirectory()) {
+                await walk(path.join(current, entry.name), `${relative}/`);
+            } else if (entry.isFile()) {
+                if (!OS_CLUTTER_FILES.has(entry.name.toLowerCase())) files.push(relative);
+            } else {
+                special.push(relative);
+            }
+        }
+    };
 
-    return files;
+    await walk(dir, "");
+    return { files, special };
 }
 
 function normalizeLineEndings(bytes: Buffer): Buffer {

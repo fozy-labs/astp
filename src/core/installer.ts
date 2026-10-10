@@ -50,7 +50,7 @@ export async function installSkill(
         throw new Error(`Skill directory '${unit.relativePath}' has no SKILL.md item.`);
     }
 
-    const stagingDir = path.join(path.dirname(skillDir), `.${path.basename(skillDir)}.astp-tmp-${randomUUID()}`);
+    const stagingDir = path.join(target.rootDir, `.astp-tmp-${randomUUID()}`);
     let stagingCreated = false;
     try {
         await fs.mkdir(path.dirname(skillDir), { recursive: true });

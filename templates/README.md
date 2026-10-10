@@ -134,7 +134,7 @@ Lock state: a unit with blocks stores `blocks` (`<file>#<name>` → block hash) 
 | Action | Result |
 |--------|--------|
 | `install` | selected blocks render; deselected go to `declinedBlocks` (kept if locally changed, unless `--force`) |
-| `update` | unchanged blocks get the new template; blocks changed on both sides get a `<FILL_INSTRUCTION>` wrapper with the new version; blocks removed upstream are removed unless locally changed |
+| `update` | unchanged blocks get the new template; blocks changed on both sides get a `<FILL_INSTRUCTION>` wrapper with the new version; blocks removed upstream are removed unless locally changed; `--force` restores locally changed blocks, except filled `<FILL_INSTRUCTION>` blocks |
 | `delete` | keeps a file with locally changed blocks or consumer text outside blocks, unless `--force` |
 
 ## Install State

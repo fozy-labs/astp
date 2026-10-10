@@ -342,6 +342,25 @@ describe("E2E: blocks", () => {
         expect(content).toContain("<extra>");
     });
 
+    it("update --force restores an edited block but keeps a filled one at the same version", async () => {
+        await install();
+        await fillFile();
+        const file = filePath();
+        await fs.writeFile(
+            file,
+            (await fs.readFile(file, "utf8")).replace("Extra ready-made text.", "My own extra."),
+        );
+
+        await update();
+        expect(await fs.readFile(file, "utf8")).toContain("My own extra.");
+
+        await update(true);
+        const content = await fs.readFile(file, "utf8");
+        expect(content).toContain("Extra ready-made text.");
+        expect(content).not.toContain("My own extra.");
+        expect(content).toContain("Filled by the agent.");
+    });
+
     it("non-TTY install brings back a declined non-optional block, keeps a declined optional one", async () => {
         // Interactive install selecting only project_map; extra and code_style declined.
         mockIsInteractive.mockReturnValue(true);

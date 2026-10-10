@@ -224,8 +224,72 @@ describe("installSkill failure safety", () => {
     });
 
     afterEach(async () => {
+        vi.restoreAllMocks();
         await fs.rm(tempDir, { recursive: true, force: true });
         await fs.rm(targetRoot, { recursive: true, force: true });
+    });
+
+    it("stages the new skill tree at the install root", async () => {
+        const sourceFile = path.join(tempDir, "skills/sample/SKILL.md");
+        await fs.mkdir(path.dirname(sourceFile), { recursive: true });
+        await fs.writeFile(sourceFile, "New skill");
+        const renameSpy = vi.spyOn(fs, "rename");
+
+        await installSkill(
+            tempDir,
+            {
+                kind: "skill",
+                relativePath: "skills/sample",
+                items: [
+                    {
+                        source: "bundle/skills/sample/SKILL.md",
+                        target: "skills/sample/SKILL.md",
+                        category: "skill",
+                    },
+                ],
+            },
+            { platform: "claude-code", type: "project", rootDir: targetRoot },
+        );
+
+        expect(renameSpy).toHaveBeenCalledOnce();
+        const [stagingDir] = renameSpy.mock.calls[0]!;
+        expect(path.dirname(String(stagingDir))).toBe(targetRoot);
+        expect(path.basename(String(stagingDir))).toMatch(/^\.astp-tmp-/);
+    });
+
+    it("leaves no staging directory behind when the final rename fails", async () => {
+        const sourceFile = path.join(tempDir, "skills/sample/SKILL.md");
+        await fs.mkdir(path.dirname(sourceFile), { recursive: true });
+        await fs.writeFile(sourceFile, "New skill");
+        vi.spyOn(fs, "rename").mockRejectedValue(new Error("boom"));
+
+        await expect(
+            installSkill(
+                tempDir,
+                {
+                    kind: "skill",
+                    relativePath: "skills/sample",
+                    items: [
+                        {
+                            source: "bundle/skills/sample/SKILL.md",
+                            target: "skills/sample/SKILL.md",
+                            category: "skill",
+                        },
+                    ],
+                },
+                { platform: "claude-code", type: "project", rootDir: targetRoot },
+            ),
+        ).rejects.toThrow("boom");
+
+        const leftovers = async (dir: string): Promise<string[]> => {
+            try {
+                return (await fs.readdir(dir)).filter((entry) => entry.includes(".astp-tmp-"));
+            } catch {
+                return [];
+            }
+        };
+        expect(await leftovers(targetRoot)).toEqual([]);
+        expect(await leftovers(path.join(targetRoot, "skills"))).toEqual([]);
     });
 
     it("preserves the installed skill and cleans staging when a source item is missing", async () => {
@@ -269,7 +333,7 @@ describe("installSkill failure safety", () => {
         expect((await fs.readdir(path.dirname(skillDir))).filter((entry) => entry.includes(".astp-tmp-"))).toEqual([]);
     });
 
-    it("rejects a symlinked parent before writing outside the install root", async () => {
+    it.skipIf(!canSymlinkFiles)("rejects a symlinked parent before writing outside the install root", async () => {
         const outside = path.join(tempDir, "outside");
         await fs.mkdir(outside);
         await fs.writeFile(path.join(outside, "marker.txt"), "keep");

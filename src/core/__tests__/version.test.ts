@@ -105,6 +105,35 @@ describe("loadInstalled", () => {
         );
     });
 
+    it("keeps a lock-tracked skill unmodified when OS clutter files appear", async () => {
+        const skillDir = path.join(rootDir, "skills", "sample");
+        await fs.mkdir(path.join(skillDir, "references"), { recursive: true });
+        await fs.writeFile(path.join(skillDir, "SKILL.md"), "# Sample\n");
+        await writeLock(rootDir, {
+            schemaVersion: 1,
+            bundles: {
+                core: {
+                    source: "repo",
+                    declined: [],
+                    units: {
+                        "skills/sample": {
+                            kind: "skill",
+                            version: "1.0.0",
+                            hash: await computeSkillTreeHash(skillDir),
+                        },
+                    },
+                },
+            },
+        });
+        await fs.writeFile(path.join(skillDir, ".DS_Store"), "clutter");
+        await fs.writeFile(path.join(skillDir, "references", "Thumbs.db"), "clutter");
+
+        const loaded = await loadInstalled(rootDir);
+        expect(loaded.bundles[0]?.units).toContainEqual(
+            expect.objectContaining({ relativePath: "skills/sample", state: "unmodified" }),
+        );
+    });
+
     it("marks modified legacy skills as modified", async () => {
         const skillDir = path.join(rootDir, "skills", "sample");
         await fs.mkdir(skillDir, { recursive: true });
@@ -390,6 +419,16 @@ describe("loadInstalled legacy compatibility", () => {
         const loaded = await loadInstalled(rootDir);
         const paths = loaded.bundles.flatMap((bundle) => bundle.units.map((unit) => unit.relativePath)).sort();
         expect(paths).toEqual(["agents/g.md", "skills/a"]);
+    });
+
+    it("keeps a legacy skill clean when an OS clutter file appears", async () => {
+        await writeLegacySkill("skills/a", "0.3.1", "# a\n");
+        await fs.writeFile(path.join(rootDir, "skills/a/.DS_Store"), "clutter");
+
+        const loaded = await loadInstalled(rootDir);
+        expect(loaded.bundles[0]?.units).toContainEqual(
+            expect.objectContaining({ relativePath: "skills/a", origin: "legacy", state: "unmodified" }),
+        );
     });
 
     it("compares a legacy unit and a new manifest unit against the manifest", async () => {

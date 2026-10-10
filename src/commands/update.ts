@@ -71,7 +71,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
         if (options.force) {
             for (const bundle of installedState.bundles) {
                 if (
-                    bundle.units.some((unit) => unit.state === "modified") &&
+                    bundle.units.some((unit) => unit.state === "modified" || unit.blocks?.dirty) &&
                     opened.get(bundle.bundleName)!.manifest.bundles[bundle.bundleName]
                 ) {
                     bundleNames.add(bundle.bundleName);

@@ -17,7 +17,7 @@ import { blockHash, frontmatterHash, parseInstalledBlocks } from "./blocks.js";
 import { computeHash, extractAstpMetadata, stripAstpFields } from "./frontmatter.js";
 import type { Lock, LockUnit } from "./lock.js";
 import { readLock } from "./lock.js";
-import { computeSkillTreeHash } from "./skill-tree.js";
+import { computeSkillTreeHash, listSkillTree } from "./skill-tree.js";
 import { groupTemplateItems } from "./units.js";
 
 interface TaggedMarkdown {
@@ -347,10 +347,10 @@ async function isCleanLegacySkill(skillDir: string, root: TaggedMarkdown): Promi
     ) {
         return true;
     }
-    const files = await findRegularFiles(skillDir);
-    if (files.length === 0 || files.some((file) => !file.endsWith(".md"))) return false;
-    for (const filePath of files) {
-        const content = await fs.readFile(filePath, "utf8");
+    const { files, special } = await listSkillTree(skillDir);
+    if (special.length > 0 || files.length === 0 || files.some((file) => !file.endsWith(".md"))) return false;
+    for (const file of files) {
+        const content = await fs.readFile(path.join(skillDir, file), "utf8");
         const metadata = extractAstpMetadata(content);
         if (!metadata?.hash || computeHash(stripAstpFields(content)) !== metadata.hash) return false;
     }
@@ -361,14 +361,4 @@ function addLegacy(bundles: Map<string, InstalledUnit[]>, bundleName: string, un
     const units = bundles.get(bundleName) ?? [];
     units.push(unit);
     bundles.set(bundleName, units);
-}
-
-async function findRegularFiles(dir: string): Promise<string[]> {
-    const results: string[] = [];
-    for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
-        const filePath = path.join(dir, entry.name);
-        if (entry.isDirectory()) results.push(...(await findRegularFiles(filePath)));
-        else if (entry.isFile()) results.push(filePath);
-    }
-    return results;
 }

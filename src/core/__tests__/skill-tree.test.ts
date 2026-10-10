@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { canSymlinkFiles } from "../../__tests__/links.js";
 import { computeSkillTreeHash, computeTemplateUnitHash } from "../skill-tree.js";
 
 describe("computeSkillTreeHash", () => {
@@ -130,7 +131,7 @@ describe("computeSkillTreeHash", () => {
         }
     });
 
-    it("ignores symbolic links", async () => {
+    it.skipIf(!canSymlinkFiles)("ignores the content a symlink points to", async () => {
         const skillDir = path.join(tempDir, "skill");
         const linkedFile = path.join(tempDir, "linked.bin");
         await fs.mkdir(skillDir);
@@ -140,6 +141,31 @@ describe("computeSkillTreeHash", () => {
 
         const initialHash = await computeSkillTreeHash(skillDir);
         await fs.writeFile(linkedFile, Buffer.from([0, 2]));
+
+        expect(await computeSkillTreeHash(skillDir)).toBe(initialHash);
+    });
+
+    it.skipIf(!canSymlinkFiles)("changes when a symlink is added to the skill", async () => {
+        const skillDir = path.join(tempDir, "skill");
+        const linkedFile = path.join(tempDir, "linked.bin");
+        await fs.mkdir(skillDir);
+        await fs.writeFile(path.join(skillDir, "SKILL.md"), "# Skill\n");
+        await fs.writeFile(linkedFile, Buffer.from([0, 1]));
+
+        const initialHash = await computeSkillTreeHash(skillDir);
+        await fs.symlink(linkedFile, path.join(skillDir, "linked.bin"));
+
+        expect(await computeSkillTreeHash(skillDir)).not.toBe(initialHash);
+    });
+
+    it.each([".DS_Store", "Thumbs.db", "desktop.ini"])("ignores the OS clutter file %s", async (name) => {
+        const skillDir = path.join(tempDir, "skill");
+        await fs.mkdir(path.join(skillDir, "references"), { recursive: true });
+        await fs.writeFile(path.join(skillDir, "SKILL.md"), "# Skill\n");
+        await fs.writeFile(path.join(skillDir, "references", "ref.md"), "Ref\n");
+
+        const initialHash = await computeSkillTreeHash(skillDir);
+        await fs.writeFile(path.join(skillDir, "references", name), "clutter");
 
         expect(await computeSkillTreeHash(skillDir)).toBe(initialHash);
     });
