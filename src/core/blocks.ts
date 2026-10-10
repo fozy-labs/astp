@@ -458,13 +458,11 @@ export function mergeBlockFile(args: MergeBlockFileArgs): MergeBlockFileResult {
             if (region && inLock) {
                 if (currentHash === lockHash || currentHash === templateHash) {
                     actions.set(block.name, { type: "replace", block });
+                } else if (forced(block.name) && !hasFillInstruction(block.content)) {
+                    actions.set(block.name, { type: "replace", block });
                 } else if (templateHash !== lockHash) {
-                    if (forced(block.name)) {
-                        actions.set(block.name, { type: "replace", block });
-                    } else {
-                        actions.set(block.name, { type: "conflict", block });
-                        conflicts.push(block.name);
-                    }
+                    actions.set(block.name, { type: "conflict", block });
+                    conflicts.push(block.name);
                 } else {
                     actions.set(block.name, { type: "keep" });
                 }

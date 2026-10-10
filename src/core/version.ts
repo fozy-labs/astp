@@ -17,7 +17,7 @@ import { blockHash, frontmatterHash, parseInstalledBlocks } from "./blocks.js";
 import { computeHash, extractAstpMetadata, stripAstpFields } from "./frontmatter.js";
 import type { Lock, LockUnit } from "./lock.js";
 import { readLock } from "./lock.js";
-import { computeSkillTreeHash } from "./skill-tree.js";
+import { computeSkillTreeHash, listSkillTree } from "./skill-tree.js";
 import { groupTemplateItems } from "./units.js";
 
 interface TaggedMarkdown {
@@ -206,7 +206,7 @@ async function getLockUnitState(
 
     // Unit with blocks: the hash covers frontmatter only; blocks are verified individually.
     const blockFiles = [...new Set(blockKeys.map((key) => key.slice(0, key.lastIndexOf("#"))))];
-    const blockInfo = { missing: false, dirty: false, parseFailed: false };
+    const blockInfo = { missing: false, dirty: false, parseFailed: false, edited: [] as string[] };
     let modified = false;
 
     if (unit.kind === "file") {
@@ -240,7 +240,7 @@ async function getLockUnitState(
 
     return {
         state: modified ? "modified" : "unmodified",
-        blocks: { missing: blockInfo.missing, dirty: blockInfo.dirty },
+        blocks: { missing: blockInfo.missing, dirty: blockInfo.dirty, edited: blockInfo.edited.sort() },
     };
 }
 
@@ -248,7 +248,7 @@ function inspectBlockFile(
     content: string,
     fileTarget: string,
     lockBlocks: Record<string, string>,
-    info: { missing: boolean; dirty: boolean; parseFailed: boolean },
+    info: { missing: boolean; dirty: boolean; parseFailed: boolean; edited: string[] },
 ): void {
     const names = Object.keys(lockBlocks)
         .filter((key) => key.startsWith(`${fileTarget}#`))
@@ -265,7 +265,10 @@ function inspectBlockFile(
             info.missing = true;
             continue;
         }
-        if (blockHash(region.content) !== lockBlocks[`${fileTarget}#${name}`]) info.dirty = true;
+        if (blockHash(region.content) !== lockBlocks[`${fileTarget}#${name}`]) {
+            info.dirty = true;
+            info.edited.push(`${fileTarget}#${name}`);
+        }
     }
     if (parsed.outsideText.trim() !== "") info.dirty = true;
 }
@@ -347,10 +350,10 @@ async function isCleanLegacySkill(skillDir: string, root: TaggedMarkdown): Promi
     ) {
         return true;
     }
-    const files = await findRegularFiles(skillDir);
-    if (files.length === 0 || files.some((file) => !file.endsWith(".md"))) return false;
-    for (const filePath of files) {
-        const content = await fs.readFile(filePath, "utf8");
+    const { files, special } = await listSkillTree(skillDir);
+    if (special.length > 0 || files.length === 0 || files.some((file) => !file.endsWith(".md"))) return false;
+    for (const file of files) {
+        const content = await fs.readFile(path.join(skillDir, file), "utf8");
         const metadata = extractAstpMetadata(content);
         if (!metadata?.hash || computeHash(stripAstpFields(content)) !== metadata.hash) return false;
     }
@@ -361,14 +364,4 @@ function addLegacy(bundles: Map<string, InstalledUnit[]>, bundleName: string, un
     const units = bundles.get(bundleName) ?? [];
     units.push(unit);
     bundles.set(bundleName, units);
-}
-
-async function findRegularFiles(dir: string): Promise<string[]> {
-    const results: string[] = [];
-    for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
-        const filePath = path.join(dir, entry.name);
-        if (entry.isDirectory()) results.push(...(await findRegularFiles(filePath)));
-        else if (entry.isFile()) results.push(filePath);
-    }
-    return results;
 }

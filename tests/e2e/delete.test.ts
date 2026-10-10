@@ -5,7 +5,8 @@ import { vi } from "vitest";
 
 import { executeDelete } from "@/commands/delete.js";
 import { executeInstall } from "@/commands/install.js";
-import { assertInsideRoot, downloadBundle, fetchManifest } from "@/core/index.js";
+import { executeUpdate } from "@/commands/update.js";
+import { assertInsideRoot, computeHash, DEFAULT_SOURCE, downloadBundle, fetchManifest } from "@/core/index.js";
 import type { Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { confirmInstall } from "@/ui/prompts.js";
@@ -170,6 +171,27 @@ describe("E2E: delete", () => {
         expect(lock.bundles.core.units["agents/second.md"]).toBeDefined();
         await expect(fs.access(path.join(rootDir, "agents/first.md"))).rejects.toMatchObject({ code: "ENOENT" });
         expect(await fs.readFile(path.join(rootDir, "agents/second.md"), "utf8")).toContain("second");
+    });
+
+    it("records the default source when a legacy-only bundle leaves a lock entry", async () => {
+        const rootDir = path.join(projectDir, ".claude");
+        const writeLegacyFile = async (target: string, content: string): Promise<void> => {
+            const filePath = path.join(rootDir, target);
+            await fs.mkdir(path.dirname(filePath), { recursive: true });
+            const hash = computeHash(content);
+            await fs.writeFile(
+                filePath,
+                `---\nastp-source: nowhere\nastp-bundle: retired\nastp-version: 0.3.1\nastp-hash: ${hash}\n---\n${content}`,
+            );
+        };
+        await writeLegacyFile("agents/a.md", "# A\n");
+        await writeLegacyFile("agents/b.md", "# B\n");
+
+        await executeDelete({ bundle: "retired", skills: ["a.md"], platform: "claude-code", target: "project" });
+
+        const lock = await readLockFixture(rootDir);
+        expect(lock.bundles.retired.source).toBe(DEFAULT_SOURCE);
+        await expect(executeUpdate({ platform: "claude-code", target: "project" })).resolves.toBeUndefined();
     });
 
     it("removes modified files with force", async () => {

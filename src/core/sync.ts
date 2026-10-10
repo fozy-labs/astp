@@ -11,7 +11,7 @@ import { installFile, installSkill } from "./installer.js";
 import { writeLock } from "./lock.js";
 import type { Lock, LockBundle, LockUnit } from "./lock.js";
 import { assertInsideRoot, foldPath, nullPrototype } from "./path-safety.js";
-import { computeSkillTreeHash, computeTemplateUnitHash } from "./skill-tree.js";
+import { computeSkillTreeHash, computeTemplateUnitHash, listSkillTree } from "./skill-tree.js";
 import type { UnitBlockFile } from "./unit-blocks.js";
 import { readUnitBlockFiles } from "./unit-blocks.js";
 import { groupTemplateItems } from "./units.js";
@@ -452,11 +452,12 @@ async function compareUntrackedBlocks(
     if (stat === "absent" || stat === "modified") return stat;
     if ((unit.kind === "file" && !stat.isFile()) || (unit.kind === "skill" && !stat.isDirectory())) return "modified";
     if (unit.kind === "skill") {
-        const onDisk = await listRelativeFiles(unitPath);
+        const { files, special } = await listSkillTree(unitPath);
         const expectedPaths = new Set(unit.items.map((item) => item.target));
         if (
-            onDisk.some((file) => !expectedPaths.has(`${unit.relativePath}/${file}`)) ||
-            onDisk.length !== expectedPaths.size
+            special.length > 0 ||
+            files.length !== expectedPaths.size ||
+            files.some((file) => !expectedPaths.has(`${unit.relativePath}/${file}`))
         )
             return "modified";
     }
@@ -472,22 +473,6 @@ async function compareUntrackedBlocks(
         if (actual.replace(/\r\n/g, "\n") !== expected.replace(/\r\n/g, "\n")) return "modified";
     }
     return "equal";
-}
-
-async function listRelativeFiles(dir: string, prefix = ""): Promise<string[]> {
-    const files: string[] = [];
-    let entries;
-    try {
-        entries = await fs.readdir(dir, { withFileTypes: true });
-    } catch {
-        return files;
-    }
-    for (const entry of entries) {
-        const filePath = path.join(dir, entry.name);
-        if (entry.isDirectory()) files.push(...(await listRelativeFiles(filePath, `${prefix}${entry.name}/`)));
-        else if (entry.isFile()) files.push(`${prefix}${entry.name}`);
-    }
-    return files;
 }
 
 async function removePath(rootDir: string, relativePath: string): Promise<void> {

@@ -74,7 +74,7 @@ The same `target` path lands under the platform's own root, so write bundle item
 
 - `source` paths follow the pattern `<bundleName>/<category>/<filename>`.
 - `target` paths equal `source` with the bundle name prefix stripped.
-- Bundle names and every `/`-separated `target` segment must be valid file names on Windows, macOS and Linux: at most 255 UTF-8 bytes, no `\ : * ? " < > |`, control or bidi characters, no trailing dot or space, no reserved device names (`con`, `nul`, `com1`…) or short names like `NAME~1`. No two bundle names, and no two targets or folders in a bundle, may differ only in letter case or Unicode normalization.
+- Bundle names and every `/`-separated `target` segment must be valid file names on Windows, macOS and Linux: at most 255 UTF-8 bytes, no `\ : * ? " < > |`, control or bidi characters, no trailing dot or space, no reserved device names (`con`, `nul`, `com1`…) or short names like `NAME~1`. No two bundle names, and no two targets or folders in a bundle, may differ only in letter case or Unicode normalization. A `target` may not end in an OS clutter file name (`.DS_Store`, `Thumbs.db`, `desktop.ini`); astp ignores such files inside skills.
 
 ## How to Add a New Bundle
 
@@ -134,7 +134,7 @@ Lock state: a unit with blocks stores `blocks` (`<file>#<name>` → block hash) 
 | Action | Result |
 |--------|--------|
 | `install` | selected blocks render; deselected go to `declinedBlocks` (kept if locally changed, unless `--force`) |
-| `update` | unchanged blocks get the new template; blocks changed on both sides get a `<FILL_INSTRUCTION>` wrapper with the new version; blocks removed upstream are removed unless locally changed |
+| `update` | unchanged blocks get the new template; blocks changed on both sides get a `<FILL_INSTRUCTION>` wrapper with the new version; blocks removed upstream are removed unless locally changed; `--force` restores locally changed blocks, except filled `<FILL_INSTRUCTION>` blocks |
 | `delete` | keeps a file with locally changed blocks or consumer text outside blocks, unless `--force` |
 
 ## Install State

@@ -306,13 +306,56 @@ describe("mergeBlockFile", () => {
             installed: filled,
             lockHashes: installed.blocks,
             selected: ["project_map", "code_style"],
-            force: new Set(["project_map"]),
+            force: new Set(["code_style"]),
         });
-        expect(result.conflicts).toEqual(["code_style"]);
-        expect(result.content).toContain("List top-level dirs.");
-        expect(result.content).not.toContain("Our map.");
-        expect(result.content).toContain("Our own style.");
+        expect(result.conflicts).toEqual(["project_map"]);
+        expect(result.content).toContain("Our map.");
+        expect(result.content).toContain("New ready-made text.");
+        expect(result.content).not.toContain("Our own style.");
         expect(result.content).toContain("The astp template of this block changed");
+    });
+
+    it("--force restores an edited block when the template is unchanged, unless it holds a FILL_INSTRUCTION", () => {
+        const installed = merge({ templateContent: TEMPLATE, selected: ["project_map", "code_style"] });
+        const filled = installed.content
+            .replace("Describe the project file structure. If the map depth is not obvious, ask the user.", "Our map.")
+            .replace("Ready-made text.", "Our own style.");
+
+        const result = merge({
+            templateContent: TEMPLATE,
+            installed: filled,
+            lockHashes: installed.blocks,
+            selected: ["project_map", "code_style"],
+            force: true,
+        });
+        expect(result.content).toContain("Ready-made text.");
+        expect(result.content).not.toContain("Our own style.");
+        expect(result.content).toContain("Our map.");
+        expect(result.conflicts).toEqual([]);
+    });
+
+    it("--force on an edited FILL_INSTRUCTION block conflicts like an unforced merge", () => {
+        const installed = merge({ templateContent: TEMPLATE, selected: ["project_map"] });
+        const filled = installed.content.replace(
+            "Describe the project file structure. If the map depth is not obvious, ask the user.",
+            "Our map.",
+        );
+        const changedTemplate = TEMPLATE.replace(
+            "Describe the project file structure. If the map depth is not obvious, ask the user.",
+            "List top-level dirs.",
+        );
+
+        const result = merge({
+            templateContent: changedTemplate,
+            installed: filled,
+            lockHashes: installed.blocks,
+            selected: ["project_map"],
+            force: true,
+        });
+        expect(result.conflicts).toEqual(["project_map"]);
+        expect(result.content).toContain("Our map.");
+        expect(result.content).toContain("The astp template of this block changed");
+        expect(result.content).toContain("List top-level dirs.");
     });
 
     it("C != L and T == L keeps the block as is", () => {

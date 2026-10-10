@@ -105,6 +105,35 @@ describe("loadInstalled", () => {
         );
     });
 
+    it("keeps a lock-tracked skill unmodified when OS clutter files appear", async () => {
+        const skillDir = path.join(rootDir, "skills", "sample");
+        await fs.mkdir(path.join(skillDir, "references"), { recursive: true });
+        await fs.writeFile(path.join(skillDir, "SKILL.md"), "# Sample\n");
+        await writeLock(rootDir, {
+            schemaVersion: 1,
+            bundles: {
+                core: {
+                    source: "repo",
+                    declined: [],
+                    units: {
+                        "skills/sample": {
+                            kind: "skill",
+                            version: "1.0.0",
+                            hash: await computeSkillTreeHash(skillDir),
+                        },
+                    },
+                },
+            },
+        });
+        await fs.writeFile(path.join(skillDir, ".DS_Store"), "clutter");
+        await fs.writeFile(path.join(skillDir, "references", "Thumbs.db"), "clutter");
+
+        const loaded = await loadInstalled(rootDir);
+        expect(loaded.bundles[0]?.units).toContainEqual(
+            expect.objectContaining({ relativePath: "skills/sample", state: "unmodified" }),
+        );
+    });
+
     it("marks modified legacy skills as modified", async () => {
         const skillDir = path.join(rootDir, "skills", "sample");
         await fs.mkdir(skillDir, { recursive: true });
@@ -392,6 +421,16 @@ describe("loadInstalled legacy compatibility", () => {
         expect(paths).toEqual(["agents/g.md", "skills/a"]);
     });
 
+    it("keeps a legacy skill clean when an OS clutter file appears", async () => {
+        await writeLegacySkill("skills/a", "0.3.1", "# a\n");
+        await fs.writeFile(path.join(rootDir, "skills/a/.DS_Store"), "clutter");
+
+        const loaded = await loadInstalled(rootDir);
+        expect(loaded.bundles[0]?.units).toContainEqual(
+            expect.objectContaining({ relativePath: "skills/a", origin: "legacy", state: "unmodified" }),
+        );
+    });
+
     it("compares a legacy unit and a new manifest unit against the manifest", async () => {
         await writeLegacyFile("agents/a.md", "1.0.0", "Agent");
         const installed = await loadInstalled(rootDir);
@@ -506,24 +545,24 @@ describe("loadInstalled with blocks", () => {
     it("reports a clean block file as unmodified with no missing/dirty", async () => {
         const unit = await setup(CLEAN);
         expect(unit.state).toBe("unmodified");
-        expect(unit.blocks).toEqual({ missing: false, dirty: false });
+        expect(unit.blocks).toEqual({ missing: false, dirty: false, edited: [] });
     });
 
     it("a filled block is dirty but still unmodified", async () => {
         const unit = await setup(CLEAN.replace("text", "filled"));
         expect(unit.state).toBe("unmodified");
-        expect(unit.blocks).toEqual({ missing: false, dirty: true });
+        expect(unit.blocks).toEqual({ missing: false, dirty: true, edited: ["rules/x.md#a"] });
     });
 
-    it("consumer text outside blocks is dirty", async () => {
+    it("consumer text outside blocks is dirty but edits no block", async () => {
         const unit = await setup(`${CLEAN}extra\n`);
-        expect(unit.blocks).toEqual({ missing: false, dirty: true });
+        expect(unit.blocks).toEqual({ missing: false, dirty: true, edited: [] });
     });
 
     it("a deleted block is missing, not modified", async () => {
         const unit = await setup(`${TEMPLATE_FM}\n`);
         expect(unit.state).toBe("unmodified");
-        expect(unit.blocks).toEqual({ missing: true, dirty: false });
+        expect(unit.blocks).toEqual({ missing: true, dirty: false, edited: [] });
     });
 
     it("an unparseable file is modified", async () => {

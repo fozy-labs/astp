@@ -27,6 +27,7 @@ import {
     warnReleased,
 } from "@/ui/prompts.js";
 
+import { canSymlinkFiles } from "../../src/__tests__/links.js";
 import { cleanupDir, createTempProject, setupTemplateDir } from "./helpers.js";
 
 vi.mock("@/core/index.js", async (importOriginal) => ({
@@ -401,7 +402,7 @@ describe("lock-file command flows", () => {
         textWrite.mockRestore();
     });
 
-    it("rejects install through a symlinked parent without touching outside files", async () => {
+    it.skipIf(!canSymlinkFiles)("rejects install through a symlinked parent without touching outside files", async () => {
         manifest = createManifest("1.0.0", ["agents/guide.md"]);
         const outside = path.join(projectDir, "outside");
         await fs.mkdir(outside, { recursive: true });
@@ -414,7 +415,7 @@ describe("lock-file command flows", () => {
         expect(await fs.readFile(path.join(outside, "marker.txt"), "utf8")).toBe("keep");
     });
 
-    it("rejects update through a symlinked parent without touching outside files", async () => {
+    it.skipIf(!canSymlinkFiles)("rejects update through a symlinked parent without touching outside files", async () => {
         manifest = createManifest("1.0.0", ["agents/guide.md"]);
         await install();
         const outside = path.join(projectDir, "outside");
@@ -431,7 +432,7 @@ describe("lock-file command flows", () => {
         expect(await fs.readFile(path.join(outside, "marker.txt"), "utf8")).toBe("keep");
     });
 
-    it("rejects delete through a symlinked parent without touching outside files", async () => {
+    it.skipIf(!canSymlinkFiles)("rejects delete through a symlinked parent without touching outside files", async () => {
         manifest = createManifest("1.0.0", ["agents/guide.md"]);
         await install();
         const outside = path.join(projectDir, "outside");
@@ -449,7 +450,7 @@ describe("lock-file command flows", () => {
         expect(await fs.readFile(path.join(outside, "marker.txt"), "utf8")).toBe("keep");
     });
 
-    it("removes a unit symlink without following its outside target", async () => {
+    it.skipIf(!canSymlinkFiles)("removes a unit symlink without following its outside target", async () => {
         manifest = createManifest("1.0.0", ["agents/guide.md"]);
         await install();
         const outsideFile = path.join(projectDir, "outside.md");

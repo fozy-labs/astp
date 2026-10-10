@@ -28,6 +28,8 @@ import {
     warnReleased,
 } from "@/ui/prompts.js";
 
+import { canSymlinkFiles } from "../../src/__tests__/links.js";
+
 import {
     cleanupDir,
     createFixtureManifest,
@@ -365,6 +367,23 @@ describe("E2E: skill directory units", () => {
         expect(await fs.readFile(referencePath, "utf8")).not.toBe("User edit");
         const updatedLock = await readLockFixture(path.join(projectDir, ".claude"));
         expect(updatedLock.bundles.skillpack.units["skills/sample"].version).toBe("1.1.0");
+    });
+
+    it.skipIf(!canSymlinkFiles)("skips a skill update when the user added a symlink inside it", async () => {
+        await installSkillpack();
+        const linkedFile = path.join(projectDir, "linked.bin");
+        await fs.writeFile(linkedFile, "data");
+        const linkPath = path.join(skillRoot(), "linked.bin");
+        await fs.symlink(linkedFile, linkPath);
+
+        manifest = createFixtureManifest("1.1.0");
+        mockFetchManifest.mockResolvedValue(manifest);
+        await setupBundle();
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect((await fs.lstat(linkPath)).isSymbolicLink()).toBe(true);
+        const lock = await readLockFixture(path.join(projectDir, ".claude"));
+        expect(lock.bundles.skillpack.units["skills/sample"].version).toBe("1.0.0");
     });
 
     it("retries a restored old-version skill when another skill already reached the new version", async () => {
