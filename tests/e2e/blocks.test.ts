@@ -15,9 +15,11 @@ import {
     isInteractive,
     selectBundleItems,
     showCheckReport,
+    warnBlockConflicts,
     warnForeign,
     warnKeptBlocks,
     warnKeptRemoved,
+    warnModified,
     warnReleased,
 } from "@/ui/prompts.js";
 
@@ -717,6 +719,46 @@ describe("E2E: blocks", () => {
             expect(content).toContain("<code_style>");
             expect(content).not.toContain("<extra>");
             expect((await lockUnit())!.declinedBlocks).toEqual([`${RULES_FILE}#extra`]);
+        });
+
+        it("install --block --force replaces the named block and leaves other conflicts", async () => {
+            await install();
+            await fillFile();
+            const before = await fs.readFile(filePath(), "utf8");
+            await fs.writeFile(filePath(), before.replace("Extra ready-made text.", "My own extra."));
+
+            manifest = createBlocksManifest("1.1.0");
+            contents[RULES_FILE] = tplV1()
+                .replace("Describe the project file structure.", "Describe it briefly.")
+                .replace("Extra ready-made text.", "Extra v2 text.");
+            await installWith({ blocks: [`${RULES_FILE}#extra`], force: true });
+
+            const content = await fs.readFile(filePath(), "utf8");
+            expect(content).toContain("Extra v2 text.");
+            expect(content).not.toContain("My own extra.");
+            expect(content).toContain("Filled by the agent.");
+            expect(content).toContain("The astp template of this block changed");
+            expect(vi.mocked(warnBlockConflicts)).toHaveBeenCalledWith([`${RULES_FILE}#project_map`]);
+        });
+
+        it("install --block --force installs a foreign file at the unit path only", async () => {
+            manifest = createMixedManifest("1.0.0");
+            contents[OTHER_FILE] = OTHER_TPL;
+            await installWith({ skills: ["plain.md"] });
+            await fs.appendFile(path.join(rootDir(), PLAIN_FILE), "local edit");
+            await fs.mkdir(path.dirname(filePath()), { recursive: true });
+            await fs.writeFile(filePath(), "my own rules\n");
+
+            await installWith({ blocks: [`${RULES_FILE}#extra`], force: true });
+
+            const content = await fs.readFile(filePath(), "utf8");
+            expect(content).toContain("<extra>");
+            expect((await lockUnit())!.blocks).toHaveProperty(`${RULES_FILE}#extra`);
+            expect(await fs.readFile(path.join(rootDir(), PLAIN_FILE), "utf8")).toContain("local edit");
+            expect(vi.mocked(warnModified)).toHaveBeenCalledWith(
+                [expect.objectContaining({ targetPath: PLAIN_FILE })],
+                `astp install blocks --skill ${PLAIN_FILE} --force --target project`,
+            );
         });
 
         it("list --json reports blocks with key, status and flags", async () => {

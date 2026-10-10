@@ -9,6 +9,7 @@ import type { Bundle, InstallTarget, TemplateItem } from "@/types/index.js";
 import { computeHash } from "../frontmatter.js";
 import { readLock, writeLock } from "../lock.js";
 import { syncBundle } from "../sync.js";
+import type { ForceScope } from "../sync.js";
 import { loadInstalled } from "../version.js";
 
 const mocks = vi.hoisted(() => ({ failOn: undefined as string | undefined }));
@@ -90,7 +91,7 @@ describe("syncBundle", () => {
         selection: {
             selected: Set<string>;
             declined: Set<string>;
-            force?: boolean;
+            force?: ForceScope;
         },
     ) =>
         syncBundle({
@@ -195,6 +196,23 @@ describe("syncBundle", () => {
         expect(core.declined).toEqual(["rules/r.md"]);
         const after = await loadInstalled(rootDir);
         expect(after.bundles.find((entry) => entry.bundleName === "core")).toBeDefined();
+    });
+
+    it("a scoped force overwrites only the named units", async () => {
+        await writeFiles(rootDir, { "agents/a.md": `${A_V1}local`, "agents/b.md": `${B_V1}local` });
+        await writeFiles(tempDir, { "agents/a.md": A_V2, "agents/b.md": B_V1 });
+        await writeV1Lock({ "agents/a.md": A_V1, "agents/b.md": B_V1 });
+        const installed = await loadInstalled(rootDir);
+
+        const result = await syncCore(installed, [agent("agents/a.md"), agent("agents/b.md")], {
+            selected: new Set(["agents/a.md", "agents/b.md"]),
+            declined: new Set(),
+            force: { units: new Set(["agents/a.md"]), blocks: new Set() },
+        });
+
+        expect(await fs.readFile(path.join(rootDir, "agents/a.md"), "utf8")).toBe(A_V2);
+        expect(await fs.readFile(path.join(rootDir, "agents/b.md"), "utf8")).toBe(`${B_V1}local`);
+        expect(result.skipped.map((status) => status.targetPath)).toEqual(["agents/b.md"]);
     });
 
     it("keeps an earlier decline when a later unit fails", async () => {

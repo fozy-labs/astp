@@ -805,5 +805,20 @@ describe("lock-file command flows", () => {
                 expect.objectContaining({ targetPath: "skills/beta" }),
             ]);
         });
+
+        it("install --skill --force overwrites only the named unit and hints at the rest", async () => {
+            await install();
+            await fs.appendFile(path.join(rootDir, "skills/alpha/SKILL.md"), "alpha edit");
+            await fs.appendFile(betaFile(), "beta edit");
+
+            await install("core", ["beta"], true);
+
+            expect(await fs.readFile(betaFile(), "utf8")).not.toContain("beta edit");
+            expect(await fs.readFile(path.join(rootDir, "skills/alpha/SKILL.md"), "utf8")).toContain("alpha edit");
+            expect(vi.mocked(warnModified)).toHaveBeenCalledWith(
+                [expect.objectContaining({ targetPath: "skills/alpha", kind: "skill" })],
+                "astp install core --skill skills/alpha --force --target project",
+            );
+        });
     });
 });

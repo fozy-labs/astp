@@ -13,11 +13,11 @@ import {
     syncBundle,
     validateUnitTargets,
 } from "@/core/index.js";
-import type { BlockSelections, UnitBlockFile } from "@/core/index.js";
+import type { BlockSelections, ForceScope, UnitBlockFile } from "@/core/index.js";
 import type { TemplateUnit } from "@/core/units.js";
 import type { Bundle, FileStatus, InstalledBundle, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { bundleSupportsPlatform, filterBundlesByPlatform, getBundlePlatforms, resolveTarget } from "@/types/index.js";
-import { describeUnitCounts } from "@/ui/format.js";
+import { describeUnitCounts, installRetry } from "@/ui/format.js";
 import type { BlockOption, BundleChoice } from "@/ui/prompts.js";
 import {
     cancelNoBundles,
@@ -60,6 +60,7 @@ interface BundlePlan {
     declined: Set<string>;
     tempDir: string;
     blockSelections: BlockSelections;
+    force: ForceScope;
 }
 
 interface DownloadedBundle {
@@ -172,9 +173,10 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             const oldDeclined = new Set(installed?.declined.filter((unitPath) => paths.has(unitPath)) ?? []);
             let selected: Set<string>;
             let declined: Set<string>;
+            let matched = new Set<string>();
 
             if (additive) {
-                const matched = resolveUnitPaths(options.skills ?? [], units, bundle.name);
+                matched = resolveUnitPaths(options.skills ?? [], units, bundle.name);
                 selected = new Set([...tracked, ...matched]);
                 const previouslyTracked = tracked.size > 0 || oldDeclined.size > 0;
                 declined = previouslyTracked
@@ -193,6 +195,18 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 selected.add(unitPath);
                 declined.delete(unitPath);
             }
+            // --skill/--block scopes --force to what was named; an untracked
+            // unit named by --block needs a whole-unit force to be installed.
+            const force: ForceScope = !options.force
+                ? false
+                : additive
+                  ? {
+                        units: new Set([...matched, ...[...requested.keys()].filter((p) => !tracked.has(p))]),
+                        blocks: new Set(
+                            [...requested].flatMap(([unitPath, keys]) => (tracked.has(unitPath) ? [...keys] : [])),
+                        ),
+                    }
+                  : true;
             const lockBundle = installedState.lock.bundles[bundle.name];
             const chosenBlocks = choice ? new Set(choice.blocks) : undefined;
             const blockSelections: BlockSelections = new Map();
@@ -207,7 +221,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 });
                 for (const [file, selection] of selections) blockSelections.set(file, selection);
             }
-            plans.push({ bundle, source, selected, declined, tempDir, blockSelections });
+            plans.push({ bundle, source, selected, declined, tempDir, blockSelections, force });
         }
 
         const selectedUnits = plans.flatMap((plan) =>
@@ -240,23 +254,29 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 selected: plan.selected,
                 declined: plan.declined,
                 blockSelections: plan.blockSelections,
-                force: options.force ?? false,
+                force: plan.force,
             });
             totals.installed.push(...result.installed);
             totals.skipped.push(...result.skipped, ...result.foreign);
             totals.kept.push(...result.kept);
             const legacy = result.skipped.filter((status) => status.state === "legacy");
             const modified = result.skipped.filter((status) => status.state !== "legacy");
-            if (modified.length > 0)
-                warnModified(modified, `astp install ${plan.bundle.name} --force --target ${target.type}`);
-            if (legacy.length > 0) warnLegacyModified(legacy, target.type);
+            const retry = (skipped: FileStatus[]) =>
+                installRetry(
+                    plan.bundle.name,
+                    skipped.map((status) => `--skill ${status.targetPath}`),
+                    target.type,
+                    options.source,
+                );
+            if (modified.length > 0) warnModified(modified, retry(modified));
+            if (legacy.length > 0) warnLegacyModified(legacy, retry(legacy));
             if (result.kept.length > 0) warnKeptRemoved(result.kept);
             if (result.keptBlocks.length > 0) warnKeptBlocks(result.keptBlocks);
             if (result.released.length > 0 || result.releasedBlocks.length > 0) {
                 warnReleased(result.released, result.releasedBlocks);
             }
             if (result.foreign.length > 0 || result.foreignBlocks.length > 0) {
-                warnForeign(plan.bundle.name, result.foreign, result.foreignBlocks, target.type);
+                warnForeign(plan.bundle.name, result.foreign, result.foreignBlocks, target.type, options.source);
             }
             if (result.conflictBlocks.length > 0) warnBlockConflicts(result.conflictBlocks);
             s.stop(`Installed ${plan.bundle.name}.`);

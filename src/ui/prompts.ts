@@ -17,7 +17,7 @@ import type {
 } from "@/types/index.js";
 import { ALL_PLATFORMS, describeTarget, resolveTarget } from "@/types/index.js";
 
-import { describeUnitCounts, formatCount, UNIT_COUNT_KINDS, unitCountKind } from "./format.js";
+import { describeUnitCounts, formatCount, installRetry, UNIT_COUNT_KINDS, unitCountKind } from "./format.js";
 
 // Re-export intro/outro for wizard usage
 export const intro = p.intro;
@@ -652,11 +652,12 @@ export function warnForeign(
     units: FileStatus[],
     blockKeys: string[],
     target: InstallTargetType,
+    source?: string,
 ): void {
     const list = [...units.map((unit) => unit.targetPath), ...blockKeys].map((entry) => `  • ${entry}`).join("\n");
     const commands = [
-        ...units.map((unit) => `  astp install ${bundleName} --skill ${unit.targetPath} --force --target ${target}`),
-        ...blockKeys.map((key) => `  astp install ${bundleName} --block ${key} --force --target ${target}`),
+        ...units.map((unit) => `  ${installRetry(bundleName, [`--skill ${unit.targetPath}`], target, source)}`),
+        ...blockKeys.map((key) => `  ${installRetry(bundleName, [`--block ${key}`], target, source)}`),
     ].join("\n");
     p.log.warn(
         `Already present with other content — left untouched, recorded as declined:\n${list}\nTo overwrite, run:\n${commands}`,
@@ -677,11 +678,9 @@ export function warnBlockConflicts(keys: string[]): void {
     );
 }
 
-export function warnLegacyModified(files: FileStatus[], target: InstallTargetType): void {
+export function warnLegacyModified(files: FileStatus[], command: string): void {
     const paths = files.map((file) => `  • ${file.targetPath}`).join("\n");
-    p.log.warn(
-        `Legacy units modified locally — skipped:\n${paths}\nRun \`astp update --force --target ${target}\` to replace them.`,
-    );
+    p.log.warn(`Legacy units modified locally — skipped:\n${paths}\nRun \`${command}\` to replace them.`);
 }
 
 export function showSuccess(message: string): void {
