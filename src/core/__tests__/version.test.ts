@@ -59,13 +59,17 @@ describe("loadInstalled", () => {
     it("finds clean and modified legacy file units", async () => {
         const cleanContent = "---\nname: clean\n---\n# clean\n";
         const clean = `---\nname: clean\nastp-source: repo\nastp-bundle: core\nastp-version: 0.3.1\nastp-hash: ${computeHash(cleanContent)}\n---\n# clean\n`;
-        await fs.writeFile(path.join(rootDir, "clean.md"), clean);
-        await fs.writeFile(path.join(rootDir, "changed.md"), clean.replaceAll("clean", "changed") + "\nlocal edit");
+        await fs.mkdir(path.join(rootDir, "agents"), { recursive: true });
+        await fs.writeFile(path.join(rootDir, "agents/clean.md"), clean);
+        await fs.writeFile(
+            path.join(rootDir, "agents/changed.md"),
+            clean.replaceAll("clean", "changed") + "\nlocal edit",
+        );
         const loaded = await loadInstalled(rootDir);
         expect(loaded.bundles[0]?.units).toEqual(
             expect.arrayContaining([
-                expect.objectContaining({ relativePath: "clean.md", origin: "legacy", state: "unmodified" }),
-                expect.objectContaining({ relativePath: "changed.md", origin: "legacy", state: "modified" }),
+                expect.objectContaining({ relativePath: "agents/clean.md", origin: "legacy", state: "unmodified" }),
+                expect.objectContaining({ relativePath: "agents/changed.md", origin: "legacy", state: "modified" }),
             ]),
         );
     });
@@ -302,28 +306,28 @@ describe("loadInstalled legacy compatibility", () => {
 
     it("treats a legacy file with a matching hash as unmodified", async () => {
         const content = "---\nname: test\n---\nBody";
-        await writeLegacyFile("agent.md", "1.0.0", content);
+        await writeLegacyFile("agents/agent.md", "1.0.0", content);
         const loaded = await loadInstalled(rootDir);
         expect(loaded.bundles[0]?.units).toContainEqual(
-            expect.objectContaining({ relativePath: "agent.md", origin: "legacy", state: "unmodified" }),
+            expect.objectContaining({ relativePath: "agents/agent.md", origin: "legacy", state: "unmodified" }),
         );
     });
 
     it("treats a legacy file with a mismatching hash as modified", async () => {
         const content = "---\nname: test\n---\nBody";
-        const filePath = await writeLegacyFile("agent.md", "1.0.0", content);
+        const filePath = await writeLegacyFile("agents/agent.md", "1.0.0", content);
         await fs.appendFile(filePath, "\nlocal edit");
         const loaded = await loadInstalled(rootDir);
         expect(loaded.bundles[0]?.units).toContainEqual(
-            expect.objectContaining({ relativePath: "agent.md", origin: "legacy", state: "modified" }),
+            expect.objectContaining({ relativePath: "agents/agent.md", origin: "legacy", state: "modified" }),
         );
     });
 
     it("treats a legacy file without a hash as modified", async () => {
-        await writeLegacyFile("agent.md", "1.0.0", "Agent", "");
+        await writeLegacyFile("agents/agent.md", "1.0.0", "Agent", "");
         const loaded = await loadInstalled(rootDir);
         expect(loaded.bundles[0]?.units).toContainEqual(
-            expect.objectContaining({ relativePath: "agent.md", origin: "legacy", state: "modified" }),
+            expect.objectContaining({ relativePath: "agents/agent.md", origin: "legacy", state: "modified" }),
         );
     });
 
@@ -340,6 +344,24 @@ describe("loadInstalled legacy compatibility", () => {
             "agents/managed-a.md",
             "agents/managed-b.md",
         ]);
+    });
+
+    it("ignores astp-tagged files outside the install layout", async () => {
+        const content = "---\nname: x\n---\nBody";
+        await writeLegacySkill("skills/a", "1.0.0", "# a\n");
+        await writeLegacyFile("agents/g.md", "1.0.0", content);
+
+        await writeLegacySkill("worktrees/feat/.claude/skills/a", "1.0.0", "# a\n");
+        await writeLegacyFile("worktrees/feat/.claude/agents/g.md", "1.0.0", content);
+        await writeLegacySkill("plugins/marketplaces/x/skills/a", "1.0.0", "# a\n");
+        await writeLegacyFile("notes.md", "1.0.0", content);
+        await fs.mkdir(path.join(rootDir, "skills/b/references"), { recursive: true });
+        await fs.writeFile(path.join(rootDir, "skills/b/SKILL.md"), "---\nname: b\n---\n# b\n");
+        await writeLegacyFile("skills/b/references/r.md", "1.0.0", content);
+
+        const loaded = await loadInstalled(rootDir);
+        const paths = loaded.bundles.flatMap((bundle) => bundle.units.map((unit) => unit.relativePath)).sort();
+        expect(paths).toEqual(["agents/g.md", "skills/a"]);
     });
 
     it("compares a legacy unit and a new manifest unit against the manifest", async () => {

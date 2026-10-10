@@ -141,6 +141,15 @@ describe("lock-file command flows", () => {
     const install = (bundle = "core", skills?: string[], force = false) =>
         executeInstall({ bundle, skills, force, platform: "claude-code", target: "project" });
 
+    const writeLegacyTagged = async (relativePath: string, content: string) => {
+        const filePath = path.join(rootDir, relativePath);
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.writeFile(
+            filePath,
+            `---\nastp-source: fixture/repo\nastp-bundle: core\nastp-version: 0.3.1\nastp-hash: ${computeHash(content)}\n---\n${content}`,
+        );
+    };
+
     it("installs full units byte-identically and records their hashes in astp.lock", async () => {
         const templateDir = await setupTemplateDir(manifest, "core");
         templateDirs.push(templateDir);
@@ -597,6 +606,38 @@ describe("lock-file command flows", () => {
         expect(await fs.readFile(path.join(rootDir, "skills/modified/SKILL.md"), "utf8")).toBe(modifiedTemplate);
         const lock = JSON.parse(await fs.readFile(path.join(rootDir, "astp.lock"), "utf8"));
         expect(lock.bundles.core.units["skills/modified"]).toBeDefined();
+    });
+
+    it("leaves legacy-tagged copies inside worktrees and plugin clones untouched by update", async () => {
+        await install();
+        const copies = [
+            "worktrees/feat/.claude/skills/a/SKILL.md",
+            "plugins/marketplaces/x/skills/a/SKILL.md",
+        ];
+        for (const copy of copies) await writeLegacyTagged(copy, "# a\n");
+        const expected = await Promise.all(copies.map((copy) => fs.readFile(path.join(rootDir, copy))));
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        for (const [index, copy] of copies.entries()) {
+            expect(await fs.readFile(path.join(rootDir, copy))).toEqual(expected[index]);
+        }
+    });
+
+    it("deletes only install-layout legacy units, not tagged copies in worktrees and plugin clones", async () => {
+        await writeLegacyTagged("skills/a/SKILL.md", "# a\n");
+        const copies = [
+            "worktrees/feat/.claude/skills/a/SKILL.md",
+            "plugins/marketplaces/x/skills/a/SKILL.md",
+        ];
+        for (const copy of copies) await writeLegacyTagged(copy, "# a\n");
+
+        await executeDelete({ bundle: "core", platform: "claude-code", target: "project" });
+
+        await expect(fs.access(path.join(rootDir, "skills/a"))).rejects.toMatchObject({ code: "ENOENT" });
+        for (const copy of copies) {
+            await expect(fs.access(path.join(rootDir, copy))).resolves.toBeUndefined();
+        }
     });
 
     it("keeps JSON summary output valid", async () => {
