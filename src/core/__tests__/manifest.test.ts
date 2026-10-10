@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import type { Manifest } from "@/types/index.js";
 
 import { resolveBundle, validateManifest } from "../manifest.js";
@@ -35,21 +38,123 @@ const validManifestData = {
     },
 };
 
+function withBundle(name: string, items: unknown[] = [rule(name, "rules/a.md")], key = name) {
+    return {
+        schemaVersion: 1,
+        bundles: { [key]: { name, version: "1.0.0", description: "x", default: false, items } },
+    };
+}
+
+function rule(bundle: string, target: string) {
+    return { source: `${bundle}/${target}`, target, category: "rule" };
+}
+
 describe("validateManifest", () => {
-    it("rejects a bundle name that is not one path segment", () => {
-        for (const name of ["../core", "a/b", "a\\b", "..", ""]) {
-            const data = structuredClone(validManifestData);
-            data.bundles.core.name = name;
-            expect(() => validateManifest(data)).toThrow("invalid name");
-        }
+    it.each(["../core", "a/b", "a\\b", "..", "", "C:", "a:b", "con", "x.", "x "])("rejects bundle name %j", (name) => {
+        expect(() => validateManifest(withBundle(name))).toThrow("must be a safe name");
     });
 
     it("accepts any other one-segment bundle name", () => {
-        for (const name of ["my+tools", "tools@2", "café"]) {
-            const data = structuredClone(validManifestData);
-            data.bundles.core.name = name;
-            expect(() => validateManifest(data)).not.toThrow();
+        for (const name of ["my+tools", "tools@2", "café", "X"]) {
+            expect(() => validateManifest(withBundle(name))).not.toThrow();
         }
+    });
+
+    it("rejects a bundle whose name differs from its key", () => {
+        expect(() => validateManifest(withBundle("core", undefined, "other"))).toThrow(
+            "Invalid bundle 'other': name 'core' must equal its key",
+        );
+    });
+
+    it("rejects bundle keys that differ only in case", () => {
+        const data = { schemaVersion: 1, bundles: { ...withBundle("Docs").bundles, ...withBundle("docs").bundles } };
+        expect(() => validateManifest(data)).toThrow('bundles "Docs" and "docs" collide');
+    });
+
+    it.each(["constructor", "__proto__"])("keeps bundle key %j as plain data", (name) => {
+        const manifest = validateManifest(JSON.parse(JSON.stringify(withBundle(name))));
+        expect(resolveBundle(manifest, name).name).toBe(name);
+        expect(() => resolveBundle(manifest, "toString")).toThrow(`Bundle 'toString' not found. Available: ${name}`);
+    });
+
+    it.each([
+        "agents/a\\b.md",
+        "agents/..\\..\\x.md",
+        "agents/./a.md",
+        "agents/.",
+        "agents//a.md",
+        "agents/",
+        "/etc/x.md",
+        "C:foo.md",
+        "C:\\x.md",
+        "\\\\host\\share\\x.md",
+        "agents/a:b.md",
+        "agents/a.md:stream",
+        "agents/CON.md",
+        "agents/con .md",
+        "agents/com¹.md",
+        "agents/a.md.",
+        "agents/a.md ",
+        "agents/a\u0000.md",
+        "../x.md",
+        "agents/a?.md",
+        "agents/\uD800.md",
+        "agents/\u009B31m.md",
+        "agents/a\u202Edm.md",
+        "skills/SKILLS~1/SKILL.md",
+        "agents/FOO~12.md",
+        `agents/${"é".repeat(128)}`,
+    ])("rejects item target %j", (target) => {
+        expect(() => validateManifest(withBundle("core", [rule("core", target)]))).toThrow(
+            /Invalid bundle 'core': items\[0\]\.target must be a safe relative path/,
+        );
+    });
+
+    it.each([
+        "rules/my rule.md",
+        "rules/правило.md",
+        "rules/a#1%.md",
+        "skills/x/references/y.md",
+        "agents/a~b.md",
+        "agents/~notes.md",
+        `agents/${"a".repeat(255)}`,
+    ])("accepts item target %j", (target) => {
+        expect(() => validateManifest(withBundle("core", [rule("core", target)]))).not.toThrow();
+    });
+
+    it.each([
+        ["targets differing in case", "agents/A.md", "agents/a.md", "agents/A.md", "agents/a.md"],
+        [
+            "targets differing in normalization",
+            "rules/\u00e9.md",
+            "rules/e\u0301.md",
+            "rules/\u00e9.md",
+            "rules/e\u0301.md",
+        ],
+        ["targets differing in ß/SS", "agents/straße.md", "agents/STRASSE.md", "agents/straße.md", "agents/STRASSE.md"],
+        ["folders differing in case", "agents/X/a.md", "agents/x/b.md", "agents/X", "agents/x"],
+        ["a target and a folder differing in case", "agents/a.md", "agents/A.MD/x.md", "agents/a.md", "agents/A.MD"],
+        ["a target that is another's folder", "agents/a/b.md", "agents/a", "agents/a", "agents/a"],
+        ["a repeated target", "agents/a.md", "agents/a.md", "agents/a.md", "agents/a.md"],
+    ])("rejects %s", (_label, first, second, left, right) => {
+        expect(() => validateManifest(withBundle("core", [rule("core", first), rule("core", second)]))).toThrow(
+            `Invalid bundle 'core': items ${JSON.stringify(left)} and ${JSON.stringify(right)} collide`,
+        );
+    });
+
+    it.each([
+        ["a non-object item", "x", "items[0] must be an object"],
+        ["a missing target", { source: "core/rules/a.md", category: "rule" }, "items[0].target must be a safe"],
+        ["a missing category", { source: "core/rules/a.md", target: "rules/a.md" }, "items[0].category must be one"],
+        ["an unknown category", { ...rule("core", "rules/a.md"), category: "hook" }, "items[0].category must be one"],
+        ["a mismatched source", { ...rule("core", "rules/a.md"), source: "core/rules/b.md" }, "items[0].source must"],
+    ])("rejects %s", (_label, item, message) => {
+        expect(() => validateManifest(withBundle("core", [item]))).toThrow(`Invalid bundle 'core': ${message}`);
+    });
+
+    it("accepts the repository's own templates/manifest.json", () => {
+        const file = path.resolve(import.meta.dirname, "../../../templates/manifest.json");
+        expect(() => validateManifest(JSON.parse(readFileSync(file, "utf8")))).not.toThrow();
     });
 
     // T12: Valid manifest
@@ -131,7 +236,7 @@ describe("platform validation", () => {
                     version: "1.0.0",
                     description: "Legacy bundle",
                     default: false,
-                    items: [{ source: "x", target: "x", category: "skill" }],
+                    items: [rule("legacy", "rules/x.md")],
                 },
             },
         };
@@ -149,7 +254,7 @@ describe("platform validation", () => {
                     description: "x",
                     default: false,
                     platforms: [],
-                    items: [{ source: "x", target: "x", category: "skill" }],
+                    items: [rule("broken", "rules/x.md")],
                 },
             },
         };
@@ -166,7 +271,7 @@ describe("platform validation", () => {
                     description: "x",
                     default: false,
                     platforms: ["jetbrains"],
-                    items: [{ source: "x", target: "x", category: "skill" }],
+                    items: [rule("broken", "rules/x.md")],
                 },
             },
         };
@@ -183,7 +288,7 @@ describe("platform validation", () => {
                     description: "x",
                     default: false,
                     platforms: ["vscode"],
-                    items: [{ source: "x", target: "x", category: "skill" }],
+                    items: [rule("broken", "rules/x.md")],
                 },
             },
         };

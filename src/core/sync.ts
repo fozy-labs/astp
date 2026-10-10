@@ -8,7 +8,7 @@ import { mergeBlockFile, parseInstalledBlocks } from "./blocks.js";
 import { computeHash } from "./frontmatter.js";
 import { installFile, installSkill } from "./installer.js";
 import type { Lock, LockBundle, LockUnit } from "./lock.js";
-import { assertInsideRoot } from "./path-safety.js";
+import { assertInsideRoot, nullPrototype } from "./path-safety.js";
 import { computeSkillTreeHash, computeTemplateUnitHash } from "./skill-tree.js";
 import type { UnitBlockFile } from "./unit-blocks.js";
 import { readUnitBlockFiles } from "./unit-blocks.js";
@@ -71,13 +71,9 @@ export async function syncBundle(args: {
         ? {
               source: args.source,
               declined: [...existingLock.declined],
-              units: Object.assign(Object.create(null) as Record<string, LockUnit>, existingLock.units),
+              units: nullPrototype(existingLock.units),
           }
-        : {
-              source: args.source,
-              declined: [],
-              units: Object.create(null) as Record<string, LockUnit>,
-          };
+        : { source: args.source, declined: [], units: nullPrototype() };
     const removedLegacy = new Set<string>();
     const keptPaths = new Set<string>();
 
@@ -271,11 +267,11 @@ async function mergeUnitBlockFiles(
     result: SyncResult,
 ): Promise<MergedUnit> {
     const contents = new Map<string, string>();
-    const blocks: Record<string, string> = {};
+    const blocks = nullPrototype<string>();
     const declinedBlocks: string[] = [];
 
     for (const [target, file] of blockFiles) {
-        const lockHashes: Record<string, string> = {};
+        const lockHashes = nullPrototype<string>();
         const declinedNames = new Set<string>();
         for (const [key, hash] of Object.entries(lockUnit?.blocks ?? {})) {
             const [filePath, name] = splitBlockKey(key);

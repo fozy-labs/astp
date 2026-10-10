@@ -7,6 +7,7 @@ import { downloadTemplate } from "giget";
 import type { Bundle, Manifest } from "@/types/index.js";
 
 import { validateManifest } from "./manifest.js";
+import { assertSafeRelativePath } from "./path-safety.js";
 import type { ManifestSource } from "./source.js";
 
 const NPM_REGISTRY = "https://registry.npmjs.org";
@@ -51,15 +52,22 @@ export async function downloadBundle(source: ManifestSource, bundle: Bundle): Pr
         if (source.kind === "url") {
             const root = new URL(".", source.manifestUrl);
             for (const item of bundle.items) {
+                assertSafeRelativePath(item.target, "item target");
                 const url = new URL([bundle.name, ...item.target.split("/")].map(encodeURIComponent).join("/"), root);
-                if (!url.href.startsWith(root.href)) {
+                const filePath = path.join(tempDir, item.target);
+                const relative = path.relative(tempDir, filePath);
+                if (
+                    !url.href.startsWith(root.href) ||
+                    relative === ".." ||
+                    relative.startsWith(`..${path.sep}`) ||
+                    path.isAbsolute(relative)
+                ) {
                     throw new Error(`item '${item.target}' resolves outside the manifest directory`);
                 }
                 const response = await request(url);
                 // A missing file is reported by assertBundleSources.
                 if (response.status === 404) continue;
                 if (!response.ok) throw new Error(`HTTP ${response.status} for ${url.href}`);
-                const filePath = path.join(tempDir, item.target);
                 await fs.mkdir(path.dirname(filePath), { recursive: true });
                 await fs.writeFile(filePath, Buffer.from(await response.arrayBuffer()));
             }

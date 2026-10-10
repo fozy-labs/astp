@@ -48,22 +48,53 @@ describe("lock file", () => {
         await expect(readLock(rootDir)).rejects.toThrow("bundle 'core'.source must be a string");
     });
 
-    it("rejects unsafe unit paths", async () => {
+    it.each([
+        ["unit path", "core", "../../outside", "safe relative path"],
+        ["unit path", "core", "agents/a:b.md", "safe relative path"],
+        ["bundle key", "C:", "agents/a.md", "bundle key must be a safe name"],
+    ])("rejects an unsafe %s (%s, %s)", async (_label, bundleName, unitPath, message) => {
         const lockPath = path.join(rootDir, "astp.lock");
         await fs.writeFile(
             lockPath,
             JSON.stringify({
                 schemaVersion: 1,
                 bundles: {
-                    core: {
+                    [bundleName]: {
                         source: "repo",
                         declined: [],
-                        units: { "../../outside": { kind: "file", version: "1.0.0", hash: "abc" } },
+                        units: { [unitPath]: { kind: "file", version: "1.0.0", hash: "abc" } },
                     },
                 },
             }),
         );
-        await expect(readLock(rootDir)).rejects.toThrow("safe relative path");
+        await expect(readLock(rootDir)).rejects.toThrow(message);
+    });
+
+    it("keeps prototype-named bundles, units and blocks as plain data through a round trip", async () => {
+        const lockPath = path.join(rootDir, "astp.lock");
+        const unit = { kind: "file", version: "1.0.0", hash: "h", blocks: { "constructor#constructor": "b" } };
+        const json = JSON.stringify({
+            schemaVersion: 1,
+            bundles: {
+                ["__proto__"]: {
+                    source: "repo",
+                    declined: [],
+                    units: { constructor: { ...unit, declinedBlocks: [] } },
+                },
+            },
+        });
+        await fs.writeFile(lockPath, json);
+
+        const lock = await readLock(rootDir);
+        const bundle = lock.bundles["__proto__"]!;
+        expect(Object.keys(lock.bundles)).toEqual(["__proto__"]);
+        expect(lock.bundles["toString"]).toBeUndefined();
+        expect(bundle.units["toString"]).toBeUndefined();
+        expect(bundle.units["constructor"]!.blocks!["toString"]).toBeUndefined();
+
+        await writeLock(rootDir, lock);
+        expect(JSON.parse(await fs.readFile(lockPath, "utf8"))).toEqual(JSON.parse(json));
+        await expect(readLock(rootDir)).resolves.toEqual(lock);
     });
 
     it("rejects unknown schema versions", async () => {

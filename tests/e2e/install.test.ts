@@ -209,6 +209,17 @@ describe("E2E: install", () => {
         await expect(fs.access(userFile)).rejects.toThrow();
     });
 
+    it("rejects an unsafe item target before downloading the bundle", async () => {
+        manifest.bundles.pipeline.items[0]!.target = "agents/..\\..\\..\\x.md";
+
+        await expect(
+            executeInstall({ bundle: "pipeline", platform: "claude-code", target: "project" }),
+        ).rejects.toThrow("safe relative path");
+
+        expect(mockDownloadBundle).not.toHaveBeenCalled();
+        await expect(fs.access(path.join(projectDir, ".claude"))).rejects.toThrow();
+    });
+
     it("preserves modified file units unless --force is passed", async () => {
         await installBundle("pipeline");
         const agentPath = path.join(projectDir, ".claude", "agents", "pipeline-approve.agent.md");

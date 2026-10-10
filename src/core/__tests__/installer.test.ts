@@ -92,16 +92,16 @@ describe("validateTargetPath", () => {
 
     // T43: Reject path traversal
     it("T43: rejects paths with .. traversal", () => {
-        expect(() => validateTargetPath(installRoot, "../../.bashrc")).toThrow("path traversal");
+        expect(() => validateTargetPath(installRoot, "../../.bashrc")).toThrow("safe relative path");
     });
 
     // T44: Reject absolute paths
     it("T44: rejects absolute POSIX paths", () => {
-        expect(() => validateTargetPath(installRoot, "/etc/passwd")).toThrow("absolute paths");
+        expect(() => validateTargetPath(installRoot, "/etc/passwd")).toThrow("safe relative path");
     });
 
     it("T44: rejects absolute Windows paths", () => {
-        expect(() => validateTargetPath(installRoot, "C:\\Windows\\System32\\cmd.exe")).toThrow("absolute paths");
+        expect(() => validateTargetPath(installRoot, "C:\\Windows\\System32\\cmd.exe")).toThrow("safe relative path");
     });
 
     // T45: Resolved path escaping install root

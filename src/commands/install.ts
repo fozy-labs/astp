@@ -123,10 +123,10 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
         s.start(candidates.length === 1 && only ? `Downloading ${only.bundle.name}...` : "Downloading bundles...");
         const downloaded: DownloadedBundle[] = [];
         for (const { bundle, source } of candidates) {
-            const tempDir = await downloadBundle(source.source, bundle);
-            tempDirs.push(tempDir);
             const units = groupTemplateItems(bundle.items);
             validateUnitTargets(target.rootDir, units);
+            const tempDir = await downloadBundle(source.source, bundle);
+            tempDirs.push(tempDir);
             await assertBundleSources(tempDir, bundle.name, units);
             await assertBundleBlocks(tempDir, bundle.name, units);
             const unitBlockFiles = new Map<string, Map<string, UnitBlockFile>>();

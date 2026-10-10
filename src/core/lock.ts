@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { assertSafeName, assertSafeRelativePath, nullPrototype } from "./path-safety.js";
+
 export interface LockUnit {
     kind: "file" | "skill";
     version: string;
@@ -34,7 +36,7 @@ export async function readLock(rootDir: string): Promise<Lock> {
         content = await fs.readFile(lockPath, "utf8");
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-            return { schemaVersion: 1, bundles: Object.create(null) as Record<string, LockBundle> };
+            return { schemaVersion: 1, bundles: nullPrototype() };
         }
         throw error;
     }
@@ -55,7 +57,11 @@ export async function readLock(rootDir: string): Promise<Lock> {
     } catch (error) {
         throw invalidLock(lockPath, error instanceof Error ? error.message : String(error));
     }
-    return data;
+    for (const bundle of Object.values(data.bundles)) {
+        bundle.units = nullPrototype(bundle.units);
+        for (const unit of Object.values(bundle.units)) if (unit.blocks) unit.blocks = nullPrototype(unit.blocks);
+    }
+    return { ...data, bundles: nullPrototype(data.bundles) };
 }
 
 export async function writeLock(rootDir: string, lock: Lock): Promise<void> {
@@ -116,15 +122,16 @@ function validateLock(data: unknown): asserts data is Lock {
     if (!isRecord(data.bundles)) throw new Error("bundles must be an object");
 
     for (const [bundleName, value] of Object.entries(data.bundles)) {
+        assertSafeName(bundleName, "bundle key");
         if (!isRecord(value)) throw new Error(`bundle '${bundleName}' must be an object`);
         if (typeof value.source !== "string") throw new Error(`bundle '${bundleName}'.source must be a string`);
         if (!Array.isArray(value.declined) || value.declined.some((entry) => typeof entry !== "string")) {
             throw new Error(`bundle '${bundleName}'.declined must be an array of strings`);
         }
-        for (const unitPath of value.declined) validateUnitPath(unitPath, `bundle '${bundleName}'.declined`);
+        for (const unitPath of value.declined) assertSafeRelativePath(unitPath, `bundle '${bundleName}'.declined`);
         if (!isRecord(value.units)) throw new Error(`bundle '${bundleName}'.units must be an object`);
         for (const [unitPath, unit] of Object.entries(value.units)) {
-            validateUnitPath(unitPath, `unit '${bundleName}/${unitPath}'`);
+            assertSafeRelativePath(unitPath, `unit '${bundleName}/${unitPath}'`);
             if (!isRecord(unit)) throw new Error(`unit '${bundleName}/${unitPath}' must be an object`);
             if (unit.kind !== "file" && unit.kind !== "skill") {
                 throw new Error(`unit '${bundleName}/${unitPath}'.kind must be 'file' or 'skill'`);
@@ -159,24 +166,12 @@ function validateLock(data: unknown): asserts data is Lock {
     }
 }
 
-function validateUnitPath(unitPath: string, field: string): void {
-    if (
-        unitPath.length === 0 ||
-        path.isAbsolute(unitPath) ||
-        path.posix.isAbsolute(unitPath) ||
-        path.win32.isAbsolute(unitPath) ||
-        unitPath.split(/[/\\]/).some((segment) => segment === "" || segment === "." || segment === "..")
-    ) {
-        throw new Error(`${field} must be a safe relative path`);
-    }
-}
-
 const BLOCK_NAME_REGEX = /^[a-z][a-z0-9_]*$/;
 
 function validateBlockKey(key: string, field: string): void {
     const separator = key.lastIndexOf("#");
     if (separator <= 0) throw new Error(`${field} keys must look like '<file>#<name>'`);
-    validateUnitPath(key.slice(0, separator), field);
+    assertSafeRelativePath(key.slice(0, separator), field);
     if (!BLOCK_NAME_REGEX.test(key.slice(separator + 1))) {
         throw new Error(`${field} key '${key}' has an invalid block name`);
     }

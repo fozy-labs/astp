@@ -6,7 +6,7 @@ import type { InstallTarget, TemplateItem } from "@/types/index.js";
 
 import { hasBlocks, parseTemplateBlocks } from "./blocks.js";
 import { computeHash } from "./frontmatter.js";
-import { assertInsideRoot } from "./path-safety.js";
+import { assertInsideRoot, assertSafeRelativePath } from "./path-safety.js";
 import { computeSkillTreeHash } from "./skill-tree.js";
 import type { SkillTemplateUnit, TemplateUnit } from "./units.js";
 
@@ -82,18 +82,7 @@ export async function installSkill(
 }
 
 export function validateTargetPath(installRoot: string, targetPath: string): void {
-    // Reject absolute paths (POSIX and Windows)
-    if (path.isAbsolute(targetPath) || path.posix.isAbsolute(targetPath) || path.win32.isAbsolute(targetPath)) {
-        throw new Error(`Invalid target path: absolute paths are not allowed: ${targetPath}`);
-    }
-
-    // Reject path traversal
-    const segments = targetPath.split(/[/\\]/);
-    if (segments.includes("..")) {
-        throw new Error(`Invalid target path: path traversal is not allowed: ${targetPath}`);
-    }
-
-    // Verify resolved path stays within install root
+    assertSafeRelativePath(targetPath, "Invalid target path: target");
     const normalizedRoot = path.resolve(installRoot);
     const resolved = path.resolve(installRoot, targetPath);
     if (!resolved.startsWith(normalizedRoot + path.sep) && resolved !== normalizedRoot) {

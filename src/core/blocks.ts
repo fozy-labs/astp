@@ -436,7 +436,7 @@ export function mergeBlockFile(args: MergeBlockFileArgs): MergeBlockFileResult {
     const installed = args.installed;
     const inTemplate = new Set(templateBlocks.map((block) => block.name));
 
-    const newHashes: Record<string, string> = {};
+    const newHashes = Object.create(null) as Record<string, string>;
     const declined = new Set([...args.declined].filter((name) => inTemplate.has(name)));
     const kept: string[] = [];
     const released: string[] = [];
