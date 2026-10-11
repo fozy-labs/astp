@@ -10,6 +10,7 @@ import { executeList } from "@/commands/list.js";
 import { executeUpdate } from "@/commands/update.js";
 import type { InstallTargetType, Platform } from "@/types/index.js";
 import { ALL_PLATFORMS } from "@/types/index.js";
+import { cancel, CancelledError } from "@/ui/prompts.js";
 import { launchWizard } from "@/ui/wizard.js";
 
 const VALID_TARGETS: ReadonlySet<InstallTargetType> = new Set(["project", "user"]);
@@ -169,4 +170,13 @@ program
         },
     );
 
-await program.parseAsync();
+try {
+    await program.parseAsync();
+} catch (error) {
+    if (error instanceof CancelledError) {
+        cancel(error.message);
+        process.exit(0);
+    }
+    console.error(`error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+}

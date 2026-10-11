@@ -8,7 +8,15 @@ import { executeUpdate } from "@/commands/update.js";
 import { compareVersions, downloadBundle, fetchManifest, loadInstalled } from "@/core/index.js";
 import type { Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
-import { confirmInstall, selectPlatform, selectTarget, warnModified } from "@/ui/prompts.js";
+import {
+    CancelledError,
+    confirmInstall,
+    isInteractive,
+    selectNewUnits,
+    selectPlatform,
+    selectTarget,
+    warnModified,
+} from "@/ui/prompts.js";
 
 import {
     cleanupDir,
@@ -32,7 +40,8 @@ vi.mock("@/types/index.js", async (importOriginal) => {
     return { ...actual, resolveTarget: vi.fn() };
 });
 
-vi.mock("@/ui/prompts.js", () => ({
+vi.mock("@/ui/prompts.js", async (importOriginal) => ({
+    CancelledError: (await importOriginal<typeof import("@/ui/prompts.js")>()).CancelledError,
     isInteractive: vi.fn(() => false),
     selectPlatform: vi.fn(),
     selectTarget: vi.fn(),
@@ -62,6 +71,7 @@ const mockConfirmInstall = vi.mocked(confirmInstall);
 const mockWarnModified = vi.mocked(warnModified);
 const mockSelectTarget = vi.mocked(selectTarget);
 const mockSelectPlatform = vi.mocked(selectPlatform);
+const mockIsInteractive = vi.mocked(isInteractive);
 
 describe("E2E: update", () => {
     let projectDir: string;
@@ -79,6 +89,7 @@ describe("E2E: update", () => {
 
         mockResolveTarget.mockReturnValue(makeProjectTarget(projectDir));
         mockConfirmInstall.mockResolvedValue(true);
+        mockIsInteractive.mockReturnValue(false);
     });
 
     afterEach(async () => {
@@ -207,5 +218,55 @@ describe("E2E: update", () => {
         mockSelectTarget.mockRejectedValue(new Error("Non-TTY: cannot prompt"));
 
         await expect(executeUpdate({})).rejects.toThrow();
+    });
+
+    it("leaves earlier bundles untouched when a later new-unit prompt is cancelled", async () => {
+        mockFetchManifest.mockResolvedValue(manifestV1);
+        for (const name of ["core", "pipeline"]) {
+            const tplDir = await setupTemplateDir(manifestV1, name);
+            templateDirs.push(tplDir);
+            mockDownloadBundle.mockResolvedValue(tplDir);
+            await executeInstall({ bundle: name, platform: "claude-code", target: "project" });
+        }
+
+        const manifestV2 = createFixtureManifest("1.1.0");
+        manifestV2.bundles.core.items.push({
+            source: "core/agents/core-new.agent.md",
+            target: "agents/core-new.agent.md",
+            category: "agent",
+        });
+        manifestV2.bundles.pipeline.items.push({
+            source: "pipeline/agents/pipeline-new.agent.md",
+            target: "agents/pipeline-new.agent.md",
+            category: "agent",
+        });
+        const downloadedDirs: string[] = [];
+        mockFetchManifest.mockResolvedValue(manifestV2);
+        mockDownloadBundle.mockImplementation(async (_source, bundle) => {
+            const dir = await setupTemplateDir(manifestV2, bundle.name);
+            templateDirs.push(dir);
+            downloadedDirs.push(dir);
+            return dir;
+        });
+        mockIsInteractive.mockReturnValue(true);
+        vi.mocked(selectNewUnits)
+            .mockImplementationOnce(async (_name, units) => units.map((unit) => unit.relativePath))
+            .mockRejectedValue(new CancelledError());
+
+        const rootDir = path.join(projectDir, ".claude");
+        const lockBefore = await fs.readFile(path.join(rootDir, "astp.lock"));
+
+        await expect(executeUpdate({ platform: "claude-code", target: "project" })).rejects.toBeInstanceOf(
+            CancelledError,
+        );
+
+        expect(await fs.readFile(path.join(rootDir, "astp.lock"))).toEqual(lockBefore);
+        expect(await fs.readFile(path.join(rootDir, "skills/orchestrate/SKILL.md"), "utf8")).toContain("v1.0.0");
+        expect(await fs.readFile(path.join(rootDir, "rules/thoughts-workflow.rules.md"), "utf8")).toContain("v1.0.0");
+        await expect(fs.access(path.join(rootDir, "agents/core-new.agent.md"))).rejects.toThrow();
+        await expect(fs.access(path.join(rootDir, "agents/pipeline-new.agent.md"))).rejects.toThrow();
+        for (const dir of downloadedDirs) {
+            await expect(fs.stat(dir)).rejects.toMatchObject({ code: "ENOENT" });
+        }
     });
 });

@@ -8,7 +8,9 @@ import { ALL_PLATFORMS } from "@/types/index.js";
 import type { BundleEntry } from "../prompts.js";
 import {
     BundleTreePrompt,
+    CancelledError,
     confirmInstall,
+    selectNewUnits,
     selectPlatform,
     showCheckReport,
     showUpdateReport,
@@ -271,6 +273,35 @@ describe("selectPlatform", () => {
         await expect(selectPlatform()).resolves.toBe(ALL_PLATFORMS[0]);
 
         expect(mockSelect).not.toHaveBeenCalled();
+    });
+});
+
+describe("cancel", () => {
+    const target: InstallTarget = { platform: "claude-code", type: "project", rootDir: "/project/.claude" };
+    let exit: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+        vi.mocked(p.isCancel).mockReturnValue(true);
+        exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    });
+
+    afterEach(() => {
+        exit.mockRestore();
+        vi.mocked(p.isCancel).mockReturnValue(false);
+    });
+
+    it("selectNewUnits rejects with CancelledError instead of exiting", async () => {
+        vi.mocked(p.multiselect).mockResolvedValue(Symbol("cancel") as never);
+
+        await expect(selectNewUnits("core", [])).rejects.toBeInstanceOf(CancelledError);
+        expect(exit).not.toHaveBeenCalled();
+    });
+
+    it("confirmInstall rejects with CancelledError instead of exiting", async () => {
+        vi.mocked(p.confirm).mockResolvedValue(Symbol("cancel") as never);
+
+        await expect(confirmInstall([], target)).rejects.toBeInstanceOf(CancelledError);
+        expect(exit).not.toHaveBeenCalled();
     });
 });
 

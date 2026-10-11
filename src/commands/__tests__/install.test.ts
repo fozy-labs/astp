@@ -53,6 +53,7 @@ vi.mock("@/ui/prompts.js", () => ({
     requireTerminal: vi.fn(),
     selectBlocks: vi.fn(),
     showSuccess: vi.fn(),
+    warnUnavailable: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
 

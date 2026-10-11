@@ -59,6 +59,7 @@ describe("without a terminal", () => {
                 const result = await runCli(args, cwd, stdin);
 
                 expect(result.stderr).toContain(message);
+                expect(result.stderr).not.toMatch(/^\s+at /m);
                 expect(result.code).toBe(1);
             }, 2 * TIMEOUT_MS);
         });
