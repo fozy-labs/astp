@@ -12,20 +12,28 @@ export interface OpenedSource {
 /** Opens each source once per command; `close` removes their downloads. */
 export class Sources {
     private readonly opened = new Map<string, OpenedSource>();
+    private readonly failed = new Map<string, unknown>();
     private readonly sources: ManifestSource[] = [];
 
     constructor(private readonly target: InstallTarget) {}
 
     /** `--source` values resolve against the cwd, lock values against the lock's directory. */
     async open(spec: string, from: "cli" | "lock"): Promise<OpenedSource> {
-        const source = await resolveSource(spec, from === "cli" ? process.cwd() : this.target.rootDir);
-        const key = formatSource(source, this.target);
-        const existing = this.opened.get(key);
-        if (existing) return existing;
-        this.sources.push(source);
-        const opened = { source, spec: key, manifest: await fetchManifest(source) };
-        this.opened.set(key, opened);
-        return opened;
+        const failKey = `${from}\0${spec}`;
+        if (this.failed.has(failKey)) throw this.failed.get(failKey);
+        try {
+            const source = await resolveSource(spec, from === "cli" ? process.cwd() : this.target.rootDir);
+            const key = formatSource(source, this.target);
+            const existing = this.opened.get(key);
+            if (existing) return existing;
+            this.sources.push(source);
+            const opened = { source, spec: key, manifest: await fetchManifest(source) };
+            this.opened.set(key, opened);
+            return opened;
+        } catch (error) {
+            this.failed.set(failKey, error);
+            throw error;
+        }
     }
 
     /** Each installed bundle's lock source (legacy units: the default), with the bundle's name in errors. */

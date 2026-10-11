@@ -413,6 +413,65 @@ describe("E2E: install", () => {
         expect(lock.bundles.pipeline).toBeDefined();
     });
 
+    it("reads an unreachable lock source only once for the bundles sharing it", async () => {
+        const coreTplDir = await setupTemplateDir(manifest, "core");
+        templateDirs.push(coreTplDir);
+        mockDownloadBundle.mockResolvedValue(coreTplDir);
+        await executeInstall({ bundle: "core", source: "gh:other/repo", platform: "claude-code", target: "project" });
+        const skillTplDir = await setupTemplateDir(manifest, "skillpack");
+        templateDirs.push(skillTplDir);
+        mockDownloadBundle.mockResolvedValue(skillTplDir);
+        await executeInstall({
+            bundle: "skillpack",
+            source: "gh:other/repo",
+            platform: "claude-code",
+            target: "project",
+        });
+
+        mockFetchManifest.mockClear();
+        mockIsInteractive.mockReturnValue(true);
+        mockFetchManifest.mockImplementation(async (source) => {
+            if (source.spec === "gh:other/repo") throw new Error("offline");
+            return manifest;
+        });
+        mockDownloadBundle.mockImplementation(async (_source, { name }) => {
+            const dir = await setupTemplateDir(manifest, name);
+            templateDirs.push(dir);
+            return dir;
+        });
+        mockSelectBundleItems.mockImplementation(
+            async (entries) =>
+                new Map(
+                    entries.map((entry) => [
+                        entry.bundle.name,
+                        { units: entry.units.map((unit) => unit.relativePath), blocks: entry.blockDefaults },
+                    ]),
+                ),
+        );
+
+        await executeInstall({ platform: "claude-code", target: "project" });
+
+        const otherCalls = mockFetchManifest.mock.calls.filter(([source]) => source.spec === "gh:other/repo");
+        expect(otherCalls).toHaveLength(1);
+        expect(mockWarnUnavailable).toHaveBeenCalledWith(
+            [
+                expect.objectContaining({
+                    bundle: "core",
+                    message: expect.stringContaining("Cannot read source 'gh:other/repo'"),
+                }),
+                expect.objectContaining({
+                    bundle: "skillpack",
+                    message: expect.stringContaining("Cannot read source 'gh:other/repo'"),
+                }),
+            ],
+            "project",
+        );
+        const entries = mockSelectBundleItems.mock.calls[0]![0];
+        expect(entries.map((entry) => entry.bundle.name)).toEqual(["pipeline"]);
+        const lock = await readLockFixture(path.join(projectDir, ".claude"));
+        expect(lock.bundles.pipeline).toBeDefined();
+    });
+
     it("rejects when no bundle can be read", async () => {
         mockIsInteractive.mockReturnValue(true);
         mockDownloadBundle.mockRejectedValue(new Error("offline"));
