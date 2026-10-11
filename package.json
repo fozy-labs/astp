@@ -12,7 +12,7 @@
         "type": "git",
         "url": "git+https://github.com/fozy-labs/astp.git"
     },
-    "license": "GPL-3.0-or-later",
+    "license": "MIT",
     "author": "Vladimir Panev <vova6255@gmail.com>",
     "bin": {
         "astp": "dist/cli.js"

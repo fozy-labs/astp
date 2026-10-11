@@ -14,6 +14,7 @@ description: >-
   decision is traceable to this brief rather than to a remembered look. Not for writing markup
   or component code against a settled spec, choosing frameworks or component libraries,
   copywriting, data-chart and visualisation specification, or accessibility conformance audits.
+license: MIT
 ---
 
 # design-derivation

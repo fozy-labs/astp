@@ -8,6 +8,7 @@ description: >-
     Mermaid diagrams, hard specs and changelogs. Use when writing, editing,
     restructuring or reviewing any such text. Not for one-line replies or short
     inline code comments.
+license: MIT
 ---
 
 # Markdown craft

@@ -4,6 +4,7 @@ description: >-
   Install, update, check and delete Claude Code skills, agents and rules with the astp CLI
   (@fozy-labs/astp). Use when the user asks to add, update, list or remove astp bundles or
   skills, when `astp.lock` is involved, or when a file contains a <SETUP_REQUIRED> block.
+license: MIT
 ---
 
 # astp

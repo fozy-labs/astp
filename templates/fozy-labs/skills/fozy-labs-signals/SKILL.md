@@ -3,6 +3,7 @@ name: fozy-labs-signals
 description: >
   Reactive state primitives via @fozy-labs/rx-toolkit — Signal.state / compute / effect,
   LocalSignal, RxJS interop and the useSignal React hook.
+license: MIT
 ---
 
 # @fozy-labs/rx-toolkit — Signals
