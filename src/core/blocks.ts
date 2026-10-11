@@ -54,8 +54,8 @@ export interface InstalledBlocks {
     /** Index of the first line after the frontmatter. */
     bodyStart: number;
     blocks: Map<string, InstalledBlockRegion>;
-    /** Line range of the `<SETUP_REQUIRED>` region, inclusive. */
-    setup: { start: number; end: number } | null;
+    /** Line range of the `<SETUP_REQUIRED>` region, inclusive; `edited` when its text differs from the default. */
+    setup: { start: number; end: number; edited: boolean } | null;
     /** Everything except frontmatter, recorded blocks and SETUP_REQUIRED. */
     outsideText: string;
     lines: string[];
@@ -169,13 +169,15 @@ export function parseTemplateBlocks(content: string): {
     blocks: TemplateBlock[];
     errors: string[];
 } {
-    const frontmatter = extractFrontmatter(content);
-    const lines = splitLines(content);
+    const normalized = content.replace(/\r\n/g, "\n");
+    const frontmatter = extractFrontmatter(normalized);
+    const lines = splitLines(normalized);
     const bodyStart = splitLines(frontmatter).length;
     const errors: Array<{ line: number; message: string }> = [];
     const blocks: TemplateBlock[] = [];
     const names = new Set<string>();
     const outsideLines: number[] = [];
+    const installedTags: Array<{ index: number; name: string; text: string }> = [];
     let sawBlock = false;
     let fence: Fence | null = null;
     let open: { name: string; optional: boolean; required: boolean; line: number } | null = null;
@@ -223,6 +225,10 @@ export function parseTemplateBlocks(content: string): {
             contentStart = index + 1;
             continue;
         }
+        if (BLOCK_OPEN_PREFIX.test(text)) {
+            error(index, 'malformed <astp-block> tag (expected a whole line like <astp-block name="x" optional>)');
+            continue;
+        }
         if (BLOCK_CLOSE.test(text)) {
             if (!open) {
                 error(index, "stray </astp-block>");
@@ -239,10 +245,17 @@ export function parseTemplateBlocks(content: string): {
             open = null;
             continue;
         }
+        if (open) {
+            const tag = text.match(NAME_OPEN) ?? text.match(NAME_CLOSE);
+            if (tag) installedTags.push({ index, name: tag[1]!, text });
+        }
         if (!open && text.trim() !== "") outsideLines.push(index);
     }
 
     if (open) error(open.line, `unclosed <astp-block name="${open.name}">`);
+    for (const { index, name, text } of installedTags) {
+        if (names.has(name)) error(index, `'${text}' matches the installed tag of block '${name}'`);
+    }
     if (sawBlock) {
         for (const index of outsideLines) {
             error(index, "text outside <astp-block> blocks is not allowed");
@@ -295,15 +308,16 @@ function parseAttributes(
  * counts as modified.
  */
 export function parseInstalledBlocks(content: string, names: string[]): InstalledBlocks | null {
-    const frontmatter = extractFrontmatter(content);
-    const lines = splitLines(content);
+    const normalized = content.replace(/\r\n/g, "\n");
+    const frontmatter = extractFrontmatter(normalized);
+    const lines = splitLines(normalized);
     const bodyStart = splitLines(frontmatter).length;
     const wanted = new Set(names);
     const blocks = new Map<string, InstalledBlockRegion>();
     const outside: string[] = [];
     let fence: Fence | null = null;
     let open: { name: string; line: number } | null = null;
-    let setup: { start: number; end: number } | null = null;
+    let setup: { start: number; end: number; edited: boolean } | null = null;
     let inSetup = false;
     let setupStart = 0;
 
@@ -328,8 +342,13 @@ export function parseInstalledBlocks(content: string, names: string[]): Installe
             continue;
         }
         if (SETUP_CLOSE.test(text)) {
+            if (open) continue;
             if (!inSetup) return null;
-            setup = { start: setupStart, end: index };
+            setup = {
+                start: setupStart,
+                end: index,
+                edited: lines.slice(setupStart, index + 1).join("") !== SETUP_REQUIRED_TEXT,
+            };
             inSetup = false;
             continue;
         }
@@ -365,7 +384,7 @@ export function parseInstalledBlocks(content: string, names: string[]): Installe
         if (!open && !inSetup) outside.push(lines[index]!);
     }
 
-    if (open || inSetup) return null;
+    if (open || inSetup || fence) return null;
     return { frontmatter, bodyStart, blocks, setup, outsideText: outside.join(""), lines };
 }
 
@@ -403,8 +422,8 @@ function renderFresh(frontmatter: string, blocks: TemplateBlock[]): string {
 function wrapperFenceLength(content: string): number {
     let longest = 0;
     for (const line of splitLines(content)) {
-        const match = lineText(line).match(/^`+/);
-        if (match) longest = Math.max(longest, match[0].length);
+        const match = lineText(line).match(/^ {0,3}(`+)/);
+        if (match) longest = Math.max(longest, match[1]!.length);
     }
     return Math.max(3, longest + 1);
 }
@@ -412,18 +431,29 @@ function wrapperFenceLength(content: string): number {
 /** Appends the outdated-block wrapper before the closing tag, replacing an existing one in place. */
 function withFillWrapper(current: string, template: string): string {
     const lines = splitLines(current);
-    for (let index = 0; index < lines.length - 1; index++) {
-        if (!FILL_OPEN.test(lineText(lines[index]!))) continue;
-        if (lineText(lines[index + 1]!) !== FILL_WRAPPER_MARKER) continue;
-        const close = lines.findIndex((line, at) => at > index && FILL_CLOSE.test(lineText(line)));
-        if (close > index) {
-            lines.splice(index, close - index + 1);
+    let fence: Fence | null = null;
+    let noteStart = -1;
+    for (let index = 0; index < lines.length; index++) {
+        const text = lineText(lines[index]!);
+        if (fence) {
+            if (fenceCloses(text, fence)) fence = null;
+            continue;
+        }
+        const opened = fenceOpen(text);
+        if (opened) {
+            fence = opened;
+            continue;
+        }
+        if (noteStart < 0) {
+            if (FILL_OPEN.test(text) && lineText(lines[index + 1] ?? "") === FILL_WRAPPER_MARKER) noteStart = index;
+        } else if (FILL_CLOSE.test(text)) {
+            lines.splice(noteStart, index - noteStart + 1);
             break;
         }
     }
-    const fence = "`".repeat(wrapperFenceLength(template));
+    const wrapperFence = "`".repeat(wrapperFenceLength(template));
     const body = template.endsWith("\n") || template === "" ? template : `${template}\n`;
-    const wrapper = `<FILL_INSTRUCTION>\n${FILL_WRAPPER_MARKER}\n\n${fence}md\n${body}${fence}\n</FILL_INSTRUCTION>\n`;
+    const wrapper = `<FILL_INSTRUCTION>\n${FILL_WRAPPER_MARKER}\n\n${wrapperFence}md\n${body}${wrapperFence}\n</FILL_INSTRUCTION>\n`;
     const head = lines.join("");
     return `${head}${head && !head.endsWith("\n") ? "\n" : ""}${wrapper}`;
 }
@@ -588,8 +618,11 @@ function mergeInstalled(
     let index = bodyStart;
     while (index < lines.length) {
         if (installed.setup && index === installed.setup.start) {
+            if (installed.setup.edited) {
+                output.push(...lines.slice(installed.setup.start, installed.setup.end + 1));
+            }
             index = installed.setup.end + 1;
-            if (index < lines.length && lines[index]!.trim() === "") index++;
+            if (!installed.setup.edited && index < lines.length && lines[index]!.trim() === "") index++;
             continue;
         }
         const region = blockAtOpen.get(index);
@@ -629,7 +662,7 @@ function mergeInstalled(
 
     // Re-add SETUP_REQUIRED when FILL_INSTRUCTIONs remain.
     const frontmatterLines = splitLines(args.template.frontmatter).length;
-    if (hasFillInstruction(output.slice(frontmatterLines).join(""))) {
+    if (!installed.setup?.edited && hasFillInstruction(output.slice(frontmatterLines).join(""))) {
         const insertion: string[] = [];
         const previous = output[frontmatterLines - 1];
         if (frontmatterLines > 0 && previous !== undefined && previous.trim() !== "") insertion.push("\n");

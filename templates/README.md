@@ -101,7 +101,7 @@ Bundle versions follow semver:
 
 ## Blocks
 
-Any `.md` template file can split its body into named blocks:
+Any template file can split its body into named blocks; a file with an `<astp-block>` or `</astp-block>` line is a block file:
 
 ```md
 ---
@@ -123,11 +123,11 @@ Ready-made text.
 
 Rules:
 
-- Block names match `[a-z][a-z0-9_]*`. Attributes: `name="…"` (required), `optional` (not selected by default), `required` (always installed, never shown in the wizard). `optional` and `required` cannot combine.
-- Tags are whole lines at column 0 outside code fences; blocks do not nest. In a file with blocks, all text except the frontmatter lives inside blocks.
+- Block names match `[a-z][a-z0-9_]*`. Attributes: `name="…"` (required), `optional` (not selected by default), `required` (always installed, never shown in the wizard). `optional` and `required` cannot combine. Write the opening tag exactly like that: `name` in double quotes, no spaces around `=`.
+- Tags are whole lines at column 0 outside code fences; blocks do not nest. In a file with blocks, all text except the frontmatter lives inside blocks. Outside a code fence, no line inside a block may equal an installed tag (`<name>` or `</name>`) of any block in the file.
 - `<FILL_INSTRUCTION>` tells the consumer's agent to fill the block in place; while one is present, the CLI keeps a `<SETUP_REQUIRED>` block at the top of the installed file.
 - On install a block renders as `<project_map>…</project_map>` — the name becomes the tag. `SETUP_REQUIRED`/`FILL_INSTRUCTION` are CLI tags and are always uppercase.
-- A skill containing a file with blocks is excluded from `.claude-plugin/marketplace.json` — only astp understands blocks. `npm run generate:skills` fails on block parse errors in any `.md` manifest item.
+- A skill containing a file with blocks is excluded from `.claude-plugin/marketplace.json` — only astp understands blocks. `npm run generate:skills` fails on block parse errors in any manifest item that is `.md` or has blocks.
 
 Lock state: a unit with blocks stores `blocks` (`<file>#<name>` → block hash) and `declinedBlocks` in `astp.lock`; the unit `hash` covers only the frontmatter.
 
@@ -139,4 +139,4 @@ Lock state: a unit with blocks stores `blocks` (`<file>#<name>` → block hash) 
 
 ## Install State
 
-Files without blocks remain byte-identical to template sources. Files with blocks merge per block (see above). Install state is recorded in `astp.lock` at the target root.
+Files without blocks remain byte-identical to template sources. Files with blocks merge per block (see above) and are written with LF line endings. Install state is recorded in `astp.lock` at the target root.

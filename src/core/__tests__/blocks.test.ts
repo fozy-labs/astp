@@ -125,6 +125,13 @@ describe("parseTemplateBlocks", () => {
             /FILL_INSTRUCTION/,
         ],
         ["text outside blocks", '<astp-block name="a">\nx\n</astp-block>\n\nsome prose\n', /outside <astp-block>/i],
+        [
+            "malformed tag with trailing text",
+            '<astp-block name="a">\nx\n</astp-block>\n\n<astp-block name="b"> oops\ny\n',
+            /malformed <astp-block> tag/,
+        ],
+        ["malformed inline tag", '<astp-block name="x">text</astp-block>\n', /malformed <astp-block> tag/],
+        ["malformed tag as the only marker", '<astp-block name="x"> oops\n', /malformed <astp-block> tag/],
     ])("reports error: %s", (_label, content, pattern) => {
         const { errors } = parseTemplateBlocks(content);
         expect(errors.length).toBeGreaterThan(0);
@@ -165,6 +172,23 @@ describe("parseTemplateBlocks", () => {
         const { errors, blocks } = parseTemplateBlocks(content);
         expect(errors).toEqual([]);
         expect(blocks).toHaveLength(1);
+    });
+
+    it("rejects a line inside a block equal to any block's installed tag", () => {
+        const { errors } = parseTemplateBlocks(
+            '<astp-block name="a">\n<a>\n<c>\n</astp-block>\n\n<astp-block name="b">\nx\n</astp-block>\n\n<astp-block name="c">\ny\n</astp-block>\n',
+        );
+        expect(errors).toEqual([
+            "line 2: '<a>' matches the installed tag of block 'a'",
+            "line 3: '<c>' matches the installed tag of block 'c'",
+        ]);
+    });
+
+    it("normalizes CRLF before parsing", () => {
+        const { frontmatter, blocks, errors } = parseTemplateBlocks(TEMPLATE.replace(/\n/g, "\r\n"));
+        expect(errors).toEqual([]);
+        expect(frontmatter).toBe("---\ndescription: Project map and code style\n---\n");
+        expect(blocks[0]!.content).not.toContain("\r");
     });
 });
 
@@ -222,8 +246,22 @@ describe("parseInstalledBlocks", () => {
         ["stray SETUP_REQUIRED closing", "</SETUP_REQUIRED>\n", []],
         ["SETUP_REQUIRED twice", `${SETUP}\n${SETUP}`, []],
         ["SETUP_REQUIRED unclosed", "<SETUP_REQUIRED>\nx\n", []],
+        ["unclosed fence at EOF", "<a>\nx\n</a>\n\n```\ndangling\n", ["a"]],
     ])("returns null: %s", (_label, content, names) => {
         expect(parseInstalledBlocks(content, names)).toBeNull();
+    });
+
+    it("ignores </SETUP_REQUIRED> inside a recorded block", () => {
+        const parsed = parseInstalledBlocks("<a>\nx\n</SETUP_REQUIRED>\n</a>\n", ["a"]);
+        expect(parsed).not.toBeNull();
+        expect(parsed!.blocks.get("a")!.content).toContain("</SETUP_REQUIRED>");
+    });
+
+    it("marks the SETUP_REQUIRED region edited when its text changed", () => {
+        const clean = parseInstalledBlocks(installed, ["project_map"])!;
+        expect(clean.setup).toMatchObject({ edited: false });
+        const edited = parseInstalledBlocks(installed.replace("Replace every", "Note:"), ["project_map"])!;
+        expect(edited.setup).toMatchObject({ edited: true });
     });
 
     it("ignores tags inside fences", () => {
@@ -596,6 +634,90 @@ C
         expect(result.content).toContain("<b>");
         expect(result.content.indexOf("<b>")).toBeLessThan(result.content.indexOf("<c>"));
         expect(Object.keys(result.blocks)).toEqual(["b", "c"]);
+    });
+
+    it("replaces the note on a second conflict even when the template holds a FILL_INSTRUCTION", () => {
+        const installed = merge({ templateContent: TEMPLATE, selected: ["project_map"] });
+        const filled = installed.content.replace(
+            "Describe the project file structure. If the map depth is not obvious, ask the user.",
+            "Our map.",
+        );
+        const t1 = TEMPLATE.replace(
+            "Describe the project file structure. If the map depth is not obvious, ask the user.",
+            "List top-level dirs.",
+        );
+        const first = merge({
+            templateContent: t1,
+            installed: filled,
+            lockHashes: installed.blocks,
+            selected: ["project_map"],
+        });
+        const t2 = TEMPLATE.replace(
+            "Describe the project file structure. If the map depth is not obvious, ask the user.",
+            "List top-level dirs, then recurse.",
+        );
+        const second = merge({
+            templateContent: t2,
+            installed: first.content,
+            lockHashes: first.blocks,
+            selected: ["project_map"],
+        });
+        expect(second.content.match(/The astp template of this block changed/g)).toHaveLength(1);
+        expect(second.content.match(/<\/FILL_INSTRUCTION>/g)).toHaveLength(3);
+        expect(parseInstalledBlocks(second.content, ["project_map"])).not.toBeNull();
+        expect(second.content).toContain("<SETUP_REQUIRED>");
+    });
+
+    it("lengthens the wrapper fence for indented backtick runs in the template", () => {
+        const withIndented = TEMPLATE.replace(
+            "Ready-made text.",
+            "Ready-made text.\n\n  ````\n  indented fence\n  ````",
+        );
+        const installed = merge({ templateContent: TEMPLATE, selected: ["code_style"] });
+        const filled = installed.content.replace("Ready-made text.", "Our own style.");
+        const result = merge({
+            templateContent: withIndented,
+            installed: filled,
+            lockHashes: installed.blocks,
+            selected: ["code_style"],
+        });
+        const parsed = parseInstalledBlocks(result.content, ["code_style"]);
+        expect(parsed).not.toBeNull();
+        expect(parsed!.blocks.get("code_style")!.content).toContain("</FILL_INSTRUCTION>");
+    });
+
+    it("keeps an edited SETUP_REQUIRED region in place without re-adding it", () => {
+        const installed = merge({ templateContent: TEMPLATE, selected: ["project_map"] });
+        const edited = installed.content.replace(
+            "Replace every <FILL_INSTRUCTION> in this file with the content it describes, then remove this block.",
+            "Fill in the blocks below.",
+        );
+        const result = merge({
+            templateContent: TEMPLATE,
+            installed: edited,
+            lockHashes: installed.blocks,
+            selected: ["project_map"],
+        });
+        expect(result.content).toContain("<SETUP_REQUIRED>\nFill in the blocks below.\n</SETUP_REQUIRED>");
+        expect(result.content.match(/<SETUP_REQUIRED>/g)).toHaveLength(1);
+    });
+
+    it("renders a CRLF template with LF line endings", () => {
+        const result = merge({ templateContent: TEMPLATE.replace(/\n/g, "\r\n"), selected: ["project_map"] });
+        expect(result.content).toBe(EXPECTED_ISSUE_RENDER);
+    });
+
+    it("merges a CRLF installed file to LF output", () => {
+        const installed = merge({ templateContent: TEMPLATE, selected: ["project_map"] });
+        const result = merge({
+            templateContent: TEMPLATE,
+            installed: installed.content.replace(/\n/g, "\r\n"),
+            lockHashes: installed.blocks,
+            selected: ["project_map"],
+        });
+        expect(result.content).not.toContain("\r");
+        expect(result.content).toBe(installed.content);
+        expect(result.blocks).toEqual(installed.blocks);
     });
 
     it("C == T is a clean replace, not a conflict", () => {

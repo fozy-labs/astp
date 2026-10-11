@@ -271,6 +271,7 @@ function inspectBlockFile(
         }
     }
     if (parsed.outsideText.trim() !== "") info.dirty = true;
+    if (parsed.setup?.edited) info.dirty = true;
 }
 
 const LEGACY_FILE_DIRS = ["agents", "rules"];

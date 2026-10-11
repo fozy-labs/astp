@@ -47,7 +47,7 @@ async function main(): Promise<void> {
     const errors = [
         ...validateManifestSources(manifest),
         ...(await validateSkillFiles(locations)),
-        ...(await validateMarkdownBlocks(manifest)),
+        ...(await validateTemplateBlocks(manifest)),
     ];
     if (errors.length > 0) {
         console.error(`${MANIFEST_PATH} and templates/ disagree:`);
@@ -155,19 +155,18 @@ export async function findBlockSkillDirs(manifest: Manifest): Promise<Set<string
     return excluded;
 }
 
-/** Reads every `.md` manifest item and reports `<astp-block>` parse errors. */
-async function validateMarkdownBlocks(manifest: Manifest): Promise<string[]> {
+/** Reads every manifest item that is `.md` or contains blocks and reports `<astp-block>` parse errors. */
+async function validateTemplateBlocks(manifest: Manifest): Promise<string[]> {
     const contents = new Map<string, string>();
     const errors: string[] = [];
     for (const bundle of Object.values(manifest.bundles)) {
         for (const item of bundle.items) {
-            if (!item.target.endsWith(".md")) continue;
             const content = await readFileOrNull(path.join(REPO_ROOT, TEMPLATES_DIR, item.source));
             if (content === null) {
                 errors.push(`${item.source}: listed in the manifest but missing on disk`);
                 continue;
             }
-            contents.set(item.source, content);
+            if (item.target.endsWith(".md") || hasBlocks(content)) contents.set(item.source, content);
         }
     }
     return [...errors, ...validateBlockSources(contents)];
