@@ -3,6 +3,7 @@ name: fozy-labs-fsd
 description: >
   Feature-Sliced Design (FSD) v2.1 — deciding which layer, slice and segment a piece of
   frontend code belongs to, plus the fozy-labs conventions.
+license: MIT
 ---
 
 # Feature-Sliced Design

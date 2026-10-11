@@ -3,6 +3,7 @@ name: fozy-labs-rx-api
 description: >
     Server-state layer for js/ts projects based on the Query module of @fozy-labs/rx-toolkit
     (createApi / createResource / createCommand) — caching, SWR, optimistic updates, React hooks.
+license: MIT
 ---
 
 # @fozy-labs/rx-toolkit — Query

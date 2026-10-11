@@ -2,6 +2,7 @@
 name: fozy-labs-di
 description: >
   Dependency injection for js/ts projects based on @fozy-labs/simplest-di package.
+license: MIT
 ---
 
 # @fozy-labs/simplest-di

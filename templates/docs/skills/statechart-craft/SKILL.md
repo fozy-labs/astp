@@ -3,6 +3,7 @@ name: statechart-craft
 description: >
     Authoring a state machine as a Mermaid schema — the stateDiagram-v2 subset with `%% @…` directives,
     the statechart-convert CLI and the typed *.generated.ts it emits.
+license: MIT
 ---
 
 # Statechart craft
