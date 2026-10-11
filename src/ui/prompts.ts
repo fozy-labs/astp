@@ -557,7 +557,7 @@ export async function confirmDelete(
 export function showCheckReport(
     report: UpdateReport,
     target: InstallTargetType,
-    changed: Array<{ path: string; modified: boolean }>,
+    changed: Array<{ path: string; modified: boolean; force: "replace" | "delete" | null }>,
 ): void {
     const lines: string[] = [];
     lines.push("Bundle         Installed   Available   Status");
@@ -593,11 +593,16 @@ export function showCheckReport(
 
     if (changed.length > 0) {
         lines.push("");
-        lines.push(
-            `Changed locally — \`astp update\` keeps them; \`astp update --force --target ${target}\` replaces the modified ones:`,
-        );
+        lines.push(`Changed locally — \`astp update\` keeps them:`);
         for (const unit of changed) {
-            lines.push(`  • ${unit.path} — ${unit.modified ? "modified" : "text edited"}`);
+            const label = unit.modified ? "modified" : "text edited";
+            const hint =
+                unit.force === "delete"
+                    ? `, removed upstream; \`astp update --force --target ${target}\` deletes it`
+                    : unit.force === "replace"
+                      ? `; \`astp update --force --target ${target}\` replaces it`
+                      : "";
+            lines.push(`  • ${unit.path} — ${label}${hint}`);
         }
     }
 

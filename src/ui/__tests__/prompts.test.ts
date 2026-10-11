@@ -343,16 +343,19 @@ describe("legacy migration prompts", () => {
 
         vi.mocked(p.log.info).mockClear();
         showCheckReport(report, "project", [
-            { path: "skills/foo", modified: true },
-            { path: "rules/working-agreement.md", modified: false },
+            { path: "skills/foo", modified: true, force: "replace" },
+            { path: "rules/x.md", modified: true, force: "delete" },
+            { path: "rules/y.md", modified: false, force: null },
         ]);
 
         const text = String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0]);
+        expect(text).toContain("Changed locally — `astp update` keeps them:");
+        expect(text).toContain("  • skills/foo — modified; `astp update --force --target project` replaces it");
         expect(text).toContain(
-            "Changed locally — `astp update` keeps them; `astp update --force --target project` replaces the modified ones:",
+            "  • rules/x.md — modified, removed upstream; `astp update --force --target project` deletes it",
         );
-        expect(text).toContain("  • skills/foo — modified");
-        expect(text).toContain("  • rules/working-agreement.md — text edited");
+        expect(text).toContain("  • rules/y.md — text edited");
+        expect(text).not.toContain("replaces the modified ones");
     });
 
     it("appends nothing when no units changed locally", () => {

@@ -1,4 +1,4 @@
-import { compareVersions, loadInstalled } from "@/core/index.js";
+import { compareVersions, groupTemplateItems, loadInstalled } from "@/core/index.js";
 import type { InstallTargetType, Platform } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { selectPlatform, selectTarget, showCheckReport, showInfo, spinner } from "@/ui/prompts.js";
@@ -36,11 +36,25 @@ export async function executeCheck(options: CheckOptions): Promise<void> {
                 entry.manifest,
             ),
         );
-        const changed = installed.bundles.flatMap((bundle) =>
-            bundle.units
+        const changed = installed.bundles.flatMap((bundle) => {
+            const manifestBundle = opened.get(bundle.bundleName)!.manifest.bundles[bundle.bundleName];
+            const manifestUnits = manifestBundle ? groupTemplateItems(manifestBundle.items) : [];
+            return bundle.units
                 .filter((unit) => unit.origin === "lock" && (unit.state === "modified" || unit.blocks?.dirty))
-                .map((unit) => ({ path: unit.relativePath, modified: unit.state === "modified" })),
-        );
+                .map((unit) => {
+                    const inManifest = manifestUnits.some(
+                        (candidate) => candidate.relativePath === unit.relativePath && candidate.kind === unit.kind,
+                    );
+                    const force: "replace" | "delete" | null = !manifestBundle
+                        ? null
+                        : inManifest
+                          ? unit.state === "modified"
+                              ? "replace"
+                              : null
+                          : "delete";
+                    return { path: unit.relativePath, modified: unit.state === "modified", force };
+                });
+        });
         showCheckReport(mergeReports(reports), target.type, changed);
     } finally {
         await sources.close();
