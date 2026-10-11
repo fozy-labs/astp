@@ -25,6 +25,7 @@ Upgrading from 0.3.x: [migration steps](../README.md#upgrading-from-03x).
 - **Breaking:** install state moves from `astp-*` frontmatter to `astp.lock` in the install root;
   0.3.x cannot manage migrated installs.
 - **Breaking:** a skill is managed as a whole directory, including its references and assets.
+- The license is MIT instead of GPL-3.0-or-later, for the CLI and the bundles in `templates/`.
 
 ### Removed
 
