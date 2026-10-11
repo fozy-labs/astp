@@ -23,15 +23,13 @@ Upgrading from 0.3.x: [migration steps](../README.md#upgrading-from-03x).
 ### Changed
 
 - **Breaking:** install state moves from `astp-*` frontmatter to `astp.lock` in the install root;
-  commit it with the installed files. `astp update` migrates clean 0.3.x installs; 0.3.x cannot
-  manage migrated ones.
+  0.3.x cannot manage migrated installs.
 - **Breaking:** a skill is managed as a whole directory, including its references and assets.
 
 ### Removed
 
 - **Breaking:** the VS Code Copilot platform (`--platform vscode`) and its `base` and `rdpi`
-  bundles; Claude Code is the only platform. Existing `.github/` and `~/.copilot/` installs are
-  left untouched.
+  bundles; Claude Code is the only platform.
 
 ### Fixed
 
