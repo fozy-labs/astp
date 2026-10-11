@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-12
+
 Upgrading from 0.3.x: [migration steps](../README.md#upgrading-from-03x).
 
 ### Added
@@ -41,4 +43,5 @@ Upgrading from 0.3.x: [migration steps](../README.md#upgrading-from-03x).
 - Without a terminal, a command missing arguments waited for a prompt forever. Now it fails with
   an error naming what to pass.
 
-[Unreleased]: https://github.com/fozy-labs/astp/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/fozy-labs/astp/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/fozy-labs/astp/compare/v0.3.1...v0.4.0
