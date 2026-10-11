@@ -89,7 +89,7 @@ The same `target` path lands under the platform's own root, so write bundle item
 
 1. Add the file under the bundle's directory, in the appropriate category subdirectory.
 2. Add a new item entry to the bundle's `items` array in `manifest.json`.
-3. Bump the bundle's patch version (e.g., `"1.0.0"` → `"1.0.1"` for content fixes, `"1.1.0"` for new files).
+3. Bump the bundle's minor version (e.g., `"1.0.0"` → `"1.1.0"`); see [Versioning](#versioning).
 
 ## Versioning
 
@@ -129,7 +129,7 @@ Rules:
 - On install a block renders as `<project_map>…</project_map>` — the name becomes the tag. `SETUP_REQUIRED`/`FILL_INSTRUCTION` are CLI tags and are always uppercase.
 - A skill containing a file with blocks is excluded from `.claude-plugin/marketplace.json` — only astp understands blocks. `npm run generate:skills` fails on block parse errors in any manifest item that is `.md` or has blocks.
 
-Lock state: a unit with blocks stores `blocks` (`<file>#<name>` → block hash) and `declinedBlocks` in `astp.lock`; the unit `hash` covers only the frontmatter.
+Lock state: a unit with blocks stores `blocks` (`<file>#<name>` → block hash) and `declinedBlocks` in `astp.lock`; a block file adds only its frontmatter to the unit `hash`.
 
 | Action | Result |
 |--------|--------|
@@ -139,4 +139,4 @@ Lock state: a unit with blocks stores `blocks` (`<file>#<name>` → block hash) 
 
 ## Install State
 
-Files without blocks remain byte-identical to template sources. Files with blocks merge per block (see above) and are written with LF line endings. Install state is recorded in `astp.lock` at the target root.
+Files without blocks remain byte-identical to template sources. Files with blocks merge per block (see above) and are written with LF line endings. A skill directory is one unit: its hash covers every file in it, and install, update and delete handle it as a whole. Install state is recorded in `astp.lock` at the target root.
