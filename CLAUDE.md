@@ -18,12 +18,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `src/` - CLI source; `@/*` aliases `src/*`
   - `cli.ts` - commander entry, parses `--platform` / `--target`; no subcommand → wizard
   - `commands/` - one `execute*` per command: install, update, check, delete, list
+    - `sources.ts` - open each `--source` / lock source once per command, merge reports
+    - `blocks.ts` - resolve `--block` values and the blocks the install tree offers and pre-checks
   - `core/` - no UI; everything goes through `core/index.ts`
     - `manifest.ts` - validate `templates/manifest.json`
+    - `source.ts` - parse a `--source` / lock source, format it for `astp.lock`
     - `fetcher.ts` - download a bundle dir into a temp dir
     - `installer.ts` - write an agent/rule file or a whole skill dir under the install root, path-traversal guard
     - `path-safety.ts` - shared path guards
     - `blocks.ts` - pure `<astp-block>` parser and per-block merge; also used by `scripts/`
+    - `unit-blocks.ts` - read the block files of a downloaded unit
     - `units.ts` - group manifest items: one unit per skill dir, one per other file
     - `skill-tree.ts` - skill dir hash over all its files
     - `frontmatter.ts` - read / strip legacy `astp-*` fields, `description`, content hash
@@ -33,7 +37,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `types/` - `Manifest`, `Bundle`, `Platform`
     - `platform.ts` - bundle ↔ platform filter
     - `resolve-target.ts` - platform × project/user → root dir (`.claude`, `$CLAUDE_CONFIG_DIR` or `~/.claude`)
-  - `ui/` - `@clack/prompts` wizard and prompts
+  - `ui/` - `@clack/prompts` wizard and prompts; `format.ts` - unit counts and printed retry commands
 - `templates/` - shipped bundles; author guide in [templates/README.md](templates/README.md)
   - `manifest.json` - source of truth: bundles, versions, platforms, `source` → `target` items
   - `<bundle>/` - astp, fozy-labs, docs, design, agreement
@@ -41,8 +45,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `tests/`
   - `e2e/` - command flows with `fetchManifest` / `downloadBundle` mocked, no network, plus a real-CLI no-terminal test
   - `scripts/` - marketplace generator tests
+- `docs/CHANGELOG.md` - CLI release notes, Keep a Changelog
 - `.claude-plugin/marketplace.json` - generated for `npx skills`; never edit by hand
-- `.claude/skills/markdown-craft/` - this repo's own astp-installed copy; edit `templates/docs/...` instead
 
 ## Architecture
 
@@ -65,3 +69,4 @@ flowchart LR
 - A new platform needs an entry in `ALL_PLATFORMS` and in `PLATFORM_ROOTS` (`resolve-target.ts`).
 
 Commits follow Conventional Commits with scopes such as `templates`, `fozy-labs`, `markdown-craft`, `claude-code`; releases are `chore(release): vX.Y.Z` plus a `v*` tag.
+Consumer-visible CLI changes get an entry under `## [Unreleased]` in `docs/CHANGELOG.md`; the release commit turns that heading into the version.

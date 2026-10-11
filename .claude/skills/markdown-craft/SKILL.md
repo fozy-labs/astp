@@ -1,10 +1,17 @@
 ---
 name: markdown-craft
-description: Rules for authoring and maintaining Markdown documents
+description: >-
+    Authoring and maintenance rules for Markdown: documentation, specs, reports,
+    READMEs, changelogs, CLAUDE.md and skill files, issue and PR bodies and comments,
+    multi-section chat replies, and large comment blocks in code. Covers one home per
+    fact, document bloat, qualifiers, cross-references as Markdown links instead of §N,
+    Mermaid diagrams, hard specs and changelogs. Use when writing, editing,
+    restructuring or reviewing any such text. Not for one-line replies or short
+    inline code comments.
 astp-source: fozy-labs/astp
 astp-bundle: docs
-astp-version: 1.1.0
-astp-hash: f6972fde16ad93e107f56f5f79a48fe43a5cc624d964092ea96f63f1ae3a9f7b
+astp-version: 1.3.2
+astp-hash: 1cf993332c23bad5b3eb17e121bc53f5670f5b983f9cb18675f0a160c22392e5
 ---
 
 # Markdown craft
@@ -60,7 +67,29 @@ This does not ban rationale. What the reader must act on stays, at full length: 
 that changes what someone does — "flip this flag and you inherit that obligation" — is a
 decision, not derivation, and never compresses to a marker.
 
-## 3. Structure
+## 3. Qualifiers
+
+A qualifier — an adjective, a parenthetical, a narrowing noun — is a claim, held to the
+same standard as the sentence it modifies.
+
+- **False precision.** A qualifier true of the example in front of you but not of every
+  case the sentence covers. It reads as authoritative and gets copied into code: "a `.mmd`
+  Mermaid schema" (Mermaid also lives in `.md`), "created once per module" (once — and one
+  module may hold several), "actions are referenced by name" (inline functions are legal
+  too). Widen it or drop it.
+- **Redundant precision.** A qualifier the reader already gets from the term it qualifies:
+  explaining that `unstable_` is a prefix, "(experimental)" next to an `unstable_` name,
+  "external inspector" for a field named `inspector`.
+- **Evaluative filler.** "the natural fit for", "for free", "is supported", "note that",
+  "also remember" — nothing the reader can act on, and it buries the sentence's real verb.
+
+**Qualifier test.** Two questions per qualifier: is it true of *every* case the sentence
+covers, and does the sentence lose meaning without it? A no to either — the qualifier goes.
+
+A qualifier the reader acts on is not a qualifier, it is the fact: version bounds, platform
+limits, "only in dev builds" stay.
+
+## 4. Structure
 
 - Reference documents longer than ~100 lines start with a contents list — partial
   reads must still reveal the full scope.
@@ -70,14 +99,15 @@ decision, not derivation, and never compresses to a marker.
   inside diagram text), backed by an explicitly frozen numbering.
 - Brevity is IMPORTANT: assume a competent reader, cut scaffolding prose.
 
-## 4. Links and anchors
+## 5. Links and anchors
 
 - Every link target must exist at write time — the file AND the `#anchor`. Anchors
   derive from heading text, so a heading rename is an API break: 
   found inbound links and fix referrers.
-- "see above/below" — must be links.
+- **Link the words, not a pointer to them.** A link on a term or phrase is the light default;
+  a sentence that only points somewhere adds weight, so it must earn it.
 
-## 5. Maintenance
+## 6. Maintenance
 
 Editing scope is the fact, not the dry diff:
 
@@ -89,13 +119,18 @@ Editing scope is the fact, not the dry diff:
 - No self-aging phrasing: "currently", "new", "recently", "will soon" rot silently.
   State the version or date explicitly, or state the timeless fact.
 
-## 6. Diagrams — load the reference
+## 7. Diagrams — load the reference
 
 Before writing or editing ANY Mermaid diagram, load [references/mermaid-craft.md](references/mermaid-craft.md).
 
-## 7. Hard specs — load the reference
+## 8. Hard specs — load the reference
 
 A **hard spec** — a specification, design doc, or any long technical document under revision —
 has failure modes the rules above do not cover. Before writing, compressing, restructuring,
 reviewing or acting on a review finding against one, load
 [references/hard-spec.md](references/hard-spec.md).
+
+## 9. Changelogs — load the reference
+
+Before writing or editing an changelog, or closing a release section, load
+[references/changelog.md](references/changelog.md).
