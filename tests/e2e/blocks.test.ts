@@ -853,5 +853,25 @@ describe("E2E: blocks", () => {
                 { name: "added", key: `${RULES_FILE}#added`, status: "new", optional: false, required: false },
             ]);
         });
+
+        it("list text output shows each unit's blocks under the unit row", async () => {
+            mockIsInteractive.mockReturnValue(true);
+            treeChoice(undefined, []);
+            await install();
+            mockIsInteractive.mockReturnValue(false);
+
+            const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+            await executeList({ bundle: "blocks", platform: "claude-code", target: "project" });
+            const output = write.mock.calls.map((call) => String(call[0])).join("");
+            write.mockRestore();
+
+            const rows = output.split("\n");
+            const unitRow = rows.findIndex((row) => row.includes("claude-md.md"));
+            const projectMap = rows.findIndex((row) => row.includes("project_map"));
+            expect(projectMap).toBeGreaterThan(unitRow);
+            expect(rows[projectMap]).toMatch(/selected\s+required/);
+            expect(rows.find((row) => row.includes("extra"))).toMatch(/declined\s*$/);
+            expect(rows.find((row) => row.includes("code_style"))).toMatch(/declined\s+optional/);
+        });
     });
 });

@@ -36,7 +36,12 @@ export async function executeCheck(options: CheckOptions): Promise<void> {
                 entry.manifest,
             ),
         );
-        showCheckReport(mergeReports(reports), target.type);
+        const changed = installed.bundles.flatMap((bundle) =>
+            bundle.units
+                .filter((unit) => unit.origin === "lock" && (unit.state === "modified" || unit.blocks?.dirty))
+                .map((unit) => ({ path: unit.relativePath, modified: unit.state === "modified" })),
+        );
+        showCheckReport(mergeReports(reports), target.type, changed);
     } finally {
         await sources.close();
     }

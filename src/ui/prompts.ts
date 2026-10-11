@@ -554,7 +554,11 @@ export async function confirmDelete(
     return confirmed;
 }
 
-export function showCheckReport(report: UpdateReport, target: InstallTargetType): void {
+export function showCheckReport(
+    report: UpdateReport,
+    target: InstallTargetType,
+    changed: Array<{ path: string; modified: boolean }>,
+): void {
     const lines: string[] = [];
     lines.push("Bundle         Installed   Available   Status");
 
@@ -584,6 +588,16 @@ export function showCheckReport(report: UpdateReport, target: InstallTargetType)
                   ? `run \`astp update --target ${target}\` to migrate.`
                   : `modified locally — \`astp update --force --target ${target}\` replaces it.`;
             lines.push(`${unit.bundleName}: legacy ${unit.kind} ${unit.targetPath} — ${guidance}`);
+        }
+    }
+
+    if (changed.length > 0) {
+        lines.push("");
+        lines.push(
+            `Changed locally — \`astp update\` keeps them; \`astp update --force --target ${target}\` replaces the modified ones:`,
+        );
+        for (const unit of changed) {
+            lines.push(`  • ${unit.path} — ${unit.modified ? "modified" : "text edited"}`);
         }
     }
 
