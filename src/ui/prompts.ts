@@ -24,6 +24,14 @@ import { describeUnitCounts, formatCount, installRetry, UNIT_COUNT_KINDS, unitCo
 export const intro = p.intro;
 export const outro = p.outro;
 export const spinner = p.spinner;
+export const cancel = p.cancel;
+
+export class CancelledError extends Error {
+    constructor(message = "Cancelled.") {
+        super(message);
+        this.name = "CancelledError";
+    }
+}
 
 export function isInteractive(): boolean {
     return Boolean(process.stdin.isTTY && process.stdout.isTTY);
@@ -46,10 +54,7 @@ export async function selectAction(): Promise<"install" | "update" | "check" | "
         ],
     });
 
-    if (p.isCancel(action)) {
-        p.cancel("Cancelled.");
-        process.exit(0);
-    }
+    if (p.isCancel(action)) throw new CancelledError();
 
     return action;
 }
@@ -69,10 +74,7 @@ export async function selectPlatform(): Promise<Platform> {
         options: ALL_PLATFORMS.map((value) => ({ value, label: PLATFORM_LABELS[value] })),
     });
 
-    if (p.isCancel(platform)) {
-        p.cancel("Cancelled.");
-        process.exit(0);
-    }
+    if (p.isCancel(platform)) throw new CancelledError();
 
     return platform;
 }
@@ -90,10 +92,7 @@ export async function selectTarget(platform: Platform): Promise<InstallTarget> {
         ],
     });
 
-    if (p.isCancel(type)) {
-        p.cancel("Cancelled.");
-        process.exit(0);
-    }
+    if (p.isCancel(type)) throw new CancelledError();
 
     return resolveTarget(platform, type as InstallTargetType);
 }
@@ -369,8 +368,7 @@ function unitKey(entry: BundleEntry, unit: TemplateUnit): string {
 }
 
 export function cancelNoBundles(platform: Platform): never {
-    p.cancel(`No bundles available for platform '${platform}'.`);
-    process.exit(0);
+    throw new CancelledError(`No bundles available for platform '${platform}'.`);
 }
 
 export async function selectBundleItems(entries: BundleEntry[]): Promise<Map<string, BundleChoice>> {
@@ -465,10 +463,7 @@ export async function selectBundleItems(entries: BundleEntry[]): Promise<Map<str
 
     const selected = await prompt.prompt();
 
-    if (p.isCancel(selected)) {
-        p.cancel("Cancelled.");
-        process.exit(0);
-    }
+    if (p.isCancel(selected)) throw new CancelledError();
 
     return selected as Map<string, BundleChoice>;
 }
@@ -487,10 +482,7 @@ export async function confirmInstall(
         )}) to ${targetLabel}?`,
     });
 
-    if (p.isCancel(confirmed)) {
-        p.cancel("Cancelled.");
-        process.exit(0);
-    }
+    if (p.isCancel(confirmed)) throw new CancelledError();
 
     return confirmed;
 }
@@ -506,10 +498,7 @@ export async function selectNewUnits(bundleName: string, units: TemplateUnit[]):
         initialValues: units.map((unit) => unit.relativePath),
         required: false,
     });
-    if (p.isCancel(selected)) {
-        p.cancel("Cancelled.");
-        process.exit(0);
-    }
+    if (p.isCancel(selected)) throw new CancelledError();
     return selected as string[];
 }
 
@@ -520,10 +509,7 @@ export async function selectBlocks(unitPath: string, blocks: BlockOption[], init
         initialValues: initial,
         required: false,
     });
-    if (p.isCancel(selected)) {
-        p.cancel("Cancelled.");
-        process.exit(0);
-    }
+    if (p.isCancel(selected)) throw new CancelledError();
     return selected as string[];
 }
 
@@ -543,10 +529,7 @@ export async function selectInstalledBundles(installed: InstalledBundle[]): Prom
         required: true,
     });
 
-    if (p.isCancel(selected)) {
-        p.cancel("Cancelled.");
-        process.exit(0);
-    }
+    if (p.isCancel(selected)) throw new CancelledError();
 
     const selectedNames = new Set(selected as string[]);
     return installed.filter((bundle) => selectedNames.has(bundle.bundleName));
@@ -566,10 +549,7 @@ export async function confirmDelete(
         )}) from ${targetLabel}${force ? " with --force" : ""}?`,
     });
 
-    if (p.isCancel(confirmed)) {
-        p.cancel("Cancelled.");
-        process.exit(0);
-    }
+    if (p.isCancel(confirmed)) throw new CancelledError();
 
     return confirmed;
 }
@@ -711,6 +691,12 @@ export function warnBlockConflicts(keys: string[]): void {
 export function warnLegacyModified(files: FileStatus[], command: string): void {
     const paths = files.map((file) => `  • ${file.targetPath}`).join("\n");
     p.log.warn(`Legacy units modified locally — skipped:\n${paths}\nRun \`${command}\` to replace them.`);
+}
+
+export function warnUnavailable(entries: Array<{ bundle: string; message: string }>, target: InstallTargetType): void {
+    p.log.warn(
+        `Unavailable, not shown:\n${entries.map((entry) => `  • ${entry.bundle}: ${entry.message}`).join("\n")}\nTo read a bundle from another source: astp install <bundle> --source <spec> --target ${target}`,
+    );
 }
 
 export function showSuccess(message: string): void {

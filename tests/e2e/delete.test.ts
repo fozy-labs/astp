@@ -194,6 +194,12 @@ describe("E2E: delete", () => {
         await expect(executeUpdate({ platform: "claude-code", target: "project" })).resolves.toBeUndefined();
     });
 
+    it("rejects a named bundle when the target has no astp-managed files", async () => {
+        await expect(
+            executeDelete({ bundle: "typo", skills: ["typo"], platform: "claude-code", target: "project" }),
+        ).rejects.toThrow(/not found/);
+    });
+
     it("removes modified files with force", async () => {
         await installPipeline();
 

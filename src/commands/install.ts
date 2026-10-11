@@ -37,6 +37,7 @@ import {
     warnLegacyModified,
     warnModified,
     warnReleased,
+    warnUnavailable,
 } from "@/ui/prompts.js";
 
 import { initialInstallBlocks, installBlockOptions, resolveBlockKeys, selectInstallBlocks } from "./blocks.js";
@@ -98,23 +99,36 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             : await sources.open(options.source ?? DEFAULT_SOURCE, options.source !== undefined ? "cli" : "lock");
 
         const candidates: Array<{ bundle: Bundle; source: OpenedSource }> = [];
+        const unavailable: Array<{ bundle: string; message: string }> = [];
         if (options.bundle) {
             candidates.push({ bundle: resolveBundle(primary.manifest, options.bundle), source: primary });
         } else {
             const manifestBundles = filterBundlesByPlatform(primary.manifest, platform);
             if (manifestBundles.length === 0) cancelNoBundles(platform);
             for (const { name } of manifestBundles) {
-                const source = await openFor(name);
-                candidates.push({ bundle: resolveBundle(source.manifest, name), source });
+                const spec = options.source ?? installedState.lock.bundles[name]?.source ?? DEFAULT_SOURCE;
+                let source: OpenedSource;
+                try {
+                    source = await openFor(name);
+                } catch (error) {
+                    unavailable.push({
+                        bundle: name,
+                        message: `Cannot read source '${spec}': ${errorMessage(error)}`,
+                    });
+                    continue;
+                }
+                try {
+                    const bundle = resolveBundle(source.manifest, name);
+                    assertBundlePlatform(bundle, platform);
+                    candidates.push({ bundle, source });
+                } catch (error) {
+                    unavailable.push({ bundle: name, message: errorMessage(error) });
+                }
             }
         }
         s.stop("Manifest fetched.");
         for (const { bundle } of candidates) {
-            if (!bundleSupportsPlatform(bundle, platform)) {
-                throw new Error(
-                    `Bundle '${bundle.name}' does not support platform '${platform}'. Supported: ${getBundlePlatforms(bundle).join(", ")}`,
-                );
-            }
+            assertBundlePlatform(bundle, platform);
         }
 
         // Block choices need the template content, so every candidate is
@@ -123,17 +137,33 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
         s.start(candidates.length === 1 && only ? `Downloading ${only.bundle.name}...` : "Downloading bundles...");
         const downloaded: DownloadedBundle[] = [];
         for (const { bundle, source } of candidates) {
-            const units = groupTemplateItems(bundle.items);
-            validateUnitTargets(target.rootDir, units);
-            const tempDir = await downloadBundle(source.source, bundle);
-            tempDirs.push(tempDir);
-            await assertBundleSources(tempDir, bundle.name, units);
-            await assertBundleBlocks(tempDir, bundle.name, units);
-            const unitBlockFiles = new Map<string, Map<string, UnitBlockFile>>();
-            for (const unit of units) unitBlockFiles.set(unit.relativePath, await readUnitBlockFiles(tempDir, unit));
-            downloaded.push({ bundle, source, tempDir, units, unitBlockFiles });
+            try {
+                const units = groupTemplateItems(bundle.items);
+                validateUnitTargets(target.rootDir, units);
+                const tempDir = await downloadBundle(source.source, bundle);
+                tempDirs.push(tempDir);
+                await assertBundleSources(tempDir, bundle.name, units);
+                await assertBundleBlocks(tempDir, bundle.name, units);
+                const unitBlockFiles = new Map<string, Map<string, UnitBlockFile>>();
+                for (const unit of units)
+                    unitBlockFiles.set(unit.relativePath, await readUnitBlockFiles(tempDir, unit));
+                downloaded.push({ bundle, source, tempDir, units, unitBlockFiles });
+            } catch (error) {
+                if (options.bundle !== undefined) throw error;
+                unavailable.push({ bundle: bundle.name, message: errorMessage(error) });
+            }
         }
         s.stop(candidates.length === 1 && only ? `Downloaded ${only.bundle.name}.` : "Downloaded bundles.");
+        if (unavailable.length > 0) {
+            if (downloaded.length === 0) {
+                throw new Error(
+                    `No bundle could be read:\n${unavailable
+                        .map((entry) => `  • ${entry.bundle}: ${entry.message}`)
+                        .join("\n")}`,
+                );
+            }
+            warnUnavailable(unavailable, target.type);
+        }
 
         let chosen: Map<string, BundleChoice> | undefined;
         if (isInteractive() && !additive) {
@@ -294,6 +324,18 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
         for (const tempDir of tempDirs) await fs.rm(tempDir, { recursive: true, force: true });
         await sources.close();
     }
+}
+
+function assertBundlePlatform(bundle: Bundle, platform: Platform): void {
+    if (!bundleSupportsPlatform(bundle, platform)) {
+        throw new Error(
+            `Bundle '${bundle.name}' does not support platform '${platform}'. Supported: ${getBundlePlatforms(bundle).join(", ")}`,
+        );
+    }
+}
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
 /** Units a bundle installs without customization: everything minus the lock's declines. */

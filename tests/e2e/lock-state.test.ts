@@ -25,6 +25,7 @@ import {
     warnLegacyModified,
     warnModified,
     warnReleased,
+    warnUnavailable,
 } from "@/ui/prompts.js";
 
 import { canSymlinkFiles } from "../../src/__tests__/links.js";
@@ -64,6 +65,7 @@ vi.mock("@/ui/prompts.js", () => ({
     warnForeign: vi.fn(),
     warnLegacyModified: vi.fn(),
     warnModified: vi.fn(),
+    warnUnavailable: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
 
@@ -75,6 +77,7 @@ const mockConfirmDelete = vi.mocked(confirmDelete);
 const mockIsInteractive = vi.mocked(isInteractive);
 const mockSelectBundleItems = vi.mocked(selectBundleItems);
 const mockSelectNewUnits = vi.mocked(selectNewUnits);
+const mockWarnUnavailable = vi.mocked(warnUnavailable);
 
 function createManifest(
     version = "1.0.0",
@@ -322,7 +325,7 @@ describe("lock-file command flows", () => {
         expect(mockFetchManifest).not.toHaveBeenCalled();
     });
 
-    it("persists nothing when a later bundle download fails — all bundles download before any install", async () => {
+    it("skips a bundle whose download fails and installs the rest", async () => {
         manifest = createManifest("1.0.0", ["agents/guide.md"], ["first", "second"]);
         mockDownloadBundle.mockImplementation(async (_source, { name: bundleName }) => {
             if (bundleName === "second") throw new Error("download failed");
@@ -330,9 +333,14 @@ describe("lock-file command flows", () => {
             templateDirs.push(dir);
             return dir;
         });
-        await expect(executeInstall({ platform: "claude-code", target: "project" })).rejects.toThrow("download failed");
-        await expect(fs.access(path.join(rootDir, "astp.lock"))).rejects.toThrow();
-        expect(await fs.readdir(rootDir).catch(() => [])).not.toContain("agents");
+        await executeInstall({ platform: "claude-code", target: "project" });
+        expect(mockWarnUnavailable).toHaveBeenCalledWith(
+            [expect.objectContaining({ bundle: "second", message: "download failed" })],
+            "project",
+        );
+        const lock = JSON.parse(await fs.readFile(path.join(rootDir, "astp.lock"), "utf8"));
+        expect(Object.keys(lock.bundles)).toEqual(["first"]);
+        expect(await fs.readdir(rootDir)).toContain("agents");
     });
 
     it("prints detailed JSON list output without prompt noise", async () => {

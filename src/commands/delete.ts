@@ -48,13 +48,13 @@ export async function executeDelete(options: DeleteOptions): Promise<void> {
         ? resolveTarget(platform, options.target)
         : await selectTarget(platform);
     const installedState = await loadInstalled(target.rootDir);
-    if (installedState.bundles.length === 0) {
+    if (installedState.bundles.length === 0 && !options.bundle) {
         showInfo("No astp-managed files found.");
         return;
     }
 
     const selectedBundles = options.bundle
-        ? [resolveInstalledBundle(installedState.bundles, options.bundle)]
+        ? [resolveInstalledBundle(installedState.bundles, options.bundle, target.rootDir)]
         : await selectInstalledBundles(installedState.bundles);
     const targets = selectedBundles.map((bundle) => {
         if (!options.skills?.length) return bundle;
@@ -114,11 +114,13 @@ export async function executeDelete(options: DeleteOptions): Promise<void> {
     showSuccess(`Deleted ${countStatuses(removed)}${kept.length ? `, kept ${countStatuses(kept)}` : ""}`);
 }
 
-function resolveInstalledBundle(installed: InstalledBundle[], bundleName: string): InstalledBundle {
+function resolveInstalledBundle(installed: InstalledBundle[], bundleName: string, rootDir: string): InstalledBundle {
     const bundle = installed.find((entry) => entry.bundleName === bundleName);
     if (!bundle) {
         throw new Error(
-            `Installed bundle '${bundleName}' not found. Available: ${installed.map((entry) => entry.bundleName).join(", ")}`,
+            installed.length === 0
+                ? `Installed bundle '${bundleName}' not found: no astp-managed files in ${rootDir}`
+                : `Installed bundle '${bundleName}' not found. Available: ${installed.map((entry) => entry.bundleName).join(", ")}`,
         );
     }
     return bundle;
