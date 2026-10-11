@@ -559,6 +559,14 @@ describe("loadInstalled with blocks", () => {
         expect(unit.blocks).toEqual({ missing: false, dirty: true, edited: [] });
     });
 
+    it("an edited SETUP_REQUIRED region is dirty but still unmodified", async () => {
+        const unit = await setup(
+            `${TEMPLATE_FM}\n<SETUP_REQUIRED>\ncustom notes\n</SETUP_REQUIRED>\n\n<a>\n${BLOCK_CONTENT}</a>\n`,
+        );
+        expect(unit.state).toBe("unmodified");
+        expect(unit.blocks).toEqual({ missing: false, dirty: true, edited: [] });
+    });
+
     it("a deleted block is missing, not modified", async () => {
         const unit = await setup(`${TEMPLATE_FM}\n`);
         expect(unit.state).toBe("unmodified");
