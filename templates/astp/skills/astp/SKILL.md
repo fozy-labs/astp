@@ -14,7 +14,7 @@ Run `astp` if it is on PATH, otherwise `npx -y @fozy-labs/astp`. Below 0.4 (`ast
 
 ## Commands
 
-Without a terminal the CLI cannot prompt, so always pass `--target project` (`./.claude/`) or `--target user` (`~/.claude/`), and give `install` a bundle name. Ask the user which target when it is not clear.
+Without a terminal the CLI cannot prompt, so always pass `--target project` (`./.claude/`) or `--target user` (`$CLAUDE_CONFIG_DIR` if set, else `~/.claude/`), and give `install` a bundle name. Ask the user which target when it is not clear.
 
 | Goal | Command |
 |------|---------|

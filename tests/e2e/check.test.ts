@@ -1,3 +1,6 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+
 import { vi } from "vitest";
 
 import { executeCheck } from "@/commands/check.js";
@@ -113,5 +116,50 @@ describe("E2E: check", () => {
 
         expect(mockShowInfo).toHaveBeenCalledWith("No astp-managed files found.");
         expect(mockShowCheckReport).not.toHaveBeenCalled();
+    });
+
+    // T35: Check lists units changed locally — modified files and dirty block files
+    it("T35: passes locally changed units to the report", async () => {
+        manifest.bundles.pipeline!.items.push({
+            source: "pipeline/rules/fillable.rules.md",
+            target: "rules/fillable.rules.md",
+            category: "rule",
+        });
+        const tplDir = await setupTemplateDir(manifest, "pipeline", {
+            "rules/fillable.rules.md":
+                '---\ndescription: fillable\n---\n\n<astp-block name="a">\nfill me\n</astp-block>\n',
+        });
+        templateDirs.push(tplDir);
+        mockDownloadBundle.mockResolvedValue(tplDir);
+        await executeInstall({ bundle: "pipeline", platform: "claude-code", target: "project" });
+
+        const rootDir = makeProjectTarget(projectDir).rootDir;
+        await fs.appendFile(path.join(rootDir, "agents/pipeline-orchestrator.agent.md"), "\nlocal edit\n");
+        await fs.appendFile(path.join(rootDir, "agents/pipeline-approve.agent.md"), "\nlocal edit\n");
+        const blockFile = path.join(rootDir, "rules/fillable.rules.md");
+        await fs.writeFile(blockFile, (await fs.readFile(blockFile, "utf8")).replace("fill me", "filled in"));
+
+        manifest.bundles.pipeline!.items = manifest.bundles.pipeline!.items.filter(
+            (item) => item.target !== "agents/pipeline-orchestrator.agent.md",
+        );
+
+        vi.clearAllMocks();
+        mockFetchManifest.mockResolvedValue(manifest);
+        mockResolveTarget.mockReturnValue(makeProjectTarget(projectDir));
+
+        await executeCheck({ platform: "claude-code", target: "project" });
+
+        const changed = mockShowCheckReport.mock.calls[0]?.[2];
+        expect(changed).toContainEqual({
+            path: "agents/pipeline-orchestrator.agent.md",
+            modified: true,
+            force: "delete",
+        });
+        expect(changed).toContainEqual({
+            path: "agents/pipeline-approve.agent.md",
+            modified: true,
+            force: "replace",
+        });
+        expect(changed).toContainEqual({ path: "rules/fillable.rules.md", modified: false, force: null });
     });
 });

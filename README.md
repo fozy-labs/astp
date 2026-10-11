@@ -35,7 +35,7 @@ astp install fozy-labs --target project
 | `astp delete [bundle] [--skill <name>] [--force]` | Remove an installed bundle or selected units |
 | `astp list [bundle] [--source <spec>] [--json]` | List available and installed bundles or bundle units |
 
-All commands accept `--platform <claude-code>` and `--target <project|user>` to skip interactive prompts. Resolved roots:
+All commands accept `--platform <claude-code>` and `--target <project|user>`, which skip the platform and target prompts; in a terminal the other prompts of each command still run. Resolved roots:
 
 | Platform | `--target project` | `--target user` |
 |----------|--------------------|-----------------|
@@ -62,7 +62,7 @@ Plain `http://` is accepted only for `localhost`. `GIGET_AUTH` is sent only to G
 astp install [bundle] [--source <spec>] [--skill <name>]... [--block <name>]... [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Install template bundles. Locally modified or unmanaged files and skills are skipped by default (unmanaged ones are recorded as declined); use `--force` to overwrite them. Repeat `--skill` to add units by name or path, and `--block` to add blocks by name or by the `key` from `list --json`, installing the block's unit if needed; both keep the declined units and blocks, and scope `--force` to the named units and blocks. Without them, a non-interactive `install <bundle>` installs every unit, clears declined units, and re-selects every non-optional block. Without arguments, prompts for target directory and bundle selection (the platform prompt is skipped while only one platform is supported). Passing a bundle name with `--platform` and `--target` runs non-interactively. Bundles that don't support the requested platform are rejected with a clear error.
+Install template bundles. Locally modified or unmanaged files and skills are skipped by default (unmanaged ones are recorded as declined); use `--force` to overwrite them. Repeat `--skill` to add units by name or path, and `--block` to add blocks by name or by the `key` from `list --json`, installing the block's unit if needed; both keep the declined units and blocks, and scope `--force` to the named units and blocks. Without them, a non-interactive `install <bundle>` installs every unit, clears declined units, and re-selects every non-optional block. In a terminal, `install` asks to confirm; without `--skill` or `--block` it first opens a tree of bundles, units and blocks, listing every bundle when no name is given. Bundles that don't support the requested platform are rejected with a clear error.
 
 ### update
 
@@ -70,7 +70,7 @@ Install template bundles. Locally modified or unmanaged files and skills are ski
 astp update [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Update installed units to the latest version from each bundle's source in `astp.lock`. A non-interactive update also installs new units and keeps declined ones. Units and blocks dropped upstream are removed; modified ones are left in place and no longer tracked in `astp.lock`, unless `--force` is passed. Modified legacy units are kept unless `--force` is passed.
+Update installed units to the latest version from each bundle's source in `astp.lock`. A non-interactive update also installs new units and keeps declined ones. Units and blocks dropped upstream are removed; modified ones are left in place and no longer tracked in `astp.lock`, unless `--force` is passed. Modified legacy units are kept unless `--force` is passed. In a terminal, it first asks which new units and blocks to install.
 
 ### check
 
@@ -78,7 +78,7 @@ Update installed units to the latest version from each bundle's source in `astp.
 astp check [--platform <claude-code>] [--target <project|user>]
 ```
 
-Compare installed versions and unit state against each bundle's source in `astp.lock`. Out-of-sync bundles are reported and brought back in sync by `astp update`.
+Compare installed versions and unit state against each bundle's source in `astp.lock`. Out-of-sync bundles are reported and brought back in sync by `astp update`. Units changed locally are listed below the table; `astp update` keeps them.
 
 ### delete
 
@@ -86,7 +86,7 @@ Compare installed versions and unit state against each bundle's source in `astp.
 astp delete [bundle] [--skill <name>]... [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Remove the files of an installed bundle. Repeat `--skill` to select units by name or path. Without a bundle name, prompts to pick from the bundles found in the target. Modified files are kept by default — use `--force` to delete them too.
+Remove the files of an installed bundle. Repeat `--skill` to select units by name or path. Without a bundle name, prompts to pick from the bundles found in the target. In a terminal, it asks to confirm. Modified files are kept by default — use `--force` to delete them too.
 
 ### list
 
@@ -94,17 +94,17 @@ Remove the files of an installed bundle. Repeat `--skill` to select units by nam
 astp list [bundle] [--source <spec>] [--json] [--platform <claude-code>] [--target <project|user>]
 ```
 
-List bundles and installed unit state. Add a bundle name for per-unit status and descriptions; `--json` prints machine-readable output; units with blocks list each block's `name`, `key`, `status` (`selected`, `declined`, or `new`), `optional`, and `required`.
+List bundles and installed unit state. Add a bundle name for per-unit status and descriptions, with each unit's blocks and their status; `--json` prints machine-readable output; units with blocks list each block's `name`, `key`, `status` (`selected`, `declined`, or `new`), `optional`, and `required`.
 
 ## Bundles
 
-| Bundle | Files | Description | Default |
-|--------|-------|-------------|---------|
-| `astp` | 1 | astp CLI skill — install, update and fill astp bundles from an agent | No |
-| `fozy-labs` | 34 | Fozy Labs stack skills (DI, FSD, rx-api, signals) | No |
-| `docs` | 6 | Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas | No |
-| `design` | 13 | Design decision derivation — gated procedure for interface, layout, and visual design choices | No |
-| `agreement` | 1 | Working agreement rule — how the agent decides, asks, scopes changes and writes for the user | No |
+| Bundle | Contents | Description | Default |
+|--------|----------|-------------|---------|
+| `astp` | 1 skill | astp CLI skill — install, update and fill astp bundles from an agent | No |
+| `fozy-labs` | 4 skills | Fozy Labs stack skills (DI, FSD, rx-api, signals) | No |
+| `docs` | 2 skills | Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas | No |
+| `design` | 1 skill | Design decision derivation — gated procedure for interface, layout, and visual design choices | No |
+| `agreement` | 1 rule | Working agreement rule — how the agent decides, asks, scopes changes and writes for the user | No |
 
 - **astp** ships the `astp` skill: how an agent runs the CLI without prompts, when to ask before `--force`, and how to fill `<SETUP_REQUIRED>` blocks.
 - **fozy-labs** ships four skills covering the `@fozy-labs` stack — `simplest-di`, Feature-Sliced Design v2.1, `rx-toolkit` server state, and `rx-toolkit` signals. All four use progressive disclosure: a short `SKILL.md` plus `references/*.md` loaded only when the situation calls for them. It installs under `.claude/skills/`.
@@ -129,7 +129,7 @@ Discovery is driven by `.claude-plugin/marketplace.json`, generated from `templa
 
 ## CI/CD
 
-For CI environments or scripted usage, pass `--platform` and `--target` to avoid interactive prompts. Without a terminal astp never prompts: a missing `--target`, or a missing bundle name for `install` and `delete`, exits with code 1 and an error.
+Without a terminal astp never prompts: a missing `--target`, or a missing bundle name for `install` and `delete`, exits with code 1 and an error. Pass `--platform` and `--target` in CI and scripts.
 
 ```bash
 # Install Fozy Labs skills
@@ -153,7 +153,10 @@ astp install fozy-labs --platform claude-code --target project
 
 `astp` fetches template files from the [`fozy-labs/astp`](https://github.com/fozy-labs/astp) GitHub repository using [giget](https://github.com/unjs/giget). A `manifest.json` file in the repository defines available bundles, their versions, and file mappings. Install state lives in `astp.lock`; commit it in projects. Installed files without blocks are byte-identical to their templates.
 
-Installs from astp ≤ 0.3.1 carry `astp-*` fields — `astp update` migrates unmodified ones, and `astp update --force` replaces modified ones.
+### Upgrading from 0.3.x
+
+- Install state moved from `astp-*` frontmatter fields to `astp.lock`: `astp update` migrates unmodified units, and `astp update --force` replaces modified ones.
+- The VS Code platform (`--platform vscode`) and the `base` and `rdpi` bundles are gone. astp no longer reads or changes `.github/` and `~/.copilot/` installs; remove those files by hand if you no longer need them.
 
 ## Maintaining
 

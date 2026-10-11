@@ -329,13 +329,44 @@ describe("legacy migration prompts", () => {
         };
 
         vi.mocked(p.log.info).mockClear();
-        showCheckReport(report, "user");
+        showCheckReport(report, "user", []);
 
         const reportText = String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0]);
         expect(reportText).toContain("core: legacy skill skills/current");
         expect(reportText).toContain("run `astp update --target user` to migrate.");
         expect(reportText).toContain("skills/removed — not in the current manifest, left in place.");
         expect(reportText).not.toContain("skills/removed — run `astp update --force` to migrate.");
+    });
+
+    it("lists locally changed units below the table", () => {
+        const report: UpdateReport = { updates: [], upToDate: [], notInManifest: [], legacySkills: [] };
+
+        vi.mocked(p.log.info).mockClear();
+        showCheckReport(report, "project", [
+            { path: "skills/foo", modified: true, force: "replace" },
+            { path: "rules/x.md", modified: true, force: "delete" },
+            { path: "rules/y.md", modified: false, force: null },
+        ]);
+
+        const text = String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0]);
+        expect(text).toContain("Changed locally — `astp update` keeps them:");
+        expect(text).toContain("  • skills/foo — modified; `astp update --force --target project` replaces it");
+        expect(text).toContain(
+            "  • rules/x.md — modified, removed upstream; `astp update --force --target project` deletes it",
+        );
+        expect(text).toContain("  • rules/y.md — text edited");
+        expect(text).not.toContain("replaces the modified ones");
+    });
+
+    it("appends nothing when no units changed locally", () => {
+        const report: UpdateReport = { updates: [], upToDate: [], notInManifest: [], legacySkills: [] };
+
+        vi.mocked(p.log.info).mockClear();
+        showCheckReport(report, "project", []);
+
+        const text = String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0]);
+        expect(text).toContain("Bundle         Installed   Available   Status");
+        expect(text).not.toContain("Changed locally");
     });
 
     it("shows the force-migration hint when modified legacy units are skipped", () => {
@@ -440,7 +471,7 @@ describe("out-of-sync update prompts", () => {
         };
 
         vi.mocked(p.log.info).mockClear();
-        showCheckReport(report, "project");
+        showCheckReport(report, "project", []);
         expect(String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0])).toContain("↻ Out of sync");
 
         vi.mocked(p.log.info).mockClear();
