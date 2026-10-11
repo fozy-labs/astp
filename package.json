@@ -3,7 +3,7 @@
     "version": "0.3.1",
     "type": "module",
     "private": false,
-    "description": "A command-line tool for generating skills, instrustions and other files for you AI workflow.",
+    "description": "A command-line tool for installing skills, instructions and other files for your AI workflow.",
     "homepage": "https://github.com/fozy-labs/astp#readme",
     "bugs": {
         "url": "https://github.com/fozy-labs/astp/issues"
