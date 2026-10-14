@@ -1,9 +1,3 @@
----
-astp-source: fozy-labs/astp
-astp-bundle: docs
-astp-version: 1.3.2
-astp-hash: d450c3c4aba2030b41ba695f12bdf28c59cf983bf0ef99791d177cdc06ff1a02
----
 # Mermaid craft
 
 Applies to every Mermaid diagram you write or edit.

@@ -8,10 +8,7 @@ description: >-
     Mermaid diagrams, hard specs and changelogs. Use when writing, editing,
     restructuring or reviewing any such text. Not for one-line replies or short
     inline code comments.
-astp-source: fozy-labs/astp
-astp-bundle: docs
-astp-version: 1.3.2
-astp-hash: 1cf993332c23bad5b3eb17e121bc53f5670f5b983f9cb18675f0a160c22392e5
+license: MIT
 ---
 
 # Markdown craft
