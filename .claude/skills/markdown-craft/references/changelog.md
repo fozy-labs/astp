@@ -1,9 +1,3 @@
----
-astp-source: fozy-labs/astp
-astp-bundle: docs
-astp-version: 1.3.2
-astp-hash: b4db08b1386f6cfe50603e1dedc78f1faaccff919f79602fbe55cc0874594b8a
----
 # Changelog
 
 Load before writing or editing any entry of a `CHANGELOG.md`. The file format is
