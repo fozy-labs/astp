@@ -343,8 +343,8 @@
         },
         "agreement": {
             "name": "agreement",
-            "version": "1.2.0",
-            "description": "Working agreement rule, communication skill and /retro command — how the agent decides, asks, scopes changes, writes for the user and reviews finished work",
+            "version": "1.3.0",
+            "description": "Working agreement rule, communication and tracker skills and /retro command — how the agent decides, asks, scopes changes, writes for the user, works with the issue tracker and reviews finished work",
             "default": false,
             "platforms": [
                 "claude-code"
@@ -358,6 +358,11 @@
                 {
                     "source": "agreement/skills/communication/SKILL.md",
                     "target": "skills/communication/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "agreement/skills/tracker/SKILL.md",
+                    "target": "skills/tracker/SKILL.md",
                     "category": "skill"
                 },
                 {
