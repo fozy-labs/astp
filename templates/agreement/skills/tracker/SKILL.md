@@ -36,7 +36,7 @@ Describe the project methodology to follow for issues and PRs/MRs. A version wit
 <astp-block name="metadata">
 ## Labels, types and fields
 
-Set labels, the type and the fields (e.g. priority, project status, milestone) on every issue and PR/MR you open — agents tend to skip types and fields. Use only existing values; if none fits, ask the user rather than creating one.
+On every issue and PR/MR you open, set the labels, type and fields (e.g. priority, project status, milestone) the tracker supports for it — agents tend to skip types and fields. Use only existing values; if none fits, ask the user rather than creating one.
 </astp-block>
 
 <astp-block name="pull_requests">
