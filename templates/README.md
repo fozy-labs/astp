@@ -29,7 +29,8 @@ templates/
     │   └── working-agreement.md
     └── skills/
         ├── communication/
-        └── retro/
+        ├── retro/
+        └── tracker/
 ```
 
 Each bundle directory's internal structure mirrors the install target structure. For example, `fozy-labs/skills/fozy-labs-di/SKILL.md` installs to `<install-root>/skills/fozy-labs-di/SKILL.md`.

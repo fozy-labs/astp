@@ -104,13 +104,13 @@ List bundles and installed unit state. Add a bundle name for per-unit status and
 | `fozy-labs` | 4 skills | Fozy Labs stack skills (DI, FSD, rx-api, signals) | No |
 | `docs` | 2 skills | Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas | No |
 | `design` | 1 skill | Design decision derivation — gated procedure for interface, layout, and visual design choices | No |
-| `agreement` | 1 rule, 2 skills | Working agreement rule, communication skill and /retro command — how the agent decides, asks, scopes changes, writes for the user and reviews finished work | No |
+| `agreement` | 1 rule, 3 skills | Working agreement rule, communication and tracker skills and /retro command — how the agent decides, asks, scopes changes, writes for the user, works with the issue tracker and reviews finished work | No |
 
 - **astp** ships the `astp` skill: how an agent runs the CLI without prompts, when to ask before `--force`, and how to fill `<SETUP_REQUIRED>` blocks.
 - **fozy-labs** ships four skills covering the `@fozy-labs` stack — `simplest-di`, Feature-Sliced Design v2.1, `rx-toolkit` server state, and `rx-toolkit` signals. All four use progressive disclosure: a short `SKILL.md` plus `references/*.md` loaded only when the situation calls for them. It installs under `.claude/skills/`.
 - **design** ships `design-derivation` — a gated procedure for deriving visual and interface decisions (frame, value, scenario → charge and sign → surface and accuracy) instead of picking a remembered look. It carries no styles, palettes, or component recipes; references are loaded on demand per gate.
 - **docs** ships two skills. `markdown-craft` carries stack-agnostic rules for the Markdown an agent writes: one home per fact, one reader per document, diagram-first flows, and link hygiene, with references loaded on demand for Mermaid diagrams and for writing or reviewing a specification. `statechart-craft` covers the other kind of Mermaid an agent writes — a `.mmd` statechart schema: the `stateDiagram-v2` subset, the `%% @…` directives, the `statechart-convert` CLI and the typed file it emits, with references for the live visualizer and for the `toMermaid()` round trip.
-- **agreement** ships the `working-agreement` rule, always loaded from `.claude/rules/`: how the agent fixes, ranks decisions, reads the user's messages and writes for the user; every section after the principles is a block you can deselect. Its `communication` skill, which the agent loads whenever it talks to the user, covers working out a request, asking questions, making offers and resolving dilemmas. The `/retro` command, run only by the user, reviews finished work and proposes changes to the agent's environment: `CLAUDE.md`, rules, skills, docs, checks and tools.
+- **agreement** ships the `working-agreement` rule, always loaded from `.claude/rules/`: how the agent fixes, ranks decisions, reads the user's messages and writes for the user; every section after the principles is a block you can deselect. Its `communication` skill, which the agent loads whenever it talks to the user, covers working out a request, asking questions, making offers and resolving dilemmas. The `tracker` skill covers posting to a Git host (GitHub, GitLab and others) — issues, PRs/MRs, labels, types and fields; its project settings, methodology and PR rules are blocks the consumer's agent fills in on install. The `/retro` command, run only by the user, reviews finished work and proposes changes to the agent's environment: `CLAUDE.md`, rules, skills, docs, checks and tools.
 
 ## Installing skills with `npx skills`
 
@@ -122,7 +122,7 @@ npx skills add fozy-labs/astp --list                   # preview what is availab
 npx skills add fozy-labs/astp --skill markdown-craft   # install one skill
 ```
 
-Discovery is driven by `.claude-plugin/marketplace.json`, generated from `templates/manifest.json`. Only bundles that support `claude-code` **and** ship skills are published, and only their skills: `npx skills` installs the `communication` and `retro` skills of `agreement` without the `working-agreement` rule.
+Discovery is driven by `.claude-plugin/marketplace.json`, generated from `templates/manifest.json`. Only bundles that support `claude-code` **and** ship skills are published, and only their skills: `npx skills` installs the `communication` and `retro` skills of `agreement` without the `working-agreement` rule — the `tracker` skill carries astp blocks, so it is astp-only.
 
 > **Pick one installer per project.** `npx skills` symlinks skills from its own cache and tracks them in `skills-lock.json`; `astp` writes real files and tracks them in `astp.lock`. Neither sees the other's installs: `astp check`, `astp update` and `astp delete` ignore skills added by `npx skills`, and installing the same skill both ways leaves a file and a symlink fighting over one path.
 
