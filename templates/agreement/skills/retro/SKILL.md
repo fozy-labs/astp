@@ -2,6 +2,9 @@
 name: retro
 description: Retrospective on finished work — proposes changes to the agent's environment so future runs go better.
 disable-model-invocation: true
+license: MIT
+metadata:
+  adapted-from: "/retro by Matt Pocock, https://github.com/mattpocock/skills/blob/a7d038f6bf7f01b516408e95e2fb56e0b338fa6f/skills/engineering/retro/SKILL.md"
 ---
 
 # Retrospective
@@ -46,12 +49,7 @@ A collaboration finding seen once fixes that case. Propose an edit to the workin
 | skills      | knowledge for one kind of task, loaded by its description; user commands                                               |
 | docs        | references that other files point to; extend an existing one before adding a new one                                   |
 
-A file listed in `astp.lock` is installed from a shared template: a local edit makes `astp update` skip it unless `--force`. For such a file offer both a local edit and a report to the bundle's repository.
-
-When drafting proposed text, follow the `markdown-craft` skill if it is installed.
-
 ## Report
 
 List findings by severity, costliest for the user first. Each gives the citation, the cause, the change and its target file. Stop there; apply a proposal only on the user's command.
 
-Adapted from [`/retro`](https://github.com/mattpocock/skills/blob/a7d038f6bf7f01b516408e95e2fb56e0b338fa6f/skills/engineering/retro/SKILL.md) by Matt Pocock, MIT License.
