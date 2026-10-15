@@ -2,7 +2,7 @@
 name: git
 description: Git work on the user's command — commit, push, switch to an up-to-date branch, do a task in an isolated worktree, guard against destructive git commands, or any other git task in free text.
 disable-model-invocation: true
-argument-hint: "commit | push | develop <branch> | isolation <task> [ide] | guard | <free text>  [--fast] [--one]"
+argument-hint: "commit | push | <branch> | isolation <task> [ide] | guard | <free text>  [--fast] [--one]"
 allowed-tools: Bash(git status *) Bash(git worktree list *) PowerShell(git status *) PowerShell(git worktree list *)
 ---
 
@@ -20,13 +20,18 @@ If a line above shows a command instead of its output, run that command yourself
 
 ## Route
 
-Pick the command the request names; for free text, pick the command it means, or treat it as an ad-hoc git task under [Safety](#safety). State the pick and the plan in one line, then act.
+Route by the first rule that matches, state the pick and the plan in one line, then act:
+
+1. The first word is a command from the table: run it.
+2. The request is a single word naming a local or `origin` branch, checked after `git fetch origin`: [switch](#switch-branch) to it.
+3. Any other single word: ask whether to create a branch of that name from the updated default branch.
+4. Free text: pick the command it means, or treat it as an ad-hoc git task under [Safety](#safety).
 
 | Command                           | Does                                                                                                                         |
 |-----------------------------------|------------------------------------------------------------------------------------------------------------------------------|
 | `commit [--fast] [--one]`         | [Commit](#commit) all uncommitted changes                                                                                    |
 | `push [--fast] [--one]`           | [Commit](#commit) if the tree is dirty, then [push](#push)                                                                  |
-| `develop <branch>`                | [Switch](#develop) to the branch and fast-forward it to origin                                                               |
+| `<branch>`                        | [Switch](#switch-branch) to the branch and fast-forward it to origin                                                         |
 | `isolation <task> [ide]`          | Do the task in a separate worktree, finish with a PR or a merge — load [references/isolation.md](references/isolation.md)    |
 | `isolation cleanup [task]`        | Remove finished isolation worktrees — same reference                                                                         |
 | `guard`                           | Make destructive git commands need the user's approval — load [references/guard.md](references/guard.md)                     |
@@ -66,12 +71,11 @@ Always:
 - Upstream on a remote: `git push`. A local branch as upstream — an isolation task's target: `git push origin <branch>`, without `-u`, so the target stays recorded. No upstream: `git push -u origin <branch>`.
 - Rejected as non-fast-forward: stop, report how far the branch and its upstream diverged, and offer a rebase onto the upstream; never force on your own.
 
-## Develop
+## Switch branch
 
-1. `git fetch origin`.
-2. Switch: `git switch <branch>` — it creates a tracking branch from `origin/<branch>` when only that exists. Neither exists: report and offer to create it from the updated default branch.
-3. Uncommitted changes that block the switch: stay on the current branch, list the files, and offer `git stash push -u -m "<current> before develop <branch>"`; after the stash, switch.
-4. Fast-forward: `git merge --ff-only origin/<branch>`; no `origin/<branch>`: report. Diverged: stop and report the ahead / behind counts.
+1. `git switch <branch>` — it creates a tracking branch from `origin/<branch>` when only that exists.
+2. Uncommitted changes that block the switch: stay on the current branch, list the files, and offer `git stash push -u -m "<current> before switching to <branch>"`; after the stash, switch.
+3. Fast-forward: `git merge --ff-only origin/<branch>`; no `origin/<branch>`: report. Diverged: stop and report the ahead / behind counts.
 
 ## Report
 
