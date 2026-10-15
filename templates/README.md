@@ -21,7 +21,7 @@ templates/
 │   └── skills/
 │       ├── markdown-craft/
 │       └── statechart-craft/
-├── design/                ← bundle: design (claude-code)
+├── thinking/              ← bundle: thinking (claude-code)
 │   └── skills/
 │       └── design-derivation/
 └── agreement/             ← bundle: agreement (claude-code)
