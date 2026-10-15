@@ -27,7 +27,7 @@ flowchart TD
 
 ## Start
 
-1. `git worktree add --track -b <branch> <path> <target>` — `--track` makes the target the branch's upstream.
+1. `git worktree add --track -b <branch> <path> <target>` — `--track` makes the target the branch's upstream. `<path>` or `<branch>` already exists: [clean up](#clean-up) that task first if its PR is merged, otherwise ask for another task name.
 2. Copy gitignored files from the main checkout: those matching `.worktreeinclude` patterns when the repo has one, else `.env*` files outside dependency folders.
 3. Install dependencies with the project's install command; else, by the lockfile, in frozen mode: `npm ci`, `pnpm install --frozen-lockfile`, `yarn install --immutable` (Yarn 1: `--frozen-lockfile`), `bun install --frozen-lockfile`. A failed install: report and ask.
 4. IDE named: open the worktree with the IDE's command-line launcher — for JetBrains IDEs, the Toolbox shell script such as `webstorm`. No launcher found: give the user the path.
