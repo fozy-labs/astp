@@ -29,6 +29,7 @@ templates/
     │   └── working-agreement.md
     └── skills/
         ├── communication/
+        ├── git/
         ├── retro/
         └── tracker/
 ```
