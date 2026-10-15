@@ -23,9 +23,10 @@ If a line above shows a command instead of its output, run that command yourself
 Route by the first rule that matches, state the pick and the plan in one line, then act:
 
 1. The first word is a command from the table: run it.
-2. The request is a single word naming a local or `origin` branch, checked after `git fetch origin`: [switch](#switch-branch) to it.
-3. Any other single word: ask whether to create a branch of that name from the updated default branch.
-4. Free text: pick the command it means, or treat it as an ad-hoc git task under [Safety](#safety).
+2. The request is a single git verb (`status`, `log`, `diff`, …): free text, below.
+3. The request is a single word naming a local branch, or an `origin` branch with or without the `origin/` prefix, checked after `git fetch origin`: [switch](#switch-branch) to it by the name without the prefix.
+4. Any other single word: ask whether to create a branch of that name from the updated default branch.
+5. Free text: pick the command it means, or treat it as an ad-hoc git task under [Safety](#safety).
 
 | Command                           | Does                                                                                                                         |
 |-----------------------------------|------------------------------------------------------------------------------------------------------------------------------|
@@ -73,9 +74,10 @@ Always:
 
 ## Switch branch
 
-1. `git switch <branch>` — it creates a tracking branch from `origin/<branch>` when only that exists.
-2. Uncommitted changes that block the switch: stay on the current branch, list the files, and offer `git stash push -u -m "<current> before switching to <branch>"`; after the stash, switch.
-3. Fast-forward: `git merge --ff-only origin/<branch>`; no `origin/<branch>`: report. Diverged: stop and report the ahead / behind counts.
+1. `git fetch origin`, unless routing just ran it.
+2. `git switch <branch>` — it creates a tracking branch from `origin/<branch>` when only that exists.
+3. Uncommitted changes that block the switch: stay on the current branch, list the files, and offer `git stash push -u -m "<current> before switching to <branch>"`; after the stash, switch.
+4. Fast-forward: `git merge --ff-only origin/<branch>`; no `origin/<branch>`: report. Diverged: stop and report the ahead / behind counts.
 
 ## Report
 
