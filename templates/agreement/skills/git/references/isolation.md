@@ -22,7 +22,7 @@ flowchart TD
 | `<task>`      | a short kebab-case slug of the task; ask when the request gives no clear one                              |
 | worktree path | `../.tmp/<repo>/<task>` from the main checkout root; `<repo>` is the main checkout's folder name          |
 | branch        | the project's branch naming applied to `<task>`, else `<task>`                                            |
-| target        | the branch current at the start; recorded as the task branch's upstream, so it survives across sessions  |
+| target        | the branch current at the start; recorded as the task branch's upstream, so it survives across sessions; pushes never pass `-u` |
 
 ## Clean up first
 
@@ -48,10 +48,10 @@ Once the task is done, ask: PR or merge — unless the request already said. The
 
 1. Commit everything in the worktree.
 2. Leave the worktree: `ExitWorktree` when you entered with `EnterWorktree` — while inside, Claude Code blocks git commands aimed at the main checkout.
-3. Update the target in the main checkout: if it is checked out there, `git pull --ff-only`; otherwise `git fetch origin <target>:<target>`. Diverged: stop and report.
+3. Update the target when it tracks a remote branch: `git pull --ff-only` in the main checkout if the target is checked out there, else `git fetch <remote> <remote branch>:<target>`. Diverged: stop and report. A target without a remote branch stays as it is: a merge works locally, a PR needs the target pushed first — ask.
 4. `git -C <path> rebase <target>`. A conflict: `git -C <path> rebase --abort`, report the files, stop.
 5. Then:
-   - **PR**: `git -C <path> push -u origin <branch>`, open the PR against `<target>` through the tracker skill. Keep the worktree and branch: [Clean up first](#clean-up-first) removes them once the PR is merged.
+   - **PR**: `git -C <path> push origin <branch>`, open the PR against `<target>` through the tracker skill. Keep the worktree and branch: [Clean up first](#clean-up-first) removes them once the PR is merged.
    - **merge**: in the main checkout, `git merge --ff-only <branch>` when it is on `<target>`, else `git fetch . <branch>:<target>`; then `git worktree remove <path>` and `git branch -d <branch>`.
 
 ## IDE launchers

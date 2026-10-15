@@ -42,7 +42,7 @@ Never without the user's explicit approval in this conversation:
 
 - push to the default branch, or force in any form — and force only as `--force-with-lease`, only when the user wrote "force";
 - `reset --hard`, `clean`, `checkout -- <path>`, `restore` of the working tree, `stash drop` / `clear` — anything that discards uncommitted work;
-- delete a branch that is not merged — a branch whose PR the tracker shows merged counts as merged;
+- delete a remote branch, or a local one that is not merged — a branch whose PR the tracker shows merged counts as merged;
 - rewrite commits that are already pushed (amend, rebase, squash);
 - `--no-verify`.
 
@@ -59,11 +59,11 @@ Always:
 1. Read `git status` and the diff. Files that look like secrets (`.env`, keys, credentials) are never staged: stop and ask.
 2. Group the changes into logical commits by file — a file mixing concerns stays in one commit, and the plan says so. `--one`: a single commit.
 3. Show the plan — per commit the subject and files — and wait for approval when it has more than one commit or touches files you did not edit in this session. `--fast` skips the wait.
-4. Per commit: `git add -- <paths>`, then commit with the message in the project's format.
+4. Per commit: `git add -- <paths>`, then `git commit -F <file> -- <paths>` with the message in the project's format — the paths keep changes staged earlier for other commits out.
 
 ## Push
 
-- Upstream set: `git push`. No upstream: `git push -u origin <branch>`.
+- Upstream on a remote: `git push`. A local branch as upstream — an isolation task's target: `git push origin <branch>`, without `-u`, so the target stays recorded. No upstream: `git push -u origin <branch>`.
 - Rejected as non-fast-forward: stop, report how far the branch and its upstream diverged, and offer a rebase onto the upstream; never force on your own.
 
 ## Develop
@@ -71,7 +71,7 @@ Always:
 1. `git fetch origin`.
 2. Switch: `git switch <branch>` — it creates a tracking branch from `origin/<branch>` when only that exists. Neither exists: report and offer to create it from the updated default branch.
 3. Uncommitted changes that block the switch: stay on the current branch, list the files, and offer `git stash push -u -m "<current> before develop <branch>"`; after the stash, switch.
-4. Fast-forward: `git merge --ff-only @{upstream}`. Diverged: stop and report the ahead / behind counts.
+4. Fast-forward: `git merge --ff-only origin/<branch>`; no `origin/<branch>`: report. Diverged: stop and report the ahead / behind counts.
 
 ## Report
 

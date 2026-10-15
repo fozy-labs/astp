@@ -31,6 +31,8 @@ Claude Code, in `permissions.ask` (or `permissions.deny`). `*` matches any text;
 git push *-f*
 git push *+*
 git push *--no-verify*
+git push *--delete*
+git push *-d *
 git reset *--hard*
 git clean *
 git branch *-D*
@@ -54,6 +56,8 @@ Devin CLI, in `permissions.ask` (or `permissions.deny`). `Exec(…)` matches a c
 ```text
 Exec(git push --force)
 Exec(git push -f)
+Exec(git push --delete)
+Exec(git push -d)
 Exec(git reset --hard)
 Exec(git clean)
 Exec(git branch -D)
@@ -94,7 +98,7 @@ const has = (args, short, ...long) =>
 
 const risky = {
     push: (a) => has(a, "f", "--force", "--force-with-lease", "--force-if-includes", "--no-verify", "--delete", "--mirror") ||
-        a.some((x) => x.startsWith("+")),
+        has(a, "d") || a.some((x) => x.startsWith("+")),
     reset: (a) => has(a, null, "--hard", "--merge", "--keep"),
     clean: () => true,
     branch: (a) => has(a, "D", "--force"),
