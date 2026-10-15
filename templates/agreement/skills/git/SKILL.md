@@ -24,7 +24,7 @@ Route by the first rule that matches, state the pick and the plan in one line, t
 
 1. The first word is a command from the table: run it.
 2. The request is a single git verb (`status`, `log`, `diff`, …): free text, below.
-3. The request is a single word naming a local branch, or an `origin` branch with or without the `origin/` prefix, checked after `git fetch origin`: [switch](#switch-branch) to it by the name without the prefix.
+3. The request is a single word naming a branch, checked after `git fetch origin` — a local branch by its exact name first, else an `origin` branch with or without the `origin/` prefix: [switch](#switch-branch) to it, an `origin` one by the name without the prefix.
 4. Any other single word: ask whether to create a branch of that name from the updated default branch.
 5. Free text: pick the command it means, or treat it as an ad-hoc git task under [Safety](#safety).
 
@@ -92,7 +92,7 @@ Fill only what differs from the defaults above and in references/isolation.md, t
 - branch naming (e.g. `feat/<task>`);
 - the install command for a fresh worktree;
 - the worktree root instead of `../.tmp/<repo>/`;
-- gitignored files to copy into a worktree when the repo has no `.worktreeinclude`;
+- gitignored files to copy into a worktree — first offer the user to create a `.worktreeinclude` at the repo root instead (`.gitignore` syntax, also read by Claude Code); list them here only if the user declines;
 - extra actions that need the user's approval.
 </FILL_INSTRUCTION>
 </astp-block>
