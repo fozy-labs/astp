@@ -343,7 +343,7 @@
         },
         "agreement": {
             "name": "agreement",
-            "version": "1.4.1",
+            "version": "1.4.2",
             "description": "Working agreement rule, communication and tracker skills and /retro and /git commands — how the agent decides, asks, scopes changes, writes for the user, works with the issue tracker and git, and reviews finished work",
             "default": false,
             "platforms": [

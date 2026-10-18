@@ -3,7 +3,7 @@ name: tracker
 description: Working with a Git host (GitHub, GitLab and others) — issues, PRs/MRs, comments, labels and reviews. Use before any command that creates or changes something in the tracker.
 ---
 
-<astp-block name="posting" required>
+<astp-block name="posting" description="Safety rules for posting to the issue tracker" required>
 # Tracker
 
 ## Posting
@@ -14,7 +14,7 @@ description: Working with a Git host (GitHub, GitLab and others) — issues, PRs
 - Before opening an issue or a PR/MR, search for an existing one and update it instead of opening a duplicate.
 </astp-block>
 
-<astp-block name="project">
+<astp-block name="project" description="Tracker CLI, repository, default branch, merge strategy and CI">
 ## Project settings
 
 <FILL_INSTRUCTION>
@@ -25,7 +25,7 @@ Describe what an agent cannot infer safely:
 </FILL_INSTRUCTION>
 </astp-block>
 
-<astp-block name="methodology">
+<astp-block name="methodology" description="Project methodology for issues and PRs/MRs">
 ## Methodology
 
 <FILL_INSTRUCTION>
@@ -33,13 +33,13 @@ Describe the project methodology to follow for issues and PRs/MRs. A version wit
 </FILL_INSTRUCTION>
 </astp-block>
 
-<astp-block name="metadata">
+<astp-block name="metadata" description="Setting labels, types and fields on new issues and PRs/MRs">
 ## Labels, types and fields
 
 On every issue and PR/MR you open, set the labels, type and fields (e.g. priority, project status, milestone) the tracker supports for it — agents tend to skip types and fields. Use only existing values; if none fits, ask the user rather than creating one.
 </astp-block>
 
-<astp-block name="pull_requests">
+<astp-block name="pull_requests" description="Rules for opening and formatting PRs/MRs">
 ## PRs/MRs
 
 <FILL_INSTRUCTION>
