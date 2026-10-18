@@ -121,14 +121,14 @@ Describe the project file structure.
 </FILL_INSTRUCTION>
 </astp-block>
 
-<astp-block name="code_style" optional>
+<astp-block name="code_style" description="Code formatting and naming conventions" optional>
 Ready-made text.
 </astp-block>
 ```
 
 Rules:
 
-- Block names match `[a-z][a-z0-9_]*`. Attributes: `name="…"` (required), `optional` (not selected by default), `required` (always installed, never shown in the wizard). `optional` and `required` cannot combine. Write the opening tag exactly like that: `name` in double quotes, no spaces around `=`.
+- Block names match `[a-z][a-z0-9_]*`. Attributes: `name="…"` (required), `description="…"` (optional non-empty description shown in prompts and `astp list`), `optional` (not selected by default), `required` (always installed, never shown in the wizard). `optional` and `required` cannot combine. Write the opening tag with `name` and `description` in double quotes, no spaces around `=`.
 - Tags are whole lines at column 0 outside code fences; blocks do not nest. In a file with blocks, all text except the frontmatter lives inside blocks. Outside a code fence, no line inside a block may equal an installed tag (`<name>` or `</name>`) of any block in the file.
 - `<FILL_INSTRUCTION>` tells the consumer's agent to fill the block in place; while one is present, the CLI keeps a `<SETUP_REQUIRED>` block at the top of the installed file.
 - On install a block renders as `<project_map>…</project_map>` — the name becomes the tag. `SETUP_REQUIRED`/`FILL_INSTRUCTION` are CLI tags and are always uppercase.

@@ -180,6 +180,7 @@ async function list(
                             name: block.name,
                             key,
                             status: blockStatus,
+                            description: block.description,
                             optional: block.optional,
                             required: block.required,
                         };
@@ -221,11 +222,10 @@ async function list(
                 const description = unit.description ?? "";
                 lines.push(`${unit.name.padEnd(24)}${unit.status.padEnd(13)}${description}`.slice(0, 80));
                 for (const block of unit.blocks ?? []) {
-                    lines.push(
-                        `${`  ${block.name}`.padEnd(24)}${block.status.padEnd(13)}${
-                            block.required ? "required" : block.optional ? "optional" : ""
-                        }`.slice(0, 80),
-                    );
+                    const flag = block.required ? "required" : block.optional ? "optional" : "";
+                    const blockDesc =
+                        flag && block.description ? `(${flag}) ${block.description}` : (block.description ?? flag);
+                    lines.push(`${`  ${block.name}`.padEnd(24)}${block.status.padEnd(13)}${blockDesc}`.slice(0, 80));
                 }
             }
             process.stdout.write(`${lines.join("\n")}\n`);

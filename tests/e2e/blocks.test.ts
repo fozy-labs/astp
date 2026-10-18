@@ -822,13 +822,14 @@ describe("E2E: blocks", () => {
             );
         });
 
-        it("list --json reports blocks with key, status and flags", async () => {
+        it("list --json reports blocks with key, status, description and flags", async () => {
             mockIsInteractive.mockReturnValue(true);
             treeChoice(undefined, []);
             await install();
             mockIsInteractive.mockReturnValue(false);
             manifest = createBlocksManifest("1.0.0");
-            contents[RULES_FILE] = `${tplV1()}\n<astp-block name="added">\nNew.\n</astp-block>\n`;
+            contents[RULES_FILE] =
+                `${tplV1()}\n<astp-block name="added" description="Added block">\nNew.\n</astp-block>\n`;
 
             const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
             await executeList({ bundle: "blocks", json: true, platform: "claude-code", target: "project" });
@@ -839,18 +840,34 @@ describe("E2E: blocks", () => {
                     name: "project_map",
                     key: `${RULES_FILE}#project_map`,
                     status: "selected",
+                    description: null,
                     optional: false,
                     required: true,
                 },
-                { name: "extra", key: `${RULES_FILE}#extra`, status: "declined", optional: false, required: false },
+                {
+                    name: "extra",
+                    key: `${RULES_FILE}#extra`,
+                    status: "declined",
+                    description: null,
+                    optional: false,
+                    required: false,
+                },
                 {
                     name: "code_style",
                     key: `${RULES_FILE}#code_style`,
                     status: "declined",
+                    description: null,
                     optional: true,
                     required: false,
                 },
-                { name: "added", key: `${RULES_FILE}#added`, status: "new", optional: false, required: false },
+                {
+                    name: "added",
+                    key: `${RULES_FILE}#added`,
+                    status: "new",
+                    description: "Added block",
+                    optional: false,
+                    required: false,
+                },
             ]);
         });
 
@@ -859,6 +876,10 @@ describe("E2E: blocks", () => {
             treeChoice(undefined, []);
             await install();
             mockIsInteractive.mockReturnValue(false);
+            contents[RULES_FILE] = contents[RULES_FILE]!.replace(
+                '<astp-block name="code_style" optional>',
+                '<astp-block name="code_style" description="Code style rules" optional>',
+            );
 
             const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
             await executeList({ bundle: "blocks", platform: "claude-code", target: "project" });
@@ -871,7 +892,9 @@ describe("E2E: blocks", () => {
             expect(projectMap).toBeGreaterThan(unitRow);
             expect(rows[projectMap]).toMatch(/selected\s+required/);
             expect(rows.find((row) => row.includes("extra"))).toMatch(/declined\s*$/);
-            expect(rows.find((row) => row.includes("code_style"))).toMatch(/declined\s+optional/);
+            expect(rows.find((row) => row.includes("code_style"))).toMatch(
+                /declined\s+\(optional\) Code style rules$/,
+            );
         });
     });
 });

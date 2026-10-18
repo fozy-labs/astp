@@ -82,7 +82,7 @@ function merge(args: {
 }
 
 function block(content: string, name = "a"): TemplateBlock {
-    return { name, optional: false, required: false, content };
+    return { name, description: null, optional: false, required: false, content };
 }
 
 describe("parseTemplateBlocks", () => {
@@ -91,16 +91,42 @@ describe("parseTemplateBlocks", () => {
         expect(errors).toEqual([]);
         expect(frontmatter).toBe("---\ndescription: Project map and code style\n---\n");
         expect(blocks).toHaveLength(2);
-        expect(blocks[0]).toMatchObject({ name: "project_map", optional: false, required: false });
+        expect(blocks[0]).toMatchObject({
+            name: "project_map",
+            description: null,
+            optional: false,
+            required: false,
+        });
         expect(blocks[0]!.content).toContain("## Project Map");
         expect(blocks[0]!.content.endsWith("\n")).toBe(true);
-        expect(blocks[1]).toMatchObject({ name: "code_style", optional: true });
+        expect(blocks[1]).toMatchObject({ name: "code_style", description: null, optional: true });
+    });
+
+    it("parses description attribute with spaces and '>' characters", () => {
+        const content = '<astp-block name="a" description="First -> second block" optional>\nx\n</astp-block>\n';
+        const { blocks, errors } = parseTemplateBlocks(content);
+        expect(errors).toEqual([]);
+        expect(blocks).toEqual([
+            {
+                name: "a",
+                description: "First -> second block",
+                optional: true,
+                required: false,
+                content: "x\n",
+            },
+        ]);
     });
 
     it.each([
         ["missing name", "<astp-block>\nx\n</astp-block>\n", /name/i],
         ["invalid name", '<astp-block name="Bad_Name">\nx\n</astp-block>\n', /invalid block name/i],
         ["unknown attribute", '<astp-block name="a" foo>\nx\n</astp-block>\n', /unknown attribute 'foo'/i],
+        ["empty description", '<astp-block name="a" description="  ">\nx\n</astp-block>\n', /empty 'description'/i],
+        [
+            "duplicate description",
+            '<astp-block name="a" description="one" description="two">\nx\n</astp-block>\n',
+            /duplicate 'description'/i,
+        ],
         [
             "optional with required",
             '<astp-block name="a" optional required>\nx\n</astp-block>\n',

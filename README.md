@@ -94,7 +94,7 @@ Remove the files of an installed bundle. Repeat `--skill` to select units by nam
 astp list [bundle] [--source <spec>] [--json] [--platform <claude-code>] [--target <project|user>]
 ```
 
-List bundles and installed unit state. Add a bundle name for per-unit status and descriptions, with each unit's blocks and their status; `--json` prints machine-readable output; units with blocks list each block's `name`, `key`, `status` (`selected`, `declined`, or `new`), `optional`, and `required`.
+List bundles and installed unit state. Add a bundle name for per-unit status and descriptions, with each unit's blocks, their status and descriptions; `--json` prints machine-readable output; units with blocks list each block's `name`, `key`, `status` (`selected`, `declined`, or `new`), `description`, `optional`, and `required`.
 
 ## Bundles
 

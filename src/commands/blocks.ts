@@ -13,6 +13,7 @@ function unitBlockEntries(blockFiles: Map<string, UnitBlockFile>): BlockEntry[] 
             entries.push({
                 key: `${target}#${block.name}`,
                 name: block.name,
+                description: block.description,
                 file: target,
                 optional: block.optional,
                 required: block.required,
@@ -72,7 +73,7 @@ export function resolveBlockKeys(
 export function installBlockOptions(blockFiles: Map<string, UnitBlockFile>): BlockOption[] {
     return unitBlockEntries(blockFiles)
         .filter((entry) => !entry.required)
-        .map(({ key, name, file, optional }) => ({ key, name, file, optional }));
+        .map(({ key, name, description, file, optional }) => ({ key, name, description, file, optional }));
 }
 
 /**
