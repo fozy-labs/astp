@@ -738,6 +738,18 @@ export function warnUnavailable(entries: Array<{ bundle: string; message: string
     );
 }
 
+export function warnNewerManifest(
+    manifestVersion: string,
+    supportedVersion: string,
+    updateCommand: string,
+    source?: string,
+): void {
+    const from = source ? ` at '${source}'` : "";
+    p.log.warn(
+        `Manifest${from} uses schema version ${manifestVersion}, which is newer than supported by this astp CLI (${supportedVersion}).\nRun \`${updateCommand}\` to update astp.`,
+    );
+}
+
 export function showSuccess(message: string): void {
     p.log.success(message);
 }

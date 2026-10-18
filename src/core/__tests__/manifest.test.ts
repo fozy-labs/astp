@@ -3,7 +3,14 @@ import path from "node:path";
 
 import type { Manifest } from "@/types/index.js";
 
-import { resolveBundle, validateManifest } from "../manifest.js";
+import {
+    checkManifestVersion,
+    formatSupportedSchemaVersions,
+    parseSchemaVersion,
+    resolveBundle,
+    UPDATE_CLI_COMMAND,
+    validateManifest,
+} from "../manifest.js";
 
 const validManifestData = {
     schemaVersion: 1,
@@ -259,8 +266,53 @@ describe("validateManifest", () => {
     // T14: Unsupported schema version
     it("T14: throws on unsupported schema version", () => {
         expect(() => validateManifest({ ...validManifestData, schemaVersion: 99 })).toThrow(
-            "Unsupported manifest schema version 99. Update astp CLI.",
+            `Unsupported manifest schema version 99 (supported: 1.0, 2.0). Update astp CLI: ${UPDATE_CLI_COMMAND}`,
         );
+    });
+
+    it("accepts 'major.minor' string schemaVersion and reports when minor is newer than supported", () => {
+        const current = validateManifest({ ...validManifestData, schemaVersion: "2.0" });
+        expect(current.schemaVersion).toBe("2.0");
+        expect(checkManifestVersion(current)).toBeNull();
+        expect(checkManifestVersion(validateManifest(validManifestData))).toBeNull();
+
+        const newerMinor = validateManifest({ ...validManifestData, schemaVersion: "2.1" });
+        expect(newerMinor.schemaVersion).toBe("2.1");
+        expect(checkManifestVersion(newerMinor)).toEqual({
+            manifestVersion: "2.1",
+            supportedVersion: "2.0",
+            updateCommand: UPDATE_CLI_COMMAND,
+        });
+    });
+
+    it("rejects unsupported major version in 'major.minor' string and older major versions", () => {
+        expect(() => validateManifest({ ...validManifestData, schemaVersion: "3.0" })).toThrow(
+            `Unsupported manifest schema version 3.0 (supported: 1.0, 2.0). Update astp CLI: ${UPDATE_CLI_COMMAND}`,
+        );
+        expect(() => validateManifest({ ...validManifestData, schemaVersion: 1 }, { 2: 1 })).toThrow(
+            "Unsupported manifest schema version 1 (supported: 2.0–2.1).",
+        );
+        expect(() => validateManifest({ ...validManifestData, schemaVersion: 1 }, { 2: 1 })).not.toThrow(
+            /Update astp CLI/,
+        );
+    });
+
+    it.each([0, -1, 1.5, Number.NaN, "", "1", "01.0", "1.01", "1.0.0", "v1.0", null, true, {}])(
+        "rejects invalid schemaVersion %j",
+        (schemaVersion) => {
+            expect(() => validateManifest({ ...validManifestData, schemaVersion })).toThrow(
+                "Invalid manifest: schemaVersion must be a positive integer or 'major.minor' string",
+            );
+            expect(() => parseSchemaVersion(schemaVersion)).toThrow(
+                "Invalid manifest: schemaVersion must be a positive integer or 'major.minor' string",
+            );
+        },
+    );
+
+    it("formats supported schema versions across single and multi-major ranges", () => {
+        expect(formatSupportedSchemaVersions({ 1: 0 })).toBe("1.0");
+        expect(formatSupportedSchemaVersions({ 1: 2 })).toBe("1.0–1.2");
+        expect(formatSupportedSchemaVersions({ 2: 0, 1: 3 })).toBe("1.0–1.3, 2.0");
     });
 
     // T15: Non-object input

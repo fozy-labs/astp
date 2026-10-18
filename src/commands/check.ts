@@ -29,6 +29,7 @@ export async function executeCheck(options: CheckOptions): Promise<void> {
         s.start("Fetching manifests...");
         const opened = await sources.openInstalled(installed.bundles, installed.lock);
         s.stop("Manifests fetched.");
+        sources.warnIfNewer();
 
         const reports = [...new Set(opened.values())].map((entry) =>
             compareVersions(

@@ -72,6 +72,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
         s.start("Fetching manifests...");
         const opened = await sources.openInstalled(installedState.bundles, installedState.lock);
         s.stop("Manifests fetched.");
+        sources.warnIfNewer();
         const report = mergeReports(
             [...new Set(opened.values())].map((entry) =>
                 compareVersions(

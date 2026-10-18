@@ -11,7 +11,7 @@ import { executeUpdate } from "@/commands/update.js";
 import { loadInstalled } from "@/core/index.js";
 import type { Bundle, Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
-import { showCheckReport, showInfo, warnForeign, warnModified } from "@/ui/prompts.js";
+import { showCheckReport, showInfo, warnForeign, warnModified, warnNewerManifest } from "@/ui/prompts.js";
 
 import { createTempProject, makeProjectTarget, readLockFixture } from "./helpers.js";
 
@@ -40,6 +40,7 @@ vi.mock("@/ui/prompts.js", () => ({
     warnKeptRemoved: vi.fn(),
     warnReleased: vi.fn(),
     warnForeign: vi.fn(),
+    warnNewerManifest: vi.fn(),
     spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
 }));
 
@@ -274,6 +275,42 @@ describe("E2E: manifest sources", () => {
         await fs.rm(path.join(projectDir, "a"), { recursive: true });
         await expect(executeUpdate(opts)).rejects.toThrow(
             /Cannot read source '\.\.\/a' of core: .*\nTo switch source: astp install core --source <spec> --target project/s,
+        );
+    });
+
+    it("warns once per source when manifest minor schemaVersion is ahead, skips on list --json, and fails on unsupported major", async () => {
+        const manifestPath = path.join(projectDir, "a/templates/manifest.json");
+        const raw = JSON.parse(await fs.readFile(manifestPath, "utf8")) as Manifest;
+        await fs.writeFile(manifestPath, JSON.stringify({ ...raw, schemaVersion: "1.1" }));
+
+        await executeInstall({ ...opts, bundle: "core", source: "./a" });
+        expect(vi.mocked(warnNewerManifest)).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(warnNewerManifest)).toHaveBeenCalledWith(
+            "1.1",
+            "1.0",
+            "npm install -g @fozy-labs/astp",
+            "../a",
+        );
+
+        vi.mocked(warnNewerManifest).mockClear();
+        await executeCheck(opts);
+        expect(vi.mocked(warnNewerManifest)).toHaveBeenCalledTimes(1);
+
+        vi.mocked(warnNewerManifest).mockClear();
+        await executeUpdate(opts);
+        expect(vi.mocked(warnNewerManifest)).toHaveBeenCalledTimes(1);
+
+        vi.mocked(warnNewerManifest).mockClear();
+        const write = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        await executeList({ ...opts, source: "./a", json: true });
+        expect(vi.mocked(warnNewerManifest)).not.toHaveBeenCalled();
+        await executeList({ ...opts, source: "./a" });
+        expect(vi.mocked(warnNewerManifest)).toHaveBeenCalledTimes(1);
+        write.mockRestore();
+
+        await fs.writeFile(manifestPath, JSON.stringify({ ...raw, schemaVersion: "3.0" }));
+        await expect(executeInstall({ ...opts, bundle: "core", source: "./a" })).rejects.toThrow(
+            "Unsupported manifest schema version 3.0 (supported: 1.0, 2.0). Update astp CLI: npm install -g @fozy-labs/astp",
         );
     });
 });

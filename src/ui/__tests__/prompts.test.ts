@@ -18,6 +18,7 @@ import {
     warnForeign,
     warnLegacyModified,
     warnModified,
+    warnNewerManifest,
 } from "../prompts.js";
 
 vi.mock("@clack/prompts", async (importOriginal) => ({
@@ -647,6 +648,24 @@ describe("install confirmation counts", () => {
 
         expect(p.confirm).toHaveBeenCalledWith(
             expect.objectContaining({ message: expect.stringContaining("(1 skill)") }),
+        );
+    });
+});
+
+describe("warnNewerManifest", () => {
+    it("formats the warning for the default source and for a custom source", () => {
+        vi.mocked(p.log.warn).mockClear();
+        warnNewerManifest("1.2", "1.0", "npm install -g @fozy-labs/astp");
+        expect(vi.mocked(p.log.warn)).toHaveBeenCalledWith(
+            "Manifest uses schema version 1.2, which is newer than supported by this astp CLI (1.0).\n" +
+                "Run `npm install -g @fozy-labs/astp` to update astp.",
+        );
+
+        vi.mocked(p.log.warn).mockClear();
+        warnNewerManifest("1.2", "1.0", "npm install -g @fozy-labs/astp", "../other");
+        expect(vi.mocked(p.log.warn)).toHaveBeenCalledWith(
+            "Manifest at '../other' uses schema version 1.2, which is newer than supported by this astp CLI (1.0).\n" +
+                "Run `npm install -g @fozy-labs/astp` to update astp.",
         );
     });
 });
