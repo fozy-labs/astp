@@ -12,8 +12,8 @@ export const ALL_PLATFORMS = ["claude-code"] as const satisfies readonly Platfor
 
 /** Remote manifest.json schema — the source of truth for available templates. */
 export interface Manifest {
-    /** Schema version (integer). CLI checks compatibility before processing. */
-    schemaVersion: number;
+    /** Schema version (positive integer or "major.minor"). CLI checks compatibility before processing. */
+    schemaVersion: number | string;
     /** "owner/repo"; kept for astp 0.3.1, which requires it. Not read by the CLI. */
     repository?: string;
     /** Available bundles, keyed by bundle name. */

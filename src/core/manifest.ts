@@ -4,12 +4,77 @@ import { ALL_PLATFORMS } from "@/types/index.js";
 import { assertSafeName, assertSafeRelativePath, foldPath, nullPrototype } from "./path-safety.js";
 import { isOsClutterName } from "./skill-tree.js";
 
-const SUPPORTED_SCHEMA_VERSION = 1;
+/** Supported manifest schema versions: major version → max supported minor version. */
+export const SUPPORTED_SCHEMA_VERSIONS: Readonly<Record<number, number>> = {
+    1: 0,
+    2: 0,
+};
+
+export const UPDATE_CLI_COMMAND = "npm install -g @fozy-labs/astp";
+
+export interface SchemaVersion {
+    major: number;
+    minor: number;
+}
+
+export interface NewerManifestNotice {
+    manifestVersion: string;
+    supportedVersion: string;
+    updateCommand: string;
+}
+
+const SCHEMA_VERSION_REGEX = /^([1-9]\d*)\.(0|[1-9]\d*)$/;
 const VALID_PLATFORMS: ReadonlySet<Platform> = new Set(ALL_PLATFORMS);
 const VALID_CATEGORIES: ReadonlySet<ItemCategory> = new Set(["agent", "skill", "rule"]);
 const LABEL_REGEX = /^[a-z][a-z0-9_-]*$/;
 
-export function validateManifest(data: unknown): Manifest {
+export function parseSchemaVersion(raw: unknown): SchemaVersion {
+    if (typeof raw === "number" && Number.isSafeInteger(raw) && raw >= 1) {
+        return { major: raw, minor: 0 };
+    }
+    if (typeof raw === "string") {
+        const match = raw.match(SCHEMA_VERSION_REGEX);
+        if (match) {
+            const major = Number(match[1]);
+            const minor = Number(match[2]);
+            if (Number.isSafeInteger(major) && Number.isSafeInteger(minor)) {
+                return { major, minor };
+            }
+        }
+    }
+    throw new Error("Invalid manifest: schemaVersion must be a positive integer or 'major.minor' string");
+}
+
+export function formatSupportedSchemaVersions(
+    supported: Readonly<Record<number, number>> = SUPPORTED_SCHEMA_VERSIONS,
+): string {
+    return Object.entries(supported)
+        .map(([major, maxMinor]) => [Number(major), maxMinor] as const)
+        .sort(([a], [b]) => a - b)
+        .map(([major, maxMinor]) => (maxMinor === 0 ? `${major}.0` : `${major}.0–${major}.${maxMinor}`))
+        .join(", ");
+}
+
+export function checkManifestVersion(
+    manifest: Pick<Manifest, "schemaVersion">,
+    supported: Readonly<Record<number, number>> = SUPPORTED_SCHEMA_VERSIONS,
+): NewerManifestNotice | null {
+    const version = parseSchemaVersion(manifest.schemaVersion);
+    const maxMinor = supported[version.major];
+    if (maxMinor !== undefined && version.minor > maxMinor) {
+        return {
+            manifestVersion: `${version.major}.${version.minor}`,
+            supportedVersion: `${version.major}.${maxMinor}`,
+            updateCommand: UPDATE_CLI_COMMAND,
+        };
+    }
+    return null;
+}
+
+export function validateManifest(
+    data: unknown,
+    supported: Readonly<Record<number, number>> = SUPPORTED_SCHEMA_VERSIONS,
+): Manifest {
     if (typeof data !== "object" || data === null) {
         throw new Error("Invalid manifest: expected an object");
     }
@@ -20,12 +85,13 @@ export function validateManifest(data: unknown): Manifest {
         throw new Error("Invalid manifest: missing schemaVersion");
     }
 
-    if (typeof obj.schemaVersion !== "number") {
-        throw new Error("Invalid manifest: schemaVersion must be a number");
-    }
-
-    if (obj.schemaVersion > SUPPORTED_SCHEMA_VERSION) {
-        throw new Error(`Unsupported manifest schema version ${obj.schemaVersion}. Update astp CLI.`);
+    const version = parseSchemaVersion(obj.schemaVersion);
+    if (supported[version.major] === undefined) {
+        const maxSupportedMajor = Math.max(...Object.keys(supported).map(Number));
+        const suffix = version.major > maxSupportedMajor ? ` Update astp CLI: ${UPDATE_CLI_COMMAND}` : "";
+        throw new Error(
+            `Unsupported manifest schema version ${String(obj.schemaVersion)} (supported: ${formatSupportedSchemaVersions(supported)}).${suffix}`,
+        );
     }
 
     if (!("bundles" in obj) || typeof obj.bundles !== "object" || obj.bundles === null) {

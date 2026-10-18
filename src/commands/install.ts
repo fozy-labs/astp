@@ -127,6 +127,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             }
         }
         s.stop("Manifest fetched.");
+        sources.warnIfNewer();
         for (const { bundle } of candidates) {
             assertBundlePlatform(bundle, platform);
         }

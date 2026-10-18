@@ -53,7 +53,7 @@ The `manifest.json` file defines all available bundles and their contents. It is
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `schemaVersion` | `number` | Schema version (integer). CLI checks compatibility before processing. |
+| `schemaVersion` | `number \| string` | Schema version (positive integer `N` or `"major.minor"` string, e.g. `1` or `"1.1"`). A newer minor version on a supported major version warns to update `astp`; an unsupported major version fails. |
 | `repository` | `string` | Source repository in `owner/repo` format. |
 | `bundles` | `Record<string, Bundle>` | Available bundles, keyed by bundle name. |
 

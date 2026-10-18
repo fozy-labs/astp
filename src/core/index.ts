@@ -10,7 +10,16 @@ export {
 } from "./blocks.js";
 export type { InstalledBlocks, MergeBlockFileArgs, MergeBlockFileResult, TemplateBlock } from "./blocks.js";
 export { computeHash, extractAstpMetadata, readDescription, stripAstpFields } from "./frontmatter.js";
-export { resolveBundle, validateManifest } from "./manifest.js";
+export {
+    checkManifestVersion,
+    formatSupportedSchemaVersions,
+    parseSchemaVersion,
+    resolveBundle,
+    SUPPORTED_SCHEMA_VERSIONS,
+    UPDATE_CLI_COMMAND,
+    validateManifest,
+} from "./manifest.js";
+export type { NewerManifestNotice, SchemaVersion } from "./manifest.js";
 export { closeSource, downloadBundle, fetchManifest } from "./fetcher.js";
 export { ACCEPTED_SOURCES, DEFAULT_SOURCE, formatSource, resolveSource } from "./source.js";
 export type { ManifestSource } from "./source.js";

@@ -1,6 +1,14 @@
-import { closeSource, DEFAULT_SOURCE, fetchManifest, formatSource, resolveSource } from "@/core/index.js";
+import {
+    checkManifestVersion,
+    closeSource,
+    DEFAULT_SOURCE,
+    fetchManifest,
+    formatSource,
+    resolveSource,
+} from "@/core/index.js";
 import type { Lock, ManifestSource } from "@/core/index.js";
 import type { InstalledBundle, InstallTarget, Manifest, UpdateReport } from "@/types/index.js";
+import { warnNewerManifest } from "@/ui/prompts.js";
 
 export interface OpenedSource {
     source: ManifestSource;
@@ -14,6 +22,7 @@ export class Sources {
     private readonly opened = new Map<string, OpenedSource>();
     private readonly failed = new Map<string, unknown>();
     private readonly sources: ManifestSource[] = [];
+    private readonly warned = new Set<string>();
 
     constructor(private readonly target: InstallTarget) {}
 
@@ -59,6 +68,22 @@ export class Sources {
             for (const bundle of group) result.set(bundle.bundleName, opened);
         }
         return result;
+    }
+
+    warnIfNewer(): void {
+        for (const [key, { manifest }] of this.opened) {
+            if (this.warned.has(key)) continue;
+            this.warned.add(key);
+            const notice = checkManifestVersion(manifest);
+            if (notice) {
+                warnNewerManifest(
+                    notice.manifestVersion,
+                    notice.supportedVersion,
+                    notice.updateCommand,
+                    key === DEFAULT_SOURCE ? undefined : key,
+                );
+            }
+        }
     }
 
     async close(): Promise<void> {

@@ -59,7 +59,10 @@ async function list(
             : await sources.open(options.source ?? DEFAULT_SOURCE, fromCli ? "cli" : "lock");
     const installedSources =
         options.bundle || fromCli ? new Map() : await sources.openInstalled(installedState.bundles, lock);
-    if (!options.json) s.stop("Manifest fetched.");
+    if (!options.json) {
+        s.stop("Manifest fetched.");
+        sources.warnIfNewer();
+    }
     const manifest = listing.manifest;
 
     if (!options.bundle) {
