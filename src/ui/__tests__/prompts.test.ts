@@ -342,6 +342,20 @@ describe("BundleTreePrompt blocks", () => {
         await result;
     });
 
+    it("space on an optional-only bundle expands it without selecting optional units", async () => {
+        const optOnly = treeEntry("opt", ["agents/opt1.md", "agents/opt2.md"], { defaults: [] });
+        optOnly.units[0]!.optional = true;
+        optOnly.units[1]!.optional = true;
+        const other = treeEntry("other", ["agents/a.md"]);
+
+        const { prompt, input, result } = drivePrompt([optOnly, other], [SPACE]);
+        await vi.waitFor(() => expect(prompt.expanded.has("opt")).toBe(true));
+        expect(prompt.chosen.get("opt")?.size).toBe(0);
+
+        for (const key of [DOWN, SPACE, ENTER]) input.write(key);
+        await expect(result).resolves.toEqual(new Map([["opt", { units: ["agents/opt1.md"], blocks: [] }]]));
+    });
+
     it("selectNewUnits pre-checks only non-optional units and renders unit labels", async () => {
         vi.mocked(p.multiselect).mockResolvedValueOnce(["agents/a.md"] as never);
         await selectNewUnits("core", [

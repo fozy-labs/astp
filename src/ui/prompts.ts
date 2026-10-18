@@ -343,12 +343,15 @@ export class BundleTreePrompt extends Prompt<Map<string, BundleChoice>> {
                     if (set.has(row.unit.relativePath)) set.delete(row.unit.relativePath);
                     else set.add(row.unit.relativePath);
                 } else if (set.size === 0) {
-                    const nonOptional = row.entry.units.filter((unit) => !unit.optional);
                     const paths =
                         row.entry.defaults.length > 0
                             ? row.entry.defaults
-                            : (nonOptional.length > 0 ? nonOptional : row.entry.units).map((unit) => unit.relativePath);
-                    for (const unitPath of paths) set.add(unitPath);
+                            : row.entry.units.filter((unit) => !unit.optional).map((unit) => unit.relativePath);
+                    if (paths.length > 0) {
+                        for (const unitPath of paths) set.add(unitPath);
+                    } else if (row.entry.units.length > 0) {
+                        this.expanded.add(row.entry.bundle.name);
+                    }
                 } else {
                     set.clear();
                 }
