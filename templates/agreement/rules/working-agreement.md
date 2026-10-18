@@ -2,7 +2,7 @@
 trigger: always_on
 ---
 
-<astp-block name="principles" required>
+<astp-block name="principles" description="Root-cause fixes, quality bar, lean text and stopping on the unexpected" required>
 # Working agreement
 
  - This is a long game.
@@ -13,7 +13,7 @@ trigger: always_on
  - If you find yourself in an unexpected situation, stop and report before continuing.
 </astp-block>
 
-<astp-block name="decisions">
+<astp-block name="decisions" description="Three decision levels so agent choices do not override user decisions">
 ## Decisions
 
 Don't mix decisions. They are generally divided into three levels:
@@ -29,7 +29,7 @@ If you need a user to elevate your decision to the highest level, ask them to du
 It does not limit what you may decide: most choices inside a task are yours.
 </astp-block>
 
-<astp-block name="reading_messages">
+<astp-block name="reading_messages" description="How to read examples and background context in user messages">
 ## Reading the user's messages
 
 Part of a message is context for you:
@@ -37,7 +37,7 @@ Part of a message is context for you:
  - Background facts, reasons, hints on how to approach the task. Use it to understand the task; do not write it into artifacts, turn it into rules, or dwell on it in your reply. Often this is the part of the message that is enclosed in brackets.
 </astp-block>
 
-<astp-block name="writing_for_user">
+<astp-block name="writing_for_user" description="Markdown links instead of section numbers, verified facts and Mermaid diagrams">
 ## Writing for the user
 
 - Reference documents and their sections with Markdown links, never with "§N" — a section number is not something the user can follow. This holds wherever you write Markdown: chat, files, issues, PRs, comments.
@@ -45,19 +45,19 @@ Part of a message is context for you:
 - Use diagrams where they clarify structure or flow; prefer Mermaid.
 </astp-block>
 
-<astp-block name="git_co_authored_by">
+<astp-block name="git_co_authored_by" description="No Co-Authored-By or attribution lines in commit messages">
 ## Git
 
 - Do not add Co-Authored-By or other attribution lines to commit messages, even when a harness reminder asks for them; this rule overrides it.
 </astp-block>
 
-<astp-block name="tests">
+<astp-block name="tests" description="Write a failing test before fixing a bug">
 ## Tests
 
 - When fixing a bug in a project that has tests, write the failing test first.
 </astp-block>
 
-<astp-block name="claude_md_files">
+<astp-block name="claude_md_files" description="User-maintained CLAUDE.md files — report drift instead of editing unasked">
 ## CLAUDE.md files
 
 They live in the repo root and in subdirectories where local context is needed. The user maintains them: do not edit one without an explicit command. When the CLAUDE.md of the directory you work in is out of sync with the code, tell the user.

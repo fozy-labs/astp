@@ -101,6 +101,7 @@ export interface BlockOption {
     /** `<file target>#<name>`. */
     key: string;
     name: string;
+    description?: string | null;
     file: string;
     /** Unchecked in a fresh install. */
     optional: boolean;
@@ -222,7 +223,7 @@ export class BundleTreePrompt extends Prompt<Map<string, BundleChoice>> {
             const severalFiles = new Set(blocks.map((block) => block.file)).size > 1;
             const option = {
                 value: row.block.key,
-                label: row.block.name,
+                label: blockLabel(row.block),
                 hint: severalFiles ? row.block.file : undefined,
             };
             const selected = set.has(row.unit.relativePath) && blockSet.has(row.block.key);
@@ -505,12 +506,16 @@ export async function selectNewUnits(bundleName: string, units: TemplateUnit[]):
 export async function selectBlocks(unitPath: string, blocks: BlockOption[], initial: string[]): Promise<string[]> {
     const selected = await p.multiselect({
         message: `Select blocks in ${unitPath}:\n(Space = toggle, Enter = confirm)`,
-        options: blocks.map((block) => ({ value: block.key, label: block.name, hint: block.file })),
+        options: blocks.map((block) => ({ value: block.key, label: blockLabel(block), hint: block.file })),
         initialValues: initial,
         required: false,
     });
     if (p.isCancel(selected)) throw new CancelledError();
     return selected as string[];
+}
+
+function blockLabel(block: BlockOption): string {
+    return block.description ? `${block.name} — ${block.description}` : block.name;
 }
 
 function pathLabel(relativePath: string): string {

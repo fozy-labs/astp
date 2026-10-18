@@ -10,6 +10,7 @@ import {
     BundleTreePrompt,
     CancelledError,
     confirmInstall,
+    selectBlocks,
     selectNewUnits,
     selectPlatform,
     showCheckReport,
@@ -263,6 +264,38 @@ describe("BundleTreePrompt blocks", () => {
         const { result } = drivePrompt([withBlocks({ preselected: true })], [DOWN, SPACE, ENTER]);
 
         await expect(result).resolves.toEqual(new Map([["one", { units: ["agents/a.md"], blocks: [] }]]));
+    });
+
+    it("renders block description in the block row label when present", async () => {
+        const entry = withBlocks({ preselected: true });
+        entry.blocks.get(RULE)![0]!.description = "First block description";
+        const { prompt, input, result } = drivePrompt([entry], [DOWN, RIGHT]);
+
+        await vi.waitFor(() => expect(prompt.rows).toHaveLength(5));
+        expect(prompt.renderRow(prompt.rows[2]!, false)).toContain("x — First block description");
+        expect(prompt.renderRow(prompt.rows[3]!, false)).not.toContain("—");
+        input.write(ENTER);
+        await result;
+    });
+
+    it("selectBlocks includes description in the option label when present", async () => {
+        vi.mocked(p.multiselect).mockResolvedValueOnce([`${RULE}#x`] as never);
+        await selectBlocks(
+            RULE,
+            [
+                { key: `${RULE}#x`, name: "x", description: "First block", file: RULE, optional: false },
+                { key: `${RULE}#y`, name: "y", description: null, file: RULE, optional: true },
+            ],
+            [`${RULE}#x`],
+        );
+        expect(p.multiselect).toHaveBeenCalledWith(
+            expect.objectContaining({
+                options: [
+                    { value: `${RULE}#x`, label: "x — First block", hint: RULE },
+                    { value: `${RULE}#y`, label: "y", hint: RULE },
+                ],
+            }),
+        );
     });
 });
 

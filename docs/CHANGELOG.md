@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- [`description` attribute](../templates/README.md#blocks) on `<astp-block>` tags, shown in block selection prompts and `astp list`.
+
 ## [0.4.0] - 2026-10-12
 
 Upgrading from 0.3.x: [migration steps](../README.md#upgrading-from-03x).
