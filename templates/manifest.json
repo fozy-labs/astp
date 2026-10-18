@@ -341,6 +341,102 @@
                 }
             ]
         },
+        "thinking-draft": {
+            "name": "thinking-draft",
+            "version": "1.0.0",
+            "description": "Draft reasoning skills — analysis, software-architecture, and testing",
+            "default": false,
+            "platforms": [
+                "claude-code"
+            ],
+            "items": [
+                {
+                    "source": "thinking-draft/skills/analysis/SKILL.md",
+                    "target": "skills/analysis/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking-draft/skills/analysis/references/causes.md",
+                    "target": "skills/analysis/references/causes.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking-draft/skills/analysis/references/checks.md",
+                    "target": "skills/analysis/references/checks.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking-draft/skills/analysis/references/glossary.md",
+                    "target": "skills/analysis/references/glossary.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking-draft/skills/analysis/references/limits.md",
+                    "target": "skills/analysis/references/limits.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking-draft/skills/analysis/references/options.md",
+                    "target": "skills/analysis/references/options.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking-draft/skills/software-architecture/SKILL.md",
+                    "target": "skills/software-architecture/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking-draft/skills/software-architecture/references/boundaries-and-systems.md",
+                    "target": "skills/software-architecture/references/boundaries-and-systems.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking-draft/skills/software-architecture/references/glossary.md",
+                    "target": "skills/software-architecture/references/glossary.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking-draft/skills/software-architecture/references/limits.md",
+                    "target": "skills/software-architecture/references/limits.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking-draft/skills/software-architecture/references/tricks.md",
+                    "target": "skills/software-architecture/references/tricks.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking-draft/skills/testing/SKILL.md",
+                    "target": "skills/testing/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking-draft/skills/testing/references/generative.md",
+                    "target": "skills/testing/references/generative.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking-draft/skills/testing/references/glossary.md",
+                    "target": "skills/testing/references/glossary.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking-draft/skills/testing/references/limits.md",
+                    "target": "skills/testing/references/limits.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking-draft/skills/testing/references/shape.md",
+                    "target": "skills/testing/references/shape.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking-draft/skills/testing/references/suite.md",
+                    "target": "skills/testing/references/suite.md",
+                    "category": "skill"
+                }
+            ]
+        },
         "agreement": {
             "name": "agreement",
             "version": "1.4.0",

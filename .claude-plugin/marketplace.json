@@ -57,6 +57,17 @@
             "skills": [
                 "./skills/design-derivation"
             ]
+        },
+        {
+            "name": "thinking-draft",
+            "source": "./templates/thinking-draft",
+            "description": "Draft reasoning skills — analysis, software-architecture, and testing",
+            "version": "1.0.0",
+            "skills": [
+                "./skills/analysis",
+                "./skills/software-architecture",
+                "./skills/testing"
+            ]
         }
     ]
 }
