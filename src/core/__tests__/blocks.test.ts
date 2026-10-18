@@ -134,6 +134,23 @@ describe("parseTemplateBlocks", () => {
         ]);
     });
 
+    it("parses use-when attribute on blocks", () => {
+        const content =
+            '<astp-block name="a" description="Desc" use-when="When the project needs custom overrides" optional>\nx\n</astp-block>\n';
+        const { blocks, errors } = parseTemplateBlocks(content);
+        expect(errors).toEqual([]);
+        expect(blocks).toEqual([
+            {
+                name: "a",
+                description: "Desc",
+                useWhen: "When the project needs custom overrides",
+                optional: true,
+                required: false,
+                content: "x\n",
+            },
+        ]);
+    });
+
     it.each([
         ["missing name", "<astp-block>\nx\n</astp-block>\n", /name/i],
         ["invalid name", '<astp-block name="Bad_Name">\nx\n</astp-block>\n', /invalid block name/i],
@@ -143,6 +160,12 @@ describe("parseTemplateBlocks", () => {
             "duplicate description",
             '<astp-block name="a" description="one" description="two">\nx\n</astp-block>\n',
             /duplicate 'description'/i,
+        ],
+        ["empty use-when", '<astp-block name="a" use-when="  ">\nx\n</astp-block>\n', /empty 'use-when'/i],
+        [
+            "duplicate use-when",
+            '<astp-block name="a" use-when="one" use-when="two">\nx\n</astp-block>\n',
+            /duplicate 'use-when'/i,
         ],
         ["empty labels", '<astp-block name="a" labels="  ">\nx\n</astp-block>\n', /empty 'labels'/i],
         [

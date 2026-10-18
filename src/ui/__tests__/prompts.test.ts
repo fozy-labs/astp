@@ -266,12 +266,15 @@ describe("BundleTreePrompt blocks", () => {
         await expect(result).resolves.toEqual(new Map([["one", { units: ["agents/a.md"], blocks: [] }]]));
     });
 
-    it("renders block description in the block row label when present", async () => {
+    it("renders block description in the block row label when present and omits bundle use-when", async () => {
         const entry = withBlocks({ preselected: true });
+        entry.bundle["use-when"] = "Only when the agent needs it";
         entry.blocks.get(RULE)![0]!.description = "First block description";
         const { prompt, input, result } = drivePrompt([entry], [DOWN, RIGHT]);
 
         await vi.waitFor(() => expect(prompt.rows).toHaveLength(5));
+        expect(prompt.renderRow(prompt.rows[0]!, false)).toContain("one — one bundle");
+        expect(prompt.renderRow(prompt.rows[0]!, false)).not.toContain("Only when the agent needs it");
         expect(prompt.renderRow(prompt.rows[2]!, false)).toContain("x — First block description");
         expect(prompt.renderRow(prompt.rows[3]!, false)).not.toContain("—");
         input.write(ENTER);

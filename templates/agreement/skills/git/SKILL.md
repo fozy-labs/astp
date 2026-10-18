@@ -6,7 +6,7 @@ argument-hint: "commit | push | <branch> | isolation <task> [--from <branch> | -
 allowed-tools: Bash(git status *) Bash(git worktree list *) PowerShell(git status *) PowerShell(git worktree list *)
 ---
 
-<astp-block name="commands" description="Routing, safety, commit, push and branch-switching rules" required>
+<astp-block name="commands" description="Routing, safety, commit, push and branch-switching rules" use-when="The user runs /git commands for commits, pushes, branch switching, worktrees or guards" required>
 # Git
 
 Request: $ARGUMENTS
@@ -86,7 +86,7 @@ Always:
 End with what changed — branch, commits (short hash and subject), pushes — and what was left: stash entries, skipped files, worktrees kept.
 </astp-block>
 
-<astp-block name="project_overrides" description="Project-specific branch naming, isolation defaults and worktree setup" optional>
+<astp-block name="project_overrides" description="Project-specific branch naming, isolation defaults and worktree setup" use-when="The project overrides default branch naming, worktree paths, isolation base/finish defaults or approval rules" optional>
 ## Project overrides
 
 <FILL_INSTRUCTION>

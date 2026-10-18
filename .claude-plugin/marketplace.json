@@ -12,7 +12,7 @@
             "name": "agreement",
             "source": "./templates/agreement",
             "description": "Working agreement rule, communication and tracker skills and /retro and /git commands — how the agent decides, asks, scopes changes, writes for the user, works with the issue tracker and git, and reviews finished work",
-            "version": "1.4.2",
+            "version": "1.4.3",
             "skills": [
                 "./skills/communication",
                 "./skills/retro"
@@ -22,7 +22,7 @@
             "name": "astp",
             "source": "./templates/astp",
             "description": "astp CLI skill — install, update and fill astp bundles from an agent",
-            "version": "1.0.4",
+            "version": "1.0.5",
             "skills": [
                 "./skills/astp"
             ]
