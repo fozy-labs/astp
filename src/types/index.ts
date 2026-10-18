@@ -28,6 +28,8 @@ export interface Bundle {
     version: string;
     /** Human-readable description for display in prompts. */
     description: string;
+    /** Guidance on when to use or install this bundle; shown in `astp list`, omitted from prompts. */
+    "use-when"?: string;
     /** Whether this bundle is pre-selected by default in the interactive wizard. */
     default: boolean;
     /**

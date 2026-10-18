@@ -185,6 +185,28 @@ describe("validateManifest", () => {
         expect(validateManifest(data).bundles.core.name).toBe("core");
     });
 
+    it("accepts use-when on bundles and rejects empty or non-string use-when", () => {
+        const data = {
+            schemaVersion: 1,
+            bundles: {
+                core: {
+                    ...withBundle("core").bundles.core,
+                    "use-when": "When the project needs core skills",
+                },
+            },
+        };
+        expect(validateManifest(data).bundles.core["use-when"]).toBe("When the project needs core skills");
+
+        for (const bad of ["", "   ", 123, null]) {
+            expect(() =>
+                validateManifest({
+                    schemaVersion: 1,
+                    bundles: { core: { ...withBundle("core").bundles.core, "use-when": bad } },
+                }),
+            ).toThrow("Invalid bundle 'core': use-when must be a non-empty string");
+        }
+    });
+
     it("accepts optional and labels on items", () => {
         const item = {
             ...rule("core", "rules/a.md"),

@@ -61,6 +61,12 @@ function validateBundle(key: string, data: unknown): void {
         throw new Error(`Invalid bundle '${key}': missing or invalid version`);
     }
 
+    if ("use-when" in bundle && bundle["use-when"] !== undefined) {
+        if (typeof bundle["use-when"] !== "string" || bundle["use-when"].trim() === "") {
+            throw new Error(`Invalid bundle '${key}': use-when must be a non-empty string`);
+        }
+    }
+
     if (!("items" in bundle) || !Array.isArray(bundle.items)) {
         throw new Error(`Invalid bundle '${key}': missing or invalid items`);
     }

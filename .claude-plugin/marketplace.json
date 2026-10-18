@@ -12,7 +12,7 @@
             "name": "agreement",
             "source": "./templates/agreement",
             "description": "Working agreement rule, communication and tracker skills and /retro and /git commands — how the agent decides, asks, scopes changes, writes for the user, works with the issue tracker and git, and reviews finished work",
-            "version": "1.4.2",
+            "version": "1.4.3",
             "skills": [
                 "./skills/communication",
                 "./skills/retro"
@@ -22,7 +22,7 @@
             "name": "astp",
             "source": "./templates/astp",
             "description": "astp CLI skill — install, update and fill astp bundles from an agent",
-            "version": "1.0.4",
+            "version": "1.0.5",
             "skills": [
                 "./skills/astp"
             ]
@@ -31,7 +31,7 @@
             "name": "docs",
             "source": "./templates/docs",
             "description": "Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas",
-            "version": "1.3.3",
+            "version": "1.3.4",
             "skills": [
                 "./skills/markdown-craft",
                 "./skills/statechart-craft"
@@ -41,7 +41,7 @@
             "name": "fozy-labs",
             "source": "./templates/fozy-labs",
             "description": "Fozy Labs stack skills — DI, FSD, rx-api, signals",
-            "version": "1.5.4",
+            "version": "1.5.5",
             "skills": [
                 "./skills/fozy-labs-di",
                 "./skills/fozy-labs-fsd",
@@ -53,7 +53,7 @@
             "name": "ponytail",
             "source": "./templates/ponytail",
             "description": "Ponytail skills — smallest complete changes, change reviews, repository audits and a shortcut debt ledger",
-            "version": "1.0.0",
+            "version": "1.0.1",
             "skills": [
                 "./skills/ponytail",
                 "./skills/ponytail-audit",
@@ -65,7 +65,7 @@
             "name": "thinking",
             "source": "./templates/thinking",
             "description": "Reasoning skills — design decision derivation, plus optional experimental analysis, software architecture, and testing",
-            "version": "1.0.0",
+            "version": "1.0.1",
             "skills": [
                 "./skills/analysis",
                 "./skills/design-derivation",

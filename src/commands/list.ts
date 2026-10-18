@@ -76,6 +76,7 @@ async function list(
             return {
                 name,
                 description: bundle?.description ?? null,
+                ...(bundle?.["use-when"] ? { "use-when": bundle["use-when"] } : {}),
                 version: bundle?.version ?? null,
                 installedVersion: installed?.version || null,
                 units: { installed: installed?.units.length ?? 0, total },
@@ -95,7 +96,7 @@ async function list(
                         bundle.installedVersion ?? "—"
                     ).padEnd(12)}${`${bundle.units.installed}/${bundle.units.total}`.padEnd(12)}${bundle.source.padEnd(
                         sourceWidth,
-                    )}${bundle.description ?? ""}`,
+                    )}${formatListedDescription([], bundle.description, bundle["use-when"])}`,
                 );
             }
             process.stdout.write(`${lines.join("\n")}\n`);
@@ -181,6 +182,7 @@ async function list(
                             key,
                             status: blockStatus,
                             description: block.description,
+                            ...(block.useWhen ? { "use-when": block.useWhen } : {}),
                             optional: block.optional,
                             required: block.required,
                             ...(block.labels ? { labels: block.labels } : {}),
@@ -234,6 +236,7 @@ async function list(
                             ...(block.labels ?? []),
                         ],
                         block.description,
+                        block["use-when"],
                     );
                     lines.push(`${`  ${block.name}`.padEnd(24)}${block.status.padEnd(13)}${blockDesc}`);
                 }
@@ -245,7 +248,8 @@ async function list(
     }
 }
 
-function formatListedDescription(tags: string[], description: string | null): string {
-    if (tags.length === 0) return description ?? "";
-    return description ? `(${tags.join(", ")}) ${description}` : tags.join(", ");
+function formatListedDescription(tags: string[], description: string | null, useWhen?: string): string {
+    const body = [description, useWhen ? `Use when: ${useWhen}` : null].filter(Boolean).join(" — ");
+    if (tags.length === 0) return body;
+    return body ? `(${tags.join(", ")}) ${body}` : tags.join(", ");
 }

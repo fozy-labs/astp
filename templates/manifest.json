@@ -4,8 +4,9 @@
     "bundles": {
         "astp": {
             "name": "astp",
-            "version": "1.0.4",
+            "version": "1.0.5",
             "description": "astp CLI skill — install, update and fill astp bundles from an agent",
+            "use-when": "The user wants the agent to manage, recommend or fill astp bundles, skills and blocks",
             "default": false,
             "platforms": [
                 "claude-code"
@@ -20,8 +21,9 @@
         },
         "fozy-labs": {
             "name": "fozy-labs",
-            "version": "1.5.4",
+            "version": "1.5.5",
             "description": "Fozy Labs stack skills — DI, FSD, rx-api, signals",
+            "use-when": "The project uses @fozy-labs packages (simplest-di, rx-toolkit) or Feature-Sliced Design (FSD v2.1)",
             "default": false,
             "platforms": [
                 "claude-code"
@@ -221,8 +223,9 @@
         },
         "docs": {
             "name": "docs",
-            "version": "1.3.3",
+            "version": "1.3.4",
             "description": "Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas",
+            "use-when": "The agent writes or maintains Markdown documentation, specs, changelogs, Mermaid diagrams or .mmd statechart schemas",
             "default": false,
             "platforms": [
                 "claude-code"
@@ -267,8 +270,9 @@
         },
         "thinking": {
             "name": "thinking",
-            "version": "1.0.0",
+            "version": "1.0.1",
             "description": "Reasoning skills — design decision derivation, plus optional experimental analysis, software architecture, and testing",
+            "use-when": "The project needs structured reasoning for UI/visual design derivation, root-cause and option analysis, software architecture, or testing",
             "default": false,
             "platforms": [
                 "claude-code"
@@ -440,8 +444,9 @@
         },
         "ponytail": {
             "name": "ponytail",
-            "version": "1.0.0",
+            "version": "1.0.1",
             "description": "Ponytail skills — smallest complete changes, change reviews, repository audits and a shortcut debt ledger",
+            "use-when": "The user wants minimal-diff coding, pre-commit change reviews, whole-repo quality audits or tracking deliberate shortcuts",
             "default": false,
             "platforms": [
                 "claude-code"
@@ -491,8 +496,9 @@
         },
         "agreement": {
             "name": "agreement",
-            "version": "1.4.2",
+            "version": "1.4.3",
             "description": "Working agreement rule, communication and tracker skills and /retro and /git commands — how the agent decides, asks, scopes changes, writes for the user, works with the issue tracker and git, and reviews finished work",
+            "use-when": "Any project or user setup that wants structured agent collaboration, git and issue-tracker workflows, and session retrospectives",
             "default": false,
             "platforms": [
                 "claude-code"

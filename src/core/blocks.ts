@@ -36,6 +36,7 @@ const FILL_WRAPPER_MARKER =
 export interface TemplateBlock {
     name: string;
     description: string | null;
+    useWhen?: string;
     labels?: string[];
     optional: boolean;
     required: boolean;
@@ -186,6 +187,7 @@ export function parseTemplateBlocks(content: string): {
     let open: {
         name: string;
         description: string | null;
+        useWhen: string | null;
         labels: string[];
         optional: boolean;
         required: boolean;
@@ -248,6 +250,7 @@ export function parseTemplateBlocks(content: string): {
                 blocks.push({
                     name: open.name,
                     description: open.description,
+                    ...(open.useWhen ? { useWhen: open.useWhen } : {}),
                     ...(open.labels.length > 0 ? { labels: open.labels } : {}),
                     optional: open.optional,
                     required: open.required,
@@ -285,10 +288,19 @@ function parseAttributes(
     attrPart: string,
     line: number,
     error: (line: number, message: string) => void,
-): { name: string; description: string | null; labels: string[]; optional: boolean; required: boolean } {
+): {
+    name: string;
+    description: string | null;
+    useWhen: string | null;
+    labels: string[];
+    optional: boolean;
+    required: boolean;
+} {
     let name = "";
     let description: string | null = null;
     let sawDescription = false;
+    let useWhen: string | null = null;
+    let sawUseWhen = false;
     const labels: string[] = [];
     let sawLabels = false;
     let optional = false;
@@ -296,6 +308,7 @@ function parseAttributes(
     for (const token of attrPart.match(/[^\s"]*(?:"[^"]*"[^\s"]*)+|[^\s"]+/g) ?? []) {
         const nameMatch = token.match(/^name="([^"]*)"$/);
         const descMatch = token.match(/^description="([^"]*)"$/);
+        const useWhenMatch = token.match(/^use-when="([^"]*)"$/);
         const labelsMatch = token.match(/^labels="([^"]*)"$/);
         if (nameMatch) {
             if (name) error(line, "duplicate 'name' attribute");
@@ -306,6 +319,12 @@ function parseAttributes(
             const trimmed = descMatch[1]!.trim();
             if (!trimmed) error(line, "empty 'description' attribute");
             else description = trimmed;
+        } else if (useWhenMatch) {
+            if (sawUseWhen) error(line, "duplicate 'use-when' attribute");
+            sawUseWhen = true;
+            const trimmed = useWhenMatch[1]!.trim();
+            if (!trimmed) error(line, "empty 'use-when' attribute");
+            else useWhen = trimmed;
         } else if (labelsMatch) {
             if (sawLabels) error(line, "duplicate 'labels' attribute");
             sawLabels = true;
@@ -341,7 +360,7 @@ function parseAttributes(
         name = "";
     }
     if (optional && required) error(line, "attributes 'optional' and 'required' cannot be combined");
-    return { name, description, labels, optional, required };
+    return { name, description, useWhen, labels, optional, required };
 }
 
 // ── Installed parse ──────────────────────────────────────────────────

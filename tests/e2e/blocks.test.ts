@@ -822,18 +822,28 @@ describe("E2E: blocks", () => {
             );
         });
 
-        it("list --json reports blocks with key, status, description and flags", async () => {
+        it("list --json reports blocks with key, status, description, use-when and flags", async () => {
             mockIsInteractive.mockReturnValue(true);
             treeChoice(undefined, []);
             await install();
             mockIsInteractive.mockReturnValue(false);
             manifest = createBlocksManifest("1.0.0");
+            manifest.bundles.blocks["use-when"] = "the project uses block rules";
             manifest.bundles.blocks.items[0]!.optional = true;
             manifest.bundles.blocks.items[0]!.labels = ["experimental"];
             contents[RULES_FILE] =
-                `${tplV1()}\n<astp-block name="added" description="Added block" labels="experimental, deprecated">\nNew.\n</astp-block>\n`;
+                `${tplV1()}\n<astp-block name="added" description="Added block" use-when="the project needs extra rules" labels="experimental, deprecated">\nNew.\n</astp-block>\n`;
 
             const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+            await executeList({ json: true, platform: "claude-code", target: "project" });
+            const listedBundles = JSON.parse(String(write.mock.calls[0]?.[0])).bundles;
+            expect(listedBundles[0]).toMatchObject({
+                name: "blocks",
+                description: "Blocks fixture",
+                "use-when": "the project uses block rules",
+            });
+
+            write.mockClear();
             await executeList({ bundle: "blocks", json: true, platform: "claude-code", target: "project" });
             const listed = JSON.parse(String(write.mock.calls[0]?.[0])).units;
             write.mockRestore();
@@ -871,6 +881,7 @@ describe("E2E: blocks", () => {
                     key: `${RULES_FILE}#added`,
                     status: "new",
                     description: "Added block",
+                    "use-when": "the project needs extra rules",
                     optional: false,
                     required: false,
                     labels: ["experimental", "deprecated"],
@@ -878,19 +889,25 @@ describe("E2E: blocks", () => {
             ]);
         });
 
-        it("list text output shows each unit's blocks under the unit row", async () => {
+        it("list text output shows each unit's blocks and use-when under the unit row", async () => {
             mockIsInteractive.mockReturnValue(true);
             treeChoice(undefined, []);
             await install();
             mockIsInteractive.mockReturnValue(false);
+            manifest.bundles.blocks["use-when"] = "the project uses block rules";
             manifest.bundles.blocks.items[0]!.optional = true;
             manifest.bundles.blocks.items[0]!.labels = ["experimental"];
             contents[RULES_FILE] = contents[RULES_FILE]!.replace(
                 '<astp-block name="code_style" optional>',
-                '<astp-block name="code_style" labels="deprecated" description="Code style rules and formatting conventions across the repository" optional>',
+                '<astp-block name="code_style" labels="deprecated" description="Code style rules and formatting conventions across the repository" use-when="the repo has no formatter" optional>',
             );
 
             const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+            await executeList({ platform: "claude-code", target: "project" });
+            const bundlesOutput = write.mock.calls.map((call) => String(call[0])).join("");
+            expect(bundlesOutput).toContain("Blocks fixture — Use when: the project uses block rules");
+
+            write.mockClear();
             await executeList({ bundle: "blocks", platform: "claude-code", target: "project" });
             const output = write.mock.calls.map((call) => String(call[0])).join("");
             write.mockRestore();
@@ -903,7 +920,7 @@ describe("E2E: blocks", () => {
             expect(rows[projectMap]).toMatch(/selected\s+required/);
             expect(rows.find((row) => row.includes("extra"))).toMatch(/declined\s*$/);
             expect(rows.find((row) => row.includes("code_style"))).toMatch(
-                /declined\s+\(optional, deprecated\) Code style rules and formatting conventions across the repository$/,
+                /declined\s+\(optional, deprecated\) Code style rules and formatting conventions across the repository — Use when: the repo has no formatter$/,
             );
         });
     });

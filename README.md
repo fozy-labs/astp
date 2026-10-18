@@ -94,7 +94,7 @@ Remove the files of an installed bundle. Repeat `--skill` to select units by nam
 astp list [bundle] [--source <spec>] [--json] [--platform <claude-code>] [--target <project|user>]
 ```
 
-List bundles and installed unit state. Add a bundle name for per-unit status, optional/label tags and descriptions, with each unit's blocks, their status, tags and descriptions; `--json` prints machine-readable output (`optional` and `labels` on units when set; `name`, `key`, `status`, `description`, `optional`, `required`, and `labels` when set on blocks).
+List bundles and installed unit state. Add a bundle name for per-unit status, optional/label tags and descriptions, with each unit's blocks, their status, tags and descriptions; `use-when` on bundles and blocks is included in both text and `--json` output (`optional` and `labels` on units when set; `name`, `key`, `status`, `description`, `optional`, `required`, and `use-when` and `labels` when set on blocks).
 
 ## Bundles
 
@@ -107,7 +107,7 @@ List bundles and installed unit state. Add a bundle name for per-unit status, op
 | `ponytail` | 4 skills | Ponytail skills — smallest complete changes, change reviews, repository audits and a shortcut debt ledger | No |
 | `agreement` | 1 rule, 4 skills | Working agreement rule, communication and tracker skills and /retro and /git commands — how the agent decides, asks, scopes changes, writes for the user, works with the issue tracker and git, and reviews finished work | No |
 
-- **astp** ships the `astp` skill: how an agent runs the CLI without prompts, when to ask before `--force`, and how to fill `<SETUP_REQUIRED>` blocks.
+- **astp** ships the `astp` skill (`/astp`): how an agent runs the CLI without prompts, answers questions and recommends bundles, units and blocks for a project (`/astp ask`), fills `<SETUP_REQUIRED>` and `<FILL_INSTRUCTION>` blocks (`/astp fill`), and asks before `--force`.
 - **fozy-labs** ships four skills covering the `@fozy-labs` stack — `simplest-di`, Feature-Sliced Design v2.1, `rx-toolkit` server state, and `rx-toolkit` signals. All four use progressive disclosure: a short `SKILL.md` plus `references/*.md` loaded only when the situation calls for them. It installs under `.claude/skills/`.
 - **thinking** ships `design-derivation` — a gated procedure for deriving visual and interface decisions (frame, value, scenario → charge and sign → surface and accuracy) instead of picking a remembered look, with no styles, palettes, or component recipes — plus three optional `experimental` skills: `analysis` (checking claims, metrics, options and causes), `software-architecture` (module boundaries, dependency direction, and invariants), and `testing` (test boundaries, data-driven and generative tests, and merge-gate suites). All four load their `references/*.md` on demand.
 - **docs** ships two skills. `markdown-craft` carries stack-agnostic rules for the Markdown an agent writes: one home per fact, one reader per document, diagram-first flows, and link hygiene, with references loaded on demand for Mermaid diagrams and for writing or reviewing a specification. `statechart-craft` covers the other kind of Mermaid an agent writes — a `.mmd` statechart schema: the `stateDiagram-v2` subset, the `%% @…` directives, the `statechart-convert` CLI and the typed file it emits, with references for the live visualizer and for the `toMermaid()` round trip.
