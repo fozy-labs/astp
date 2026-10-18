@@ -7,7 +7,7 @@
         "rules/working-agreement.md": {
           "hash": "fd269b1b93b718a2ffb4d583db4085007af5219111cf2e2c7a7ef2cc50e42b36",
           "kind": "file",
-          "version": "1.4.0",
+          "version": "1.4.1",
           "blocks": {
             "rules/working-agreement.md#claude_md_files": "592f63df",
             "rules/working-agreement.md#decisions": "fd324b02",
@@ -22,14 +22,14 @@
         "skills/communication": {
           "hash": "dff5a3062e7bca3eaee99549ba7729210a679025c842d0aa6450d0fddc0f7cbb",
           "kind": "skill",
-          "version": "1.4.0"
+          "version": "1.4.1"
         },
         "skills/git": {
-          "hash": "7632c1e5784607e6dc673722ea9ea8ad05d9eea4e8e23ca3f9d6c76882a27910",
+          "hash": "18d9bf641e11ede5063264a584b03036df025b3b83dd2eca4e29a9adb74da7bf",
           "kind": "skill",
-          "version": "1.4.0",
+          "version": "1.4.1",
           "blocks": {
-            "skills/git/SKILL.md#commands": "221689d8"
+            "skills/git/SKILL.md#commands": "e138955d"
           },
           "declinedBlocks": [
             "skills/git/SKILL.md#project_overrides"
@@ -38,12 +38,12 @@
         "skills/retro": {
           "hash": "4894c2ede04cc61215a1ca8de5b68c1c39f89daa5df369941c49f842d7e3b500",
           "kind": "skill",
-          "version": "1.4.0"
+          "version": "1.4.1"
         },
         "skills/tracker": {
           "hash": "836d3f38381c5dcecdb515718cc7b80f996742dbfd722a54ec8effe79dd361b2",
           "kind": "skill",
-          "version": "1.4.0",
+          "version": "1.4.1",
           "blocks": {
             "skills/tracker/SKILL.md#metadata": "037c2376",
             "skills/tracker/SKILL.md#methodology": "4c7cee37",
