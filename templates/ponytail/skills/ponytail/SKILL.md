@@ -6,7 +6,7 @@ description: >
   fixing, refactoring, reviewing, choosing dependencies) and when the user says
   "ponytail", "be lazy", "simplest solution", "yagni", or complains about
   over-engineering or bloat. Levels: lite, full (default), ultra.
-argument-hint: "[lite|full|ultra|off]"
+argument-hint: "[lite|full|ultra]"
 license: MIT
 metadata:
   adapted-from: "/ponytail by DietrichGebert, https://github.com/DietrichGebert/ponytail/blob/629158d41d1f1e2a65c06abe0a3d58bf76ad2745/skills/ponytail/SKILL.md"
