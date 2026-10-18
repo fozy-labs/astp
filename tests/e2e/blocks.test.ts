@@ -878,7 +878,7 @@ describe("E2E: blocks", () => {
             mockIsInteractive.mockReturnValue(false);
             contents[RULES_FILE] = contents[RULES_FILE]!.replace(
                 '<astp-block name="code_style" optional>',
-                '<astp-block name="code_style" description="Code style rules" optional>',
+                '<astp-block name="code_style" description="Code style rules and formatting conventions across the repository" optional>',
             );
 
             const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -893,7 +893,7 @@ describe("E2E: blocks", () => {
             expect(rows[projectMap]).toMatch(/selected\s+required/);
             expect(rows.find((row) => row.includes("extra"))).toMatch(/declined\s*$/);
             expect(rows.find((row) => row.includes("code_style"))).toMatch(
-                /declined\s+\(optional\) Code style rules$/,
+                /declined\s+\(optional\) Code style rules and formatting conventions across the repository$/,
             );
         });
     });

@@ -126,7 +126,7 @@ async function list(
         } else {
             const lines = ["Name                    Status       Description"];
             for (const unit of listed) {
-                lines.push(`${unit.name.padEnd(24)}${unit.status.padEnd(13)}`.slice(0, 80));
+                lines.push(`${unit.name.padEnd(24)}${unit.status.padEnd(13)}`);
             }
             process.stdout.write(`${lines.join("\n")}\n`);
         }
@@ -220,12 +220,12 @@ async function list(
             const lines = ["Name                    Status       Description"];
             for (const unit of listed) {
                 const description = unit.description ?? "";
-                lines.push(`${unit.name.padEnd(24)}${unit.status.padEnd(13)}${description}`.slice(0, 80));
+                lines.push(`${unit.name.padEnd(24)}${unit.status.padEnd(13)}${description}`);
                 for (const block of unit.blocks ?? []) {
                     const flag = block.required ? "required" : block.optional ? "optional" : "";
                     const blockDesc =
                         flag && block.description ? `(${flag}) ${block.description}` : (block.description ?? flag);
-                    lines.push(`${`  ${block.name}`.padEnd(24)}${block.status.padEnd(13)}${blockDesc}`.slice(0, 80));
+                    lines.push(`${`  ${block.name}`.padEnd(24)}${block.status.padEnd(13)}${blockDesc}`);
                 }
             }
             process.stdout.write(`${lines.join("\n")}\n`);
