@@ -183,6 +183,7 @@ async function list(
                             description: block.description,
                             optional: block.optional,
                             required: block.required,
+                            ...(block.labels ? { labels: block.labels } : {}),
                         };
                     }),
                 );
@@ -192,6 +193,8 @@ async function list(
                     kind: unit.kind,
                     status,
                     description,
+                    ...(unit.optional !== undefined ? { optional: unit.optional } : {}),
+                    ...(unit.labels ? { labels: unit.labels } : {}),
                     ...(blocks.length > 0 ? { blocks } : {}),
                 };
             }),
@@ -219,12 +222,19 @@ async function list(
         } else {
             const lines = ["Name                    Status       Description"];
             for (const unit of listed) {
-                const description = unit.description ?? "";
-                lines.push(`${unit.name.padEnd(24)}${unit.status.padEnd(13)}${description}`);
+                const unitDesc = formatListedDescription(
+                    [...(unit.optional ? ["optional"] : []), ...(unit.labels ?? [])],
+                    unit.description,
+                );
+                lines.push(`${unit.name.padEnd(24)}${unit.status.padEnd(13)}${unitDesc}`);
                 for (const block of unit.blocks ?? []) {
-                    const flag = block.required ? "required" : block.optional ? "optional" : "";
-                    const blockDesc =
-                        flag && block.description ? `(${flag}) ${block.description}` : (block.description ?? flag);
+                    const blockDesc = formatListedDescription(
+                        [
+                            ...(block.required ? ["required"] : block.optional ? ["optional"] : []),
+                            ...(block.labels ?? []),
+                        ],
+                        block.description,
+                    );
                     lines.push(`${`  ${block.name}`.padEnd(24)}${block.status.padEnd(13)}${blockDesc}`);
                 }
             }
@@ -233,4 +243,9 @@ async function list(
     } finally {
         await fs.rm(tempDir, { recursive: true, force: true });
     }
+}
+
+function formatListedDescription(tags: string[], description: string | null): string {
+    if (tags.length === 0) return description ?? "";
+    return description ? `(${tags.join(", ")}) ${description}` : tags.join(", ");
 }

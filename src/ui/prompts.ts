@@ -102,6 +102,7 @@ export interface BlockOption {
     key: string;
     name: string;
     description?: string | null;
+    labels?: string[];
     file: string;
     /** Unchecked in a fresh install. */
     optional: boolean;
@@ -234,7 +235,7 @@ export class BundleTreePrompt extends Prompt<Map<string, BundleChoice>> {
             const blocks = row.entry.blocks.get(row.unit.relativePath) ?? [];
             const option = {
                 value: row.unit.relativePath,
-                label: pathLabel(row.unit.relativePath),
+                label: unitLabel(row.unit),
                 hint: row.unit.relativePath,
             };
             const line = `  ${renderBundleOption(option, rowState(active, selected))}`;
@@ -261,7 +262,8 @@ export class BundleTreePrompt extends Prompt<Map<string, BundleChoice>> {
             group.total += 1;
             const unitChosen = !picked || set.has(unit.relativePath);
             if (unitChosen) group.chosen += 1;
-            if (picked && (!unitChosen || this.blocksCustomized(entry, unit))) group.customized = true;
+            if (picked && (unitChosen === Boolean(unit.optional) || (unitChosen && this.blocksCustomized(entry, unit))))
+                group.customized = true;
             groups.set(kind, group);
         }
         return (
@@ -341,10 +343,11 @@ export class BundleTreePrompt extends Prompt<Map<string, BundleChoice>> {
                     if (set.has(row.unit.relativePath)) set.delete(row.unit.relativePath);
                     else set.add(row.unit.relativePath);
                 } else if (set.size === 0) {
+                    const nonOptional = row.entry.units.filter((unit) => !unit.optional);
                     const paths =
                         row.entry.defaults.length > 0
                             ? row.entry.defaults
-                            : row.entry.units.map((unit) => unit.relativePath);
+                            : (nonOptional.length > 0 ? nonOptional : row.entry.units).map((unit) => unit.relativePath);
                     for (const unitPath of paths) set.add(unitPath);
                 } else {
                     set.clear();
@@ -493,10 +496,10 @@ export async function selectNewUnits(bundleName: string, units: TemplateUnit[]):
         message: `Select new items from ${bundleName}:\n(Space = toggle, Enter = confirm)`,
         options: units.map((unit) => ({
             value: unit.relativePath,
-            label: pathLabel(unit.relativePath),
+            label: unitLabel(unit),
             hint: unit.relativePath,
         })),
-        initialValues: units.map((unit) => unit.relativePath),
+        initialValues: units.filter((unit) => !unit.optional).map((unit) => unit.relativePath),
         required: false,
     });
     if (p.isCancel(selected)) throw new CancelledError();
@@ -514,8 +517,17 @@ export async function selectBlocks(unitPath: string, blocks: BlockOption[], init
     return selected as string[];
 }
 
+function unitLabel(unit: TemplateUnit): string {
+    return withLabels(pathLabel(unit.relativePath), unit.labels);
+}
+
 function blockLabel(block: BlockOption): string {
-    return block.description ? `${block.name} — ${block.description}` : block.name;
+    const head = withLabels(block.name, block.labels);
+    return block.description ? `${head} — ${block.description}` : head;
+}
+
+function withLabels(name: string, labels?: string[]): string {
+    return labels && labels.length > 0 ? `${name} [${labels.join(", ")}]` : name;
 }
 
 function pathLabel(relativePath: string): string {

@@ -64,6 +64,67 @@ describe("groupTemplateItems", () => {
             ]),
         ).toThrow("Skill item 'skills/alpha/references/guide.md' has no owning SKILL.md");
     });
+
+    it("copies optional and labels from file items and root SKILL.md items onto the unit", () => {
+        const units = groupTemplateItems([
+            {
+                source: "bundle/skills/alpha/references/guide.md",
+                target: "skills/alpha/references/guide.md",
+                category: "skill",
+            },
+            {
+                source: "bundle/skills/alpha/SKILL.md",
+                target: "skills/alpha/SKILL.md",
+                category: "skill",
+                optional: true,
+                labels: ["experimental"],
+            },
+            {
+                source: "bundle/rules/r.md",
+                target: "rules/r.md",
+                category: "rule",
+                optional: false,
+                labels: ["deprecated"],
+            },
+        ]);
+        expect(units[0]).toMatchObject({
+            kind: "skill",
+            relativePath: "skills/alpha",
+            optional: true,
+            labels: ["experimental"],
+        });
+        expect(units[1]).toMatchObject({
+            kind: "file",
+            relativePath: "rules/r.md",
+            optional: false,
+            labels: ["deprecated"],
+        });
+    });
+
+    it("rejects optional or labels on a non-root skill item", () => {
+        expect(() =>
+            groupTemplateItems([
+                { source: "bundle/skills/alpha/SKILL.md", target: "skills/alpha/SKILL.md", category: "skill" },
+                {
+                    source: "bundle/skills/alpha/references/guide.md",
+                    target: "skills/alpha/references/guide.md",
+                    category: "skill",
+                    optional: true,
+                },
+            ]),
+        ).toThrow("Skill item 'skills/alpha/references/guide.md' cannot set 'optional' or 'labels'");
+        expect(() =>
+            groupTemplateItems([
+                { source: "bundle/skills/alpha/SKILL.md", target: "skills/alpha/SKILL.md", category: "skill" },
+                {
+                    source: "bundle/skills/alpha/references/guide.md",
+                    target: "skills/alpha/references/guide.md",
+                    category: "skill",
+                    labels: ["experimental"],
+                },
+            ]),
+        ).toThrow("Skill item 'skills/alpha/references/guide.md' cannot set 'optional' or 'labels'");
+    });
 });
 
 describe("resolveUnitPaths", () => {

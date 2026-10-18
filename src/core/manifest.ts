@@ -7,6 +7,7 @@ import { isOsClutterName } from "./skill-tree.js";
 const SUPPORTED_SCHEMA_VERSION = 1;
 const VALID_PLATFORMS: ReadonlySet<Platform> = new Set(ALL_PLATFORMS);
 const VALID_CATEGORIES: ReadonlySet<ItemCategory> = new Set(["agent", "skill", "rule"]);
+const LABEL_REGEX = /^[a-z][a-z0-9_-]*$/;
 
 export function validateManifest(data: unknown): Manifest {
     if (typeof data !== "object" || data === null) {
@@ -75,6 +76,25 @@ function validateBundle(key: string, data: unknown): void {
         if (source !== `${key}/${target}`) throw new Error(`${at}.source must be '${key}/${target}'`);
         if (!VALID_CATEGORIES.has(category as ItemCategory)) {
             throw new Error(`${at}.category must be one of: ${[...VALID_CATEGORIES].join(", ")}`);
+        }
+        const { optional, labels } = item as Record<string, unknown>;
+        if (optional !== undefined && typeof optional !== "boolean") {
+            throw new Error(`${at}.optional must be a boolean`);
+        }
+        if (labels !== undefined) {
+            if (!Array.isArray(labels)) {
+                throw new Error(`${at}.labels must be an array of strings`);
+            }
+            const seenLabels = new Set<string>();
+            for (const label of labels) {
+                if (typeof label !== "string" || !LABEL_REGEX.test(label)) {
+                    throw new Error(`${at}.labels has invalid label '${String(label)}' (expected [a-z][a-z0-9_-]*)`);
+                }
+                if (seenLabels.has(label)) {
+                    throw new Error(`${at}.labels has duplicate label '${label}'`);
+                }
+                seenLabels.add(label);
+            }
         }
         return target;
     });

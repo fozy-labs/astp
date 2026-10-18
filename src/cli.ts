@@ -68,7 +68,7 @@ program
     .option("--target <type>", TARGET_HELP)
     .addHelpText(
         "after",
-        "\nWithout --skill or --block: a terminal asks which units to install; without one,\nevery unit and non-optional block is selected, clearing earlier declines.\n--skill and --block add to the current selection. With --skill or --block,\n--force covers only the named units and blocks.",
+        "\nWithout --skill or --block: a terminal asks which units to install; without one,\nevery non-optional unit and block is selected, clearing earlier declines.\n--skill and --block add to the current selection. With --skill or --block,\n--force covers only the named units and blocks.",
     )
     .action(
         async (
@@ -102,7 +102,7 @@ program
     .option("--target <type>", TARGET_HELP)
     .addHelpText(
         "after",
-        "\nNew units are installed (a terminal asks first). Units dropped upstream are\nremoved; locally changed ones stay in place and leave astp.lock.",
+        "\nNew non-optional units are installed (a terminal asks first). Units dropped upstream\nare removed; locally changed ones stay in place and leave astp.lock.",
     )
     .action(async (options: { force?: boolean; platform?: string; target?: string }) => {
         await executeUpdate({

@@ -480,4 +480,84 @@ describe("E2E: install", () => {
             /No bundle could be read/,
         );
     });
+
+    it("declines optional units on non-TTY install unless already installed or requested via --skill", async () => {
+        const optTarget = "agents/optional.agent.md";
+        manifest.bundles.core.items.push({
+            source: `core/${optTarget}`,
+            target: optTarget,
+            category: "agent",
+            optional: true,
+            labels: ["experimental"],
+        });
+
+        await installBundle("core");
+        const rootDir = path.join(projectDir, ".claude");
+        let lock = await readLockFixture(rootDir);
+        expect(Object.keys(lock.bundles.core.units)).toEqual(["skills/orchestrate"]);
+        expect(lock.bundles.core.declined).toEqual([optTarget]);
+        await expect(fs.access(path.join(rootDir, optTarget))).rejects.toThrow();
+
+        // Install the optional unit explicitly with --skill.
+        const tplDir = await setupTemplateDir(manifest, "core");
+        templateDirs.push(tplDir);
+        mockDownloadBundle.mockResolvedValue(tplDir);
+        await executeInstall({
+            bundle: "core",
+            skills: ["optional.agent.md"],
+            platform: "claude-code",
+            target: "project",
+        });
+        lock = await readLockFixture(rootDir);
+        expect(Object.keys(lock.bundles.core.units)).toEqual([optTarget, "skills/orchestrate"]);
+        expect(lock.bundles.core.declined).toEqual([]);
+        await expect(fs.access(path.join(rootDir, optTarget))).resolves.toBeUndefined();
+
+        // Subsequent plain non-TTY install keeps the already-installed optional unit.
+        await installBundle("core");
+        lock = await readLockFixture(rootDir);
+        expect(Object.keys(lock.bundles.core.units)).toEqual([optTarget, "skills/orchestrate"]);
+    });
+
+    it("excludes optional units from interactive tree defaults unless already installed", async () => {
+        const optTarget = "agents/optional.agent.md";
+        manifest.bundles.core.items.push({
+            source: `core/${optTarget}`,
+            target: optTarget,
+            category: "agent",
+            optional: true,
+        });
+        mockIsInteractive.mockReturnValue(true);
+        mockSelectBundleItems.mockImplementation(
+            async (entries) =>
+                new Map(
+                    entries.map((entry) => [
+                        entry.bundle.name,
+                        { units: entry.defaults, blocks: entry.blockDefaults },
+                    ]),
+                ),
+        );
+
+        await installBundle("core");
+        const firstDefaults = mockSelectBundleItems.mock.calls[0]![0][0]!.defaults;
+        expect(firstDefaults).toEqual(["skills/orchestrate"]);
+
+        // Now install optional unit via --skill, then re-open interactive tree: optional unit is in defaults.
+        mockIsInteractive.mockReturnValue(false);
+        const tplDir = await setupTemplateDir(manifest, "core");
+        templateDirs.push(tplDir);
+        mockDownloadBundle.mockResolvedValue(tplDir);
+        await executeInstall({
+            bundle: "core",
+            skills: ["optional.agent.md"],
+            platform: "claude-code",
+            target: "project",
+        });
+
+        mockSelectBundleItems.mockClear();
+        mockIsInteractive.mockReturnValue(true);
+        await installBundle("core");
+        const secondDefaults = mockSelectBundleItems.mock.calls[0]![0][0]!.defaults;
+        expect(secondDefaults).toEqual(["skills/orchestrate", optTarget]);
+    });
 });

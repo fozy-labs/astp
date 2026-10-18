@@ -283,17 +283,95 @@ describe("BundleTreePrompt blocks", () => {
         await selectBlocks(
             RULE,
             [
-                { key: `${RULE}#x`, name: "x", description: "First block", file: RULE, optional: false },
-                { key: `${RULE}#y`, name: "y", description: null, file: RULE, optional: true },
+                {
+                    key: `${RULE}#x`,
+                    name: "x",
+                    description: "First block",
+                    labels: ["experimental"],
+                    file: RULE,
+                    optional: false,
+                },
+                { key: `${RULE}#y`, name: "y", description: null, labels: ["deprecated"], file: RULE, optional: true },
             ],
             [`${RULE}#x`],
         );
         expect(p.multiselect).toHaveBeenCalledWith(
             expect.objectContaining({
                 options: [
-                    { value: `${RULE}#x`, label: "x — First block", hint: RULE },
-                    { value: `${RULE}#y`, label: "y", hint: RULE },
+                    { value: `${RULE}#x`, label: "x [experimental] — First block", hint: RULE },
+                    { value: `${RULE}#y`, label: "y [deprecated]", hint: RULE },
                 ],
+            }),
+        );
+    });
+
+    it("renders unit and block labels and tracks optional unit customization in bundle counts", async () => {
+        const entry = treeEntry("one", ["agents/a.md", "agents/opt.md"], {
+            defaults: ["agents/a.md"],
+            preselected: true,
+            blocks: { "agents/a.md": ["x"] },
+            blockDefaults: ["agents/a.md#x"],
+        });
+        entry.units[0]!.labels = ["experimental"];
+        entry.units[1]!.optional = true;
+        entry.units[1]!.labels = ["deprecated"];
+        entry.blocks.get("agents/a.md")![0]!.labels = ["beta"];
+
+        const { prompt, input, result } = drivePrompt([entry], []);
+        await vi.waitFor(() => expect(prompt.rows).toHaveLength(3));
+        expect(prompt.renderRow(prompt.rows[1]!, false)).toContain("a.md [experimental]");
+        expect(prompt.renderRow(prompt.rows[2]!, false)).toContain("opt.md [deprecated]");
+
+        // Collapsed with default selection (a.md selected, opt.md optional and unchecked): not marked customized (*).
+        input.write(LEFT);
+        await vi.waitFor(() => expect(prompt.expanded.has("one")).toBe(false));
+        expect(prompt.renderRow({ entry }, false)).toContain("└ 1/2 agents");
+        expect(prompt.renderRow({ entry }, false)).not.toContain("*");
+
+        // Check the optional unit: now customized (*).
+        for (const key of [RIGHT, DOWN, DOWN, SPACE, LEFT]) input.write(key);
+        await vi.waitFor(() => expect(prompt.expanded.has("one")).toBe(false));
+        expect(prompt.renderRow({ entry }, false)).toContain("└ 2* agents");
+
+        // Expand block row to check its label.
+        for (const key of [RIGHT, DOWN, RIGHT]) input.write(key);
+        await vi.waitFor(() => expect(prompt.rows).toHaveLength(4));
+        expect(prompt.renderRow(prompt.rows[2]!, false)).toContain("x [beta]");
+
+        input.write(ENTER);
+        await result;
+    });
+
+    it("selectNewUnits pre-checks only non-optional units and renders unit labels", async () => {
+        vi.mocked(p.multiselect).mockResolvedValueOnce(["agents/a.md"] as never);
+        await selectNewUnits("core", [
+            {
+                kind: "file",
+                relativePath: "agents/a.md",
+                item: { source: "core/agents/a.md", target: "agents/a.md", category: "agent" },
+                labels: ["experimental"],
+            },
+            {
+                kind: "file",
+                relativePath: "agents/opt.md",
+                item: {
+                    source: "core/agents/opt.md",
+                    target: "agents/opt.md",
+                    category: "agent",
+                    optional: true,
+                    labels: ["deprecated"],
+                },
+                optional: true,
+                labels: ["deprecated"],
+            },
+        ]);
+        expect(p.multiselect).toHaveBeenCalledWith(
+            expect.objectContaining({
+                options: [
+                    { value: "agents/a.md", label: "a.md [experimental]", hint: "agents/a.md" },
+                    { value: "agents/opt.md", label: "opt.md [deprecated]", hint: "agents/opt.md" },
+                ],
+                initialValues: ["agents/a.md"],
             }),
         );
     });

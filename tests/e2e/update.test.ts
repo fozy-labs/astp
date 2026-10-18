@@ -269,4 +269,34 @@ describe("E2E: update", () => {
             await expect(fs.stat(dir)).rejects.toMatchObject({ code: "ENOENT" });
         }
     });
+
+    it("update installs new non-optional units and declines new optional units non-interactively", async () => {
+        await installPipeline();
+        const manifestV2 = createFixtureManifest("1.1.0");
+        manifestV2.bundles.pipeline.items.push(
+            {
+                source: "pipeline/agents/new-default.agent.md",
+                target: "agents/new-default.agent.md",
+                category: "agent",
+            },
+            {
+                source: "pipeline/agents/new-optional.agent.md",
+                target: "agents/new-optional.agent.md",
+                category: "agent",
+                optional: true,
+                labels: ["experimental"],
+            },
+        );
+        await setupV2Mocks(manifestV2);
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        const claudeDir = path.join(projectDir, ".claude");
+        await expect(fs.access(path.join(claudeDir, "agents/new-default.agent.md"))).resolves.toBeUndefined();
+        await expect(fs.access(path.join(claudeDir, "agents/new-optional.agent.md"))).rejects.toThrow();
+        const lock = JSON.parse(await fs.readFile(path.join(claudeDir, "astp.lock"), "utf8"));
+        expect(lock.bundles.pipeline.units["agents/new-default.agent.md"]).toBeDefined();
+        expect(lock.bundles.pipeline.units["agents/new-optional.agent.md"]).toBeUndefined();
+        expect(lock.bundles.pipeline.declined).toEqual(["agents/new-optional.agent.md"]);
+    });
 });
