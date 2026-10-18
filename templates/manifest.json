@@ -356,8 +356,18 @@
                     "category": "skill"
                 },
                 {
+                    "source": "ponytail/skills/ponytail/LICENSE",
+                    "target": "skills/ponytail/LICENSE",
+                    "category": "skill"
+                },
+                {
                     "source": "ponytail/skills/ponytail-review/SKILL.md",
                     "target": "skills/ponytail-review/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "ponytail/skills/ponytail-review/LICENSE",
+                    "target": "skills/ponytail-review/LICENSE",
                     "category": "skill"
                 },
                 {
@@ -366,8 +376,18 @@
                     "category": "skill"
                 },
                 {
+                    "source": "ponytail/skills/ponytail-audit/LICENSE",
+                    "target": "skills/ponytail-audit/LICENSE",
+                    "category": "skill"
+                },
+                {
                     "source": "ponytail/skills/ponytail-debt/SKILL.md",
                     "target": "skills/ponytail-debt/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "ponytail/skills/ponytail-debt/LICENSE",
+                    "target": "skills/ponytail-debt/LICENSE",
                     "category": "skill"
                 }
             ]

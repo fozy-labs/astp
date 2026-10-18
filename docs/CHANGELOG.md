@@ -7,12 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- The `ponytail` bundle with `ponytail`, `ponytail-review`, `ponytail-audit` and `ponytail-debt`
-  skills from [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail), with their MIT
-  license and pinned-source attribution to DietrichGebert.
-
 ## [0.4.0] - 2026-10-12
 
 Upgrading from 0.3.x: [migration steps](../README.md#upgrading-from-03x).
