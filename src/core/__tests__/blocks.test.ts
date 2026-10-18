@@ -117,6 +117,23 @@ describe("parseTemplateBlocks", () => {
         ]);
     });
 
+    it("parses labels attribute on blocks", () => {
+        const content =
+            '<astp-block name="a" labels="experimental, deprecated" description="Desc" optional>\nx\n</astp-block>\n';
+        const { blocks, errors } = parseTemplateBlocks(content);
+        expect(errors).toEqual([]);
+        expect(blocks).toEqual([
+            {
+                name: "a",
+                description: "Desc",
+                labels: ["experimental", "deprecated"],
+                optional: true,
+                required: false,
+                content: "x\n",
+            },
+        ]);
+    });
+
     it.each([
         ["missing name", "<astp-block>\nx\n</astp-block>\n", /name/i],
         ["invalid name", '<astp-block name="Bad_Name">\nx\n</astp-block>\n', /invalid block name/i],
@@ -126,6 +143,23 @@ describe("parseTemplateBlocks", () => {
             "duplicate description",
             '<astp-block name="a" description="one" description="two">\nx\n</astp-block>\n',
             /duplicate 'description'/i,
+        ],
+        ["empty labels", '<astp-block name="a" labels="  ">\nx\n</astp-block>\n', /empty 'labels'/i],
+        [
+            "duplicate labels attribute",
+            '<astp-block name="a" labels="one" labels="two">\nx\n</astp-block>\n',
+            /duplicate 'labels'/i,
+        ],
+        ["invalid label", '<astp-block name="a" labels="Bad">\nx\n</astp-block>\n', /invalid block label 'Bad'/i],
+        [
+            "trailing comma in labels",
+            '<astp-block name="a" labels="ok,">\nx\n</astp-block>\n',
+            /invalid block label ''/i,
+        ],
+        [
+            "duplicate label value",
+            '<astp-block name="a" labels="experimental, experimental">\nx\n</astp-block>\n',
+            /duplicate block label 'experimental'/i,
         ],
         [
             "optional with required",

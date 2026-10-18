@@ -12,6 +12,7 @@ import { createHash } from "node:crypto";
 const FM_REGEX = /^(---[ \t]*\r?\n)([\s\S]*?)(---[ \t]*(?:\r?\n|$))/;
 
 const NAME_REGEX = /^[a-z][a-z0-9_]*$/;
+const LABEL_REGEX = /^[a-z][a-z0-9_-]*$/;
 const BLOCK_OPEN = /^<astp-block(?=[\s>])((?:[^>"]|"[^"]*")*)>\s*$/;
 const BLOCK_OPEN_PREFIX = /^<astp-block(?=[\s>])/;
 const BLOCK_CLOSE = /^<\/astp-block>\s*$/;
@@ -35,6 +36,7 @@ const FILL_WRAPPER_MARKER =
 export interface TemplateBlock {
     name: string;
     description: string | null;
+    labels?: string[];
     optional: boolean;
     required: boolean;
     /** Lines between the tag lines, each with its `\n`; ends with `\n` unless empty. */
@@ -184,6 +186,7 @@ export function parseTemplateBlocks(content: string): {
     let open: {
         name: string;
         description: string | null;
+        labels: string[];
         optional: boolean;
         required: boolean;
         line: number;
@@ -245,6 +248,7 @@ export function parseTemplateBlocks(content: string): {
                 blocks.push({
                     name: open.name,
                     description: open.description,
+                    ...(open.labels.length > 0 ? { labels: open.labels } : {}),
                     optional: open.optional,
                     required: open.required,
                     content: lines.slice(contentStart, index).join(""),
@@ -281,15 +285,18 @@ function parseAttributes(
     attrPart: string,
     line: number,
     error: (line: number, message: string) => void,
-): { name: string; description: string | null; optional: boolean; required: boolean } {
+): { name: string; description: string | null; labels: string[]; optional: boolean; required: boolean } {
     let name = "";
     let description: string | null = null;
     let sawDescription = false;
+    const labels: string[] = [];
+    let sawLabels = false;
     let optional = false;
     let required = false;
     for (const token of attrPart.match(/[^\s"]*(?:"[^"]*"[^\s"]*)+|[^\s"]+/g) ?? []) {
         const nameMatch = token.match(/^name="([^"]*)"$/);
         const descMatch = token.match(/^description="([^"]*)"$/);
+        const labelsMatch = token.match(/^labels="([^"]*)"$/);
         if (nameMatch) {
             if (name) error(line, "duplicate 'name' attribute");
             name = nameMatch[1]!;
@@ -299,6 +306,26 @@ function parseAttributes(
             const trimmed = descMatch[1]!.trim();
             if (!trimmed) error(line, "empty 'description' attribute");
             else description = trimmed;
+        } else if (labelsMatch) {
+            if (sawLabels) error(line, "duplicate 'labels' attribute");
+            sawLabels = true;
+            const raw = labelsMatch[1]!.trim();
+            if (!raw) {
+                error(line, "empty 'labels' attribute");
+            } else {
+                const seen = new Set<string>();
+                for (const part of raw.split(",")) {
+                    const label = part.trim();
+                    if (!LABEL_REGEX.test(label)) {
+                        error(line, `invalid block label '${label}' (expected [a-z][a-z0-9_-]*)`);
+                    } else if (seen.has(label)) {
+                        error(line, `duplicate block label '${label}'`);
+                    } else {
+                        seen.add(label);
+                        labels.push(label);
+                    }
+                }
+            }
         } else if (token === "optional") {
             optional = true;
         } else if (token === "required") {
@@ -314,7 +341,7 @@ function parseAttributes(
         name = "";
     }
     if (optional && required) error(line, "attributes 'optional' and 'required' cannot be combined");
-    return { name, description, optional, required };
+    return { name, description, labels, optional, required };
 }
 
 // ── Installed parse ──────────────────────────────────────────────────

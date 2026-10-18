@@ -46,6 +46,10 @@ export interface TemplateItem {
     target: string;
     /** Category for display grouping. */
     category: ItemCategory;
+    /** Whether the unit is unchecked by default on install and update. */
+    optional?: boolean;
+    /** Informational tags (e.g. "experimental", "deprecated") shown in prompts and `astp list`. */
+    labels?: string[];
 }
 
 export type ItemCategory = "agent" | "skill" | "rule";

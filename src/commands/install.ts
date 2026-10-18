@@ -216,8 +216,12 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 selected = new Set(choice.units);
                 declined = new Set([...paths].filter((unitPath) => !selected.has(unitPath)));
             } else {
-                selected = paths;
-                declined = new Set();
+                selected = new Set(
+                    units
+                        .filter((unit) => !unit.optional || tracked.has(unit.relativePath))
+                        .map((unit) => unit.relativePath),
+                );
+                declined = new Set([...paths].filter((unitPath) => !selected.has(unitPath)));
             }
 
             const requested = resolveBlockKeys(options.blocks ?? [], unitBlockFiles, bundle.name);
@@ -338,10 +342,19 @@ function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-/** Units a bundle installs without customization: everything minus the lock's declines. */
-function defaultSelection(units: Array<{ relativePath: string }>, installed?: InstalledBundle): string[] {
+/**
+ * Units pre-checked in the install tree: lock selections plus new non-optional
+ * units (a bundle not in the lock starts with all non-optional units).
+ */
+function defaultSelection(
+    units: Array<{ relativePath: string; optional?: boolean }>,
+    installed?: InstalledBundle,
+): string[] {
+    const tracked = new Set(installed?.units.map((unit) => unit.relativePath) ?? []);
     const declined = new Set(installed?.declined ?? []);
-    return units.map((unit) => unit.relativePath).filter((unitPath) => !declined.has(unitPath));
+    return units
+        .filter((unit) => tracked.has(unit.relativePath) || (!declined.has(unit.relativePath) && !unit.optional))
+        .map((unit) => unit.relativePath);
 }
 
 function countStatuses(statuses: FileStatus[]): string {

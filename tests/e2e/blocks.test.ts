@@ -828,13 +828,19 @@ describe("E2E: blocks", () => {
             await install();
             mockIsInteractive.mockReturnValue(false);
             manifest = createBlocksManifest("1.0.0");
+            manifest.bundles.blocks.items[0]!.optional = true;
+            manifest.bundles.blocks.items[0]!.labels = ["experimental"];
             contents[RULES_FILE] =
-                `${tplV1()}\n<astp-block name="added" description="Added block">\nNew.\n</astp-block>\n`;
+                `${tplV1()}\n<astp-block name="added" description="Added block" labels="experimental, deprecated">\nNew.\n</astp-block>\n`;
 
             const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
             await executeList({ bundle: "blocks", json: true, platform: "claude-code", target: "project" });
             const listed = JSON.parse(String(write.mock.calls[0]?.[0])).units;
             write.mockRestore();
+            expect(listed[0]).toMatchObject({
+                optional: true,
+                labels: ["experimental"],
+            });
             expect(listed[0].blocks).toEqual([
                 {
                     name: "project_map",
@@ -867,6 +873,7 @@ describe("E2E: blocks", () => {
                     description: "Added block",
                     optional: false,
                     required: false,
+                    labels: ["experimental", "deprecated"],
                 },
             ]);
         });
@@ -876,9 +883,11 @@ describe("E2E: blocks", () => {
             treeChoice(undefined, []);
             await install();
             mockIsInteractive.mockReturnValue(false);
+            manifest.bundles.blocks.items[0]!.optional = true;
+            manifest.bundles.blocks.items[0]!.labels = ["experimental"];
             contents[RULES_FILE] = contents[RULES_FILE]!.replace(
                 '<astp-block name="code_style" optional>',
-                '<astp-block name="code_style" description="Code style rules and formatting conventions across the repository" optional>',
+                '<astp-block name="code_style" labels="deprecated" description="Code style rules and formatting conventions across the repository" optional>',
             );
 
             const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -890,10 +899,11 @@ describe("E2E: blocks", () => {
             const unitRow = rows.findIndex((row) => row.includes("claude-md.md"));
             const projectMap = rows.findIndex((row) => row.includes("project_map"));
             expect(projectMap).toBeGreaterThan(unitRow);
+            expect(rows[unitRow]).toMatch(/installed\s+\(optional, experimental\) Project map and code style$/);
             expect(rows[projectMap]).toMatch(/selected\s+required/);
             expect(rows.find((row) => row.includes("extra"))).toMatch(/declined\s*$/);
             expect(rows.find((row) => row.includes("code_style"))).toMatch(
-                /declined\s+\(optional\) Code style rules and formatting conventions across the repository$/,
+                /declined\s+\(optional, deprecated\) Code style rules and formatting conventions across the repository$/,
             );
         });
     });

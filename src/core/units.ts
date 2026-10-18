@@ -6,12 +6,16 @@ export interface FileTemplateUnit {
     kind: "file";
     relativePath: string;
     item: TemplateItem;
+    optional?: boolean;
+    labels?: string[];
 }
 
 export interface SkillTemplateUnit {
     kind: "skill";
     relativePath: string;
     items: TemplateItem[];
+    optional?: boolean;
+    labels?: string[];
 }
 
 export type TemplateUnit = FileTemplateUnit | SkillTemplateUnit;
@@ -20,12 +24,18 @@ export function groupTemplateItems(items: TemplateItem[]): TemplateUnit[] {
     const skillRoots = items
         .filter((item) => item.category === "skill" && item.target.endsWith("/SKILL.md"))
         .map((item) => path.posix.dirname(item.target));
-    const skills = new Map<string, TemplateItem[]>();
+    const skills = new Map<string, SkillTemplateUnit>();
     const units: TemplateUnit[] = [];
 
     for (const item of items) {
         if (item.category !== "skill") {
-            units.push({ kind: "file", relativePath: item.target, item });
+            units.push({
+                kind: "file",
+                relativePath: item.target,
+                item,
+                ...(item.optional !== undefined ? { optional: item.optional } : {}),
+                ...(item.labels !== undefined ? { labels: item.labels } : {}),
+            });
             continue;
         }
 
@@ -35,14 +45,24 @@ export function groupTemplateItems(items: TemplateItem[]): TemplateUnit[] {
         if (!owningRoot) {
             throw new Error(`Skill item '${item.target}' has no owning SKILL.md in the bundle.`);
         }
-
-        let skillItems = skills.get(owningRoot);
-        if (!skillItems) {
-            skillItems = [];
-            skills.set(owningRoot, skillItems);
-            units.push({ kind: "skill", relativePath: owningRoot, items: skillItems });
+        const rootTarget = `${owningRoot}/SKILL.md`;
+        if (item.target !== rootTarget && (item.optional !== undefined || item.labels !== undefined)) {
+            throw new Error(
+                `Skill item '${item.target}' cannot set 'optional' or 'labels'; set them on '${rootTarget}'.`,
+            );
         }
-        skillItems.push(item);
+
+        let skillUnit = skills.get(owningRoot);
+        if (!skillUnit) {
+            skillUnit = { kind: "skill", relativePath: owningRoot, items: [] };
+            skills.set(owningRoot, skillUnit);
+            units.push(skillUnit);
+        }
+        if (item.target === rootTarget) {
+            if (item.optional !== undefined) skillUnit.optional = item.optional;
+            if (item.labels !== undefined) skillUnit.labels = item.labels;
+        }
+        skillUnit.items.push(item);
     }
 
     return units;

@@ -185,6 +185,47 @@ describe("validateManifest", () => {
         expect(validateManifest(data).bundles.core.name).toBe("core");
     });
 
+    it("accepts optional and labels on items", () => {
+        const item = {
+            ...rule("core", "rules/a.md"),
+            optional: true,
+            labels: ["experimental", "deprecated", "v2_0"],
+        };
+        const result = validateManifest(withBundle("core", [item]));
+        expect(result.bundles.core.items[0]).toEqual(item);
+    });
+
+    it.each([
+        [
+            "non-boolean optional",
+            { ...rule("core", "rules/a.md"), optional: "yes" },
+            "items[0].optional must be a boolean",
+        ],
+        [
+            "non-array labels",
+            { ...rule("core", "rules/a.md"), labels: "experimental" },
+            "items[0].labels must be an array",
+        ],
+        ["empty label", { ...rule("core", "rules/a.md"), labels: [""] }, "items[0].labels has invalid label ''"],
+        [
+            "uppercase label",
+            { ...rule("core", "rules/a.md"), labels: ["Beta"] },
+            "items[0].labels has invalid label 'Beta'",
+        ],
+        [
+            "non-string label",
+            { ...rule("core", "rules/a.md"), labels: [123] },
+            "items[0].labels has invalid label '123'",
+        ],
+        [
+            "duplicate label",
+            { ...rule("core", "rules/a.md"), labels: ["experimental", "experimental"] },
+            "items[0].labels has duplicate label 'experimental'",
+        ],
+    ])("rejects %s", (_label, item, message) => {
+        expect(() => validateManifest(withBundle("core", [item]))).toThrow(`Invalid bundle 'core': ${message}`);
+    });
+
     it("T13: throws on missing bundles", () => {
         expect(() => validateManifest({ schemaVersion: 1, repository: "r" })).toThrow("bundles");
     });

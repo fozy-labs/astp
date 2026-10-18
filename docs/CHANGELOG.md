@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - [`description` attribute](../templates/README.md#blocks) on `<astp-block>` tags, shown in block selection prompts and `astp list`.
+- [`optional` and `labels`](../templates/README.md#templateitem-fields) on bundle units and [`labels` attribute](../templates/README.md#blocks) on `<astp-block>` tags: optional units start unchecked on `install` and `update`, and labels show in selection prompts and `astp list`.
 
 ## [0.4.0] - 2026-10-12
 

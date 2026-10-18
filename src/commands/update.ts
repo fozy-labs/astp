@@ -145,7 +145,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             const checked =
                 isInteractive() && newUnits.length > 0
                     ? new Set(await selectNewUnits(bundleName, newUnits))
-                    : new Set(newUnits.map((unit) => unit.relativePath));
+                    : new Set(newUnits.filter((unit) => !unit.optional).map((unit) => unit.relativePath));
             const selected = new Set([...tracked, ...checked]);
             const declined = new Set([
                 ...oldDeclined,

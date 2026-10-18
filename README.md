@@ -62,7 +62,7 @@ Plain `http://` is accepted only for `localhost`. `GIGET_AUTH` is sent only to G
 astp install [bundle] [--source <spec>] [--skill <name>]... [--block <name>]... [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Install template bundles. Locally modified or unmanaged files and skills are skipped by default (unmanaged ones are recorded as declined); use `--force` to overwrite them. Repeat `--skill` to add units by name or path, and `--block` to add blocks by name or by the `key` from `list --json`, installing the block's unit if needed; both keep the declined units and blocks, and scope `--force` to the named units and blocks. Without them, a non-interactive `install <bundle>` installs every unit, clears declined units, and re-selects every non-optional block. In a terminal, `install` asks to confirm; without `--skill` or `--block` it first opens a tree of bundles, units and blocks, listing every bundle when no name is given. Bundles that don't support the requested platform are rejected with a clear error.
+Install template bundles. Locally modified or unmanaged files and skills are skipped by default (unmanaged ones are recorded as declined); use `--force` to overwrite them. Repeat `--skill` to add units by name or path, and `--block` to add blocks by name or by the `key` from `list --json`, installing the block's unit if needed; both keep the declined units and blocks, and scope `--force` to the named units and blocks. Without them, a non-interactive `install <bundle>` installs every non-optional unit, clears declined non-optional units, and re-selects every non-optional block. In a terminal, `install` asks to confirm; without `--skill` or `--block` it first opens a tree of bundles, units and blocks, listing every bundle when no name is given. Bundles that don't support the requested platform are rejected with a clear error.
 
 ### update
 
@@ -70,7 +70,7 @@ Install template bundles. Locally modified or unmanaged files and skills are ski
 astp update [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Update installed units to the latest version from each bundle's source in `astp.lock`. A non-interactive update also installs new units and keeps declined ones. Units and blocks dropped upstream are removed; modified ones are left in place and no longer tracked in `astp.lock`, unless `--force` is passed. Modified legacy units are kept unless `--force` is passed. In a terminal, it first asks which new units and blocks to install.
+Update installed units to the latest version from each bundle's source in `astp.lock`. A non-interactive update also installs new non-optional units and keeps declined ones. Units and blocks dropped upstream are removed; modified ones are left in place and no longer tracked in `astp.lock`, unless `--force` is passed. Modified legacy units are kept unless `--force` is passed. In a terminal, it first asks which new units and blocks to install.
 
 ### check
 
@@ -94,7 +94,7 @@ Remove the files of an installed bundle. Repeat `--skill` to select units by nam
 astp list [bundle] [--source <spec>] [--json] [--platform <claude-code>] [--target <project|user>]
 ```
 
-List bundles and installed unit state. Add a bundle name for per-unit status and descriptions, with each unit's blocks, their status and descriptions; `--json` prints machine-readable output; units with blocks list each block's `name`, `key`, `status` (`selected`, `declined`, or `new`), `description`, `optional`, and `required`.
+List bundles and installed unit state. Add a bundle name for per-unit status, optional/label tags and descriptions, with each unit's blocks, their status, tags and descriptions; `--json` prints machine-readable output (`optional` and `labels` on units when set; `name`, `key`, `status`, `description`, `optional`, `required`, and `labels` when set on blocks).
 
 ## Bundles
 
