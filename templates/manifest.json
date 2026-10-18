@@ -341,6 +341,37 @@
                 }
             ]
         },
+        "ponytail": {
+            "name": "ponytail",
+            "version": "1.0.0",
+            "description": "Ponytail skills — smallest complete changes, change reviews, repository audits and a shortcut debt ledger",
+            "default": false,
+            "platforms": [
+                "claude-code"
+            ],
+            "items": [
+                {
+                    "source": "ponytail/skills/ponytail/SKILL.md",
+                    "target": "skills/ponytail/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "ponytail/skills/ponytail-review/SKILL.md",
+                    "target": "skills/ponytail-review/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "ponytail/skills/ponytail-audit/SKILL.md",
+                    "target": "skills/ponytail-audit/SKILL.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "ponytail/skills/ponytail-debt/SKILL.md",
+                    "target": "skills/ponytail-debt/SKILL.md",
+                    "category": "skill"
+                }
+            ]
+        },
         "agreement": {
             "name": "agreement",
             "version": "1.4.0",

@@ -57,6 +57,18 @@
                 "./skills/fozy-labs-rx-api",
                 "./skills/fozy-labs-signals"
             ]
+        },
+        {
+            "name": "ponytail",
+            "source": "./templates/ponytail",
+            "description": "Ponytail skills — smallest complete changes, change reviews, repository audits and a shortcut debt ledger",
+            "version": "1.0.0",
+            "skills": [
+                "./skills/ponytail",
+                "./skills/ponytail-audit",
+                "./skills/ponytail-debt",
+                "./skills/ponytail-review"
+            ]
         }
     ]
 }

@@ -24,6 +24,12 @@ templates/
 ├── design/                ← bundle: design (claude-code)
 │   └── skills/
 │       └── design-derivation/
+├── ponytail/              ← bundle: ponytail (claude-code)
+│   └── skills/
+│       ├── ponytail/
+│       ├── ponytail-review/
+│       ├── ponytail-audit/
+│       └── ponytail-debt/
 └── agreement/             ← bundle: agreement (claude-code)
     ├── rules/
     │   └── working-agreement.md
