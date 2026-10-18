@@ -28,15 +28,6 @@
             ]
         },
         {
-            "name": "design",
-            "source": "./templates/design",
-            "description": "Design decision derivation — gated procedure for interface, layout, and visual design choices",
-            "version": "1.0.1",
-            "skills": [
-                "./skills/design-derivation"
-            ]
-        },
-        {
             "name": "docs",
             "source": "./templates/docs",
             "description": "Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas",
@@ -68,6 +59,18 @@
                 "./skills/ponytail-audit",
                 "./skills/ponytail-debt",
                 "./skills/ponytail-review"
+            ]
+        },
+        {
+            "name": "thinking",
+            "source": "./templates/thinking",
+            "description": "Reasoning skills — design decision derivation, plus optional experimental analysis, software architecture, and testing",
+            "version": "1.0.0",
+            "skills": [
+                "./skills/analysis",
+                "./skills/design-derivation",
+                "./skills/software-architecture",
+                "./skills/testing"
             ]
         }
     ]

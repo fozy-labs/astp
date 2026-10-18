@@ -21,9 +21,12 @@ templates/
 │   └── skills/
 │       ├── markdown-craft/
 │       └── statechart-craft/
-├── design/                ← bundle: design (claude-code)
+├── thinking/              ← bundle: thinking (claude-code)
 │   └── skills/
-│       └── design-derivation/
+│       ├── analysis/
+│       ├── design-derivation/
+│       ├── software-architecture/
+│       └── testing/
 ├── ponytail/              ← bundle: ponytail (claude-code)
 │   └── skills/
 │       ├── ponytail/

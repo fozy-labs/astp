@@ -265,78 +265,175 @@
                 }
             ]
         },
-        "design": {
-            "name": "design",
-            "version": "1.0.1",
-            "description": "Design decision derivation — gated procedure for interface, layout, and visual design choices",
+        "thinking": {
+            "name": "thinking",
+            "version": "1.0.0",
+            "description": "Reasoning skills — design decision derivation, plus optional experimental analysis, software architecture, and testing",
             "default": false,
             "platforms": [
                 "claude-code"
             ],
             "items": [
                 {
-                    "source": "design/skills/design-derivation/SKILL.md",
+                    "source": "thinking/skills/design-derivation/SKILL.md",
                     "target": "skills/design-derivation/SKILL.md",
                     "category": "skill"
                 },
                 {
-                    "source": "design/skills/design-derivation/references/anti-patterns.md",
+                    "source": "thinking/skills/design-derivation/references/anti-patterns.md",
                     "target": "skills/design-derivation/references/anti-patterns.md",
                     "category": "skill"
                 },
                 {
-                    "source": "design/skills/design-derivation/references/argument.md",
+                    "source": "thinking/skills/design-derivation/references/argument.md",
                     "target": "skills/design-derivation/references/argument.md",
                     "category": "skill"
                 },
                 {
-                    "source": "design/skills/design-derivation/references/axes.md",
+                    "source": "thinking/skills/design-derivation/references/axes.md",
                     "target": "skills/design-derivation/references/axes.md",
                     "category": "skill"
                 },
                 {
-                    "source": "design/skills/design-derivation/references/carriers.md",
+                    "source": "thinking/skills/design-derivation/references/carriers.md",
                     "target": "skills/design-derivation/references/carriers.md",
                     "category": "skill"
                 },
                 {
-                    "source": "design/skills/design-derivation/references/charges.md",
+                    "source": "thinking/skills/design-derivation/references/charges.md",
                     "target": "skills/design-derivation/references/charges.md",
                     "category": "skill"
                 },
                 {
-                    "source": "design/skills/design-derivation/references/derivations.md",
+                    "source": "thinking/skills/design-derivation/references/derivations.md",
                     "target": "skills/design-derivation/references/derivations.md",
                     "category": "skill"
                 },
                 {
-                    "source": "design/skills/design-derivation/references/frame.md",
+                    "source": "thinking/skills/design-derivation/references/frame.md",
                     "target": "skills/design-derivation/references/frame.md",
                     "category": "skill"
                 },
                 {
-                    "source": "design/skills/design-derivation/references/glossary.md",
+                    "source": "thinking/skills/design-derivation/references/glossary.md",
                     "target": "skills/design-derivation/references/glossary.md",
                     "category": "skill"
                 },
                 {
-                    "source": "design/skills/design-derivation/references/limits.md",
+                    "source": "thinking/skills/design-derivation/references/limits.md",
                     "target": "skills/design-derivation/references/limits.md",
                     "category": "skill"
                 },
                 {
-                    "source": "design/skills/design-derivation/references/operations.md",
+                    "source": "thinking/skills/design-derivation/references/operations.md",
                     "target": "skills/design-derivation/references/operations.md",
                     "category": "skill"
                 },
                 {
-                    "source": "design/skills/design-derivation/references/sign.md",
+                    "source": "thinking/skills/design-derivation/references/sign.md",
                     "target": "skills/design-derivation/references/sign.md",
                     "category": "skill"
                 },
                 {
-                    "source": "design/skills/design-derivation/references/surface.md",
+                    "source": "thinking/skills/design-derivation/references/surface.md",
                     "target": "skills/design-derivation/references/surface.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking/skills/analysis/SKILL.md",
+                    "target": "skills/analysis/SKILL.md",
+                    "category": "skill",
+                    "optional": true,
+                    "labels": [
+                        "experimental"
+                    ]
+                },
+                {
+                    "source": "thinking/skills/analysis/references/causes.md",
+                    "target": "skills/analysis/references/causes.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking/skills/analysis/references/checks.md",
+                    "target": "skills/analysis/references/checks.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking/skills/analysis/references/glossary.md",
+                    "target": "skills/analysis/references/glossary.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking/skills/analysis/references/limits.md",
+                    "target": "skills/analysis/references/limits.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking/skills/analysis/references/options.md",
+                    "target": "skills/analysis/references/options.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking/skills/software-architecture/SKILL.md",
+                    "target": "skills/software-architecture/SKILL.md",
+                    "category": "skill",
+                    "optional": true,
+                    "labels": [
+                        "experimental"
+                    ]
+                },
+                {
+                    "source": "thinking/skills/software-architecture/references/boundaries-and-systems.md",
+                    "target": "skills/software-architecture/references/boundaries-and-systems.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking/skills/software-architecture/references/glossary.md",
+                    "target": "skills/software-architecture/references/glossary.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking/skills/software-architecture/references/limits.md",
+                    "target": "skills/software-architecture/references/limits.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking/skills/software-architecture/references/tricks.md",
+                    "target": "skills/software-architecture/references/tricks.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking/skills/testing/SKILL.md",
+                    "target": "skills/testing/SKILL.md",
+                    "category": "skill",
+                    "optional": true,
+                    "labels": [
+                        "experimental"
+                    ]
+                },
+                {
+                    "source": "thinking/skills/testing/references/generative.md",
+                    "target": "skills/testing/references/generative.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking/skills/testing/references/glossary.md",
+                    "target": "skills/testing/references/glossary.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking/skills/testing/references/limits.md",
+                    "target": "skills/testing/references/limits.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking/skills/testing/references/shape.md",
+                    "target": "skills/testing/references/shape.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "thinking/skills/testing/references/suite.md",
+                    "target": "skills/testing/references/suite.md",
                     "category": "skill"
                 }
             ]

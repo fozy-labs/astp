@@ -391,10 +391,10 @@ describe("committed marketplace", () => {
         expect(marketplace.plugins.map((plugin) => plugin.name)).toEqual([
             "agreement",
             "astp",
-            "design",
             "docs",
             "fozy-labs",
             "ponytail",
+            "thinking",
         ]);
     });
 
