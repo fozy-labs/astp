@@ -1,6 +1,6 @@
 # Isolation
 
-`/git isolation [<task | branch | pr>] [--from <branch> | --current] [ide]` (alias: `/git isolate`) does the task in a separate worktree without touching the main checkout unless `--current` or a local merge into its branch is chosen.
+`/git isolation <task> [--from <branch> | --current] [ide]` (alias: `/git isolate`, also accepts `/git isolate <branch> <task>`) does the task in a separate worktree without touching the main checkout unless `--current` or a local merge into its branch is chosen.
 
 ```mermaid
 flowchart TD
@@ -22,16 +22,14 @@ flowchart TD
 
 | Item          | Value                                                                                                     |
 |---------------|-----------------------------------------------------------------------------------------------------------|
-| `<task>`      | a short kebab-case slug of the task — for an existing branch or PR, derived from its branch name; ask when the request gives no clear one |
+| `<task>`      | a short kebab-case slug of the task; ask when the request gives no clear one                              |
 | worktree path | `../.tmp/<repo>/<task>` from the main checkout root; `<repo>` is the main checkout's folder name          |
-| `<branch>`    | an existing branch (without `origin/`) or a PR's head branch when the request names one without `--from` or `--current`; else a new branch with the project's branch naming applied to `<task>` (or `<task>`) |
-| `<target>`    | `--current`: the branch current in the main checkout; `--from <base>` (strip `origin/`): `origin/<base>` after `git fetch origin`, else local `<base>`; existing PR/branch: the PR's `origin/<base>` or `origin/<default>`; else from `Project overrides`, or `origin/<default>` when the main checkout is on `<default>` — on any doubt (e.g. the main checkout is on another branch, or it is unclear whether a named branch is `<branch>` or `<base>`), ask the user before starting. For a new branch, recorded as `<branch>`'s upstream so it survives across sessions; pushes never pass `-u` |
+| `<branch>`    | the project's branch naming applied to `<task>`, else `<task>`                                            |
+| `<target>`    | `--current`: the branch current in the main checkout; `--from <base>` or a base branch named in the request (strip `origin/`): `origin/<base>` after `git fetch origin`, else local `<base>`; else from `Project overrides`, or `origin/<default>` when the main checkout is on `<default>` — on any doubt (e.g. the main checkout is on another branch and no base was named), ask the user before starting. Recorded as `<branch>`'s upstream so it survives across sessions; pushes never pass `-u` |
 
 ## Start
 
-1. Run `git fetch origin` when `<target>` or `<branch>` is on `origin`. Create the worktree:
-   - New `<branch>`: `git worktree add --track -b <branch> <path> <target>` — `--track` makes `<target>` the branch's upstream. `<path>` or `<branch>` already exists: [clean up](#clean-up) that task first if its PR is merged, otherwise ask for another task name.
-   - Existing `<branch>`: `git worktree add <path> <branch>` (name without `origin/`); when `origin/<branch>` exists, fast-forward with `git -C <path> merge --ff-only origin/<branch>` (diverged: stop and report). `<path>` already exists or `<branch>` is checked out in another worktree: report and ask.
+1. When `<target>` is `origin/<base>`, run `git fetch origin <base>`. Then `git worktree add --track -b <branch> <path> <target>` — `--track` makes `<target>` the branch's upstream. `<path>` or `<branch>` already exists: [clean up](#clean-up) that task first if its PR is merged, otherwise ask for another task name.
 2. Copy gitignored files from the main checkout: those matching `.worktreeinclude` patterns when the repo has one, else `.env*` files outside dependency folders.
 3. Install dependencies with the project's install command; else, by the lockfile, in frozen mode: `npm ci`, `pnpm install --frozen-lockfile`, `yarn install --immutable` (Yarn 1: `--frozen-lockfile`), `bun install --frozen-lockfile`. A failed install: report and ask.
 4. IDE named: open the worktree with the IDE's command-line launcher — for JetBrains IDEs, the Toolbox shell script such as `webstorm`. No launcher found: give the user the path.
@@ -41,17 +39,17 @@ Work and commit inside the worktree with the [Commit](../SKILL.md#commit) rules.
 
 ## Finish
 
-Once the task is done, use the finish action (`PR`, `merge` or `push`) from the request or `Project overrides`; if neither sets it, ask the user (offer `PR` only when the project uses a Git host; otherwise offer `merge` or `push`). The target is `git rev-parse --abbrev-ref <branch>@{upstream}` when that names another branch; for an existing branch whose upstream is `origin/<branch>` or unset, use `--from <base>`, the PR's `origin/<base>`, `Project overrides`, or `origin/<default>`.
+Once the task is done, use the finish action (`PR`, `merge` or `push`) from the request or `Project overrides`; if neither sets it, ask the user (offer `PR` only when the project uses a Git host; otherwise offer `merge` or `push`). The target is `git rev-parse --abbrev-ref <branch>@{upstream}`.
 
 1. Commit everything in the worktree.
 2. Leave the worktree: `ExitWorktree` when you entered with `EnterWorktree` — while inside, Claude Code blocks git commands aimed at the main checkout.
-3. Update `<target>`:
+3. When `origin/<branch>` already exists and the finish action is `PR` or `push`, skip to step 5 unless the user asked to rebase (rebasing rewrites pushed commits, per [Safety](../SKILL.md#safety)). Otherwise update `<target>`:
    - Remote `<target>` (`origin/<base>`): `git fetch origin <base>` — do not touch the main checkout.
    - Local `<target>` (`--current` or a local-only base) that tracks a remote branch: `git -C <worktree> pull --ff-only` in the worktree where `<target>` is checked out (`git worktree list`), else `git fetch <remote> <remote branch>:<target>`. Diverged: stop and report. A local `<target>` without a remote branch stays as it is: a merge works locally, a PR needs `<target>` pushed first — ask.
 4. `git -C <path> rebase <target>`. A conflict: `git -C <path> rebase --abort`, report the files, stop.
 5. Then:
-   - **PR**: [push](../SKILL.md#push) `<branch>` from `<path>`, then open or update the PR against `<target>` without `origin/` — through the `tracker` skill when installed, otherwise ask before running host commands. Keep the worktree and branch: [Clean up](#clean-up) removes them once the PR is merged.
-   - **push**: [push](../SKILL.md#push) `<branch>` from `<path>`; keep the worktree and branch.
+   - **PR**: `git -C <path> push origin <branch>`, then open or update the PR against `<target>` without `origin/` — through the `tracker` skill when installed, otherwise ask before running host commands. Keep the worktree and branch: [Clean up](#clean-up) removes them once the PR is merged.
+   - **push**: `git -C <path> push origin <branch>`; keep the worktree and branch.
    - **merge**: the branch to fast-forward is `<target>` without `origin/`. In the worktree where that branch is checked out (`git worktree list`), run `git -C <worktree> merge --ff-only <branch>`; if it is not checked out in any worktree, run `git fetch . <branch>:<target branch>` in the main checkout. Then `git worktree remove <path>` and delete `<branch>` (`git branch -d <branch>`, or `-D` when `<target>` was `origin/<base>` and `<target branch>` is not `HEAD`).
 
 ## Clean up

@@ -2,7 +2,7 @@
 name: git
 description: Git work on the user's command — commit, push, switch to an up-to-date branch, do a task in an isolated worktree, guard against destructive git commands, or any other git task in free text.
 disable-model-invocation: true
-argument-hint: "commit | push | <branch> | isolation [<task | branch | pr>] [--from <branch> | --current] [ide] | guard | <free text>  [--fast] [--one]"
+argument-hint: "commit | push | <branch> | isolation <task> [--from <branch> | --current] [ide] | guard | <free text>  [--fast] [--one]"
 allowed-tools: Bash(git status *) Bash(git worktree list *) PowerShell(git status *) PowerShell(git worktree list *)
 ---
 
@@ -33,7 +33,7 @@ Route by the first rule that matches, state the pick and the plan in one line, t
 | `commit [--fast] [--one]`                                                    | [Commit](#commit) all uncommitted changes                                                                        |
 | `push [--fast] [--one]`                                                      | [Commit](#commit) if the tree is dirty, then [push](#push)                                                      |
 | `<branch>`                                                                   | [Switch](#switch-branch) to the branch and fast-forward it to origin                                             |
-| `isolation [<task \| branch \| pr>] [--from <branch> \| --current] [ide]`    | Do the task in a separate worktree (alias: `isolate`) — load [references/isolation.md](references/isolation.md) |
+| `isolation <task> [--from <branch> \| --current] [ide]`                      | Do the task in a separate worktree (alias: `isolate`) — load [references/isolation.md](references/isolation.md) |
 | `isolation cleanup [task]`                                                   | Remove finished isolation worktrees — same reference                                                             |
 | `guard`                                                                      | Make destructive git commands need the user's approval — load [references/guard.md](references/guard.md)         |
 
