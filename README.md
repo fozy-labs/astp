@@ -104,17 +104,19 @@ List bundles and installed unit state. Add a bundle name for per-unit status and
 | `fozy-labs` | 4 skills | Fozy Labs stack skills (DI, FSD, rx-api, signals) | No |
 | `docs` | 2 skills | Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas | No |
 | `design` | 1 skill | Design decision derivation — gated procedure for interface, layout, and visual design choices | No |
+| `ponytail` | 4 skills | Ponytail skills — smallest complete changes, change reviews, repository audits and a shortcut debt ledger | No |
 | `agreement` | 1 rule, 4 skills | Working agreement rule, communication and tracker skills and /retro and /git commands — how the agent decides, asks, scopes changes, writes for the user, works with the issue tracker and git, and reviews finished work | No |
 
 - **astp** ships the `astp` skill: how an agent runs the CLI without prompts, when to ask before `--force`, and how to fill `<SETUP_REQUIRED>` blocks.
 - **fozy-labs** ships four skills covering the `@fozy-labs` stack — `simplest-di`, Feature-Sliced Design v2.1, `rx-toolkit` server state, and `rx-toolkit` signals. All four use progressive disclosure: a short `SKILL.md` plus `references/*.md` loaded only when the situation calls for them. It installs under `.claude/skills/`.
 - **design** ships `design-derivation` — a gated procedure for deriving visual and interface decisions (frame, value, scenario → charge and sign → surface and accuracy) instead of picking a remembered look. It carries no styles, palettes, or component recipes; references are loaded on demand per gate.
 - **docs** ships two skills. `markdown-craft` carries stack-agnostic rules for the Markdown an agent writes: one home per fact, one reader per document, diagram-first flows, and link hygiene, with references loaded on demand for Mermaid diagrams and for writing or reviewing a specification. `statechart-craft` covers the other kind of Mermaid an agent writes — a `.mmd` statechart schema: the `stateDiagram-v2` subset, the `%% @…` directives, the `statechart-convert` CLI and the typed file it emits, with references for the live visualizer and for the `toMermaid()` round trip.
+- **ponytail** ships four [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) skills with their MIT license and pinned-source attribution to DietrichGebert: the smallest-complete-change mode, change review, whole-repository audit and a ledger for deliberate shortcuts.
 - **agreement** ships the `working-agreement` rule, always loaded from `.claude/rules/`: how the agent fixes, ranks decisions, reads the user's messages and writes for the user; every section after the principles is a block you can deselect. Its `communication` skill, which the agent loads whenever it talks to the user, covers working out a request, asking questions, making offers and resolving dilemmas. The `tracker` skill covers posting to a Git host (GitHub, GitLab and others) — issues, PRs/MRs, labels, types and fields; its project settings, methodology and PR rules are blocks the consumer's agent fills in on install. The `/retro` command, run only by the user, reviews finished work and proposes changes to the agent's environment: `CLAUDE.md`, rules, skills, docs, checks and tools. The `/git` command, also user-only, commits, pushes, switches to an up-to-date branch, runs a task in a separate worktree, and installs approval prompts for destructive git commands; project overrides are an optional block.
 
 ## Installing skills with `npx skills`
 
-The `agreement`, `astp`, `design`, `docs` and `fozy-labs` bundles are also published for the [`skills` CLI](https://github.com/vercel-labs/skills), which installs Agent Skills into Claude Code, Cursor, Copilot and other agents:
+The `agreement`, `astp`, `design`, `docs`, `fozy-labs` and `ponytail` bundles are also published for the [`skills` CLI](https://github.com/vercel-labs/skills), which installs Agent Skills into Claude Code, Cursor, Copilot and other agents:
 
 ```bash
 npx skills add fozy-labs/astp                          # choose interactively
