@@ -22,7 +22,7 @@ flowchart TD
 
 | Item          | Value                                                                                                     |
 |---------------|-----------------------------------------------------------------------------------------------------------|
-| `<task>`      | a short kebab-case slug of the task; ask when the request gives no clear one                              |
+| `<task>`      | a short kebab-case slug of the task                                                                       |
 | worktree path | `../.tmp/<repo>/<task>` from the main checkout root; `<repo>` is the main checkout's folder name          |
 | `<branch>`    | the project's branch naming applied to `<task>`, else `<task>`                                            |
 | `<target>`    | `--current`: the branch current in the main checkout; `--from <base>` or a base branch named in the request (strip `origin/`): `origin/<base>` after `git fetch origin`, else local `<base>`; else from `Project overrides`, or `origin/<default>` when the main checkout is on `<default>` — on any doubt (e.g. the main checkout is on another branch and no base was named), ask the user before starting. Recorded as `<branch>`'s upstream so it survives across sessions; pushes never pass `-u` |
@@ -35,7 +35,7 @@ flowchart TD
 4. IDE named: open the worktree with the IDE's command-line launcher — for JetBrains IDEs, the Toolbox shell script such as `webstorm`. No launcher found: give the user the path.
 5. Enter the worktree: Claude Code's `EnterWorktree` tool with `path` — the user approves once, since the path is outside the project. Without that tool, keep the main session where it is and address the worktree by absolute paths and `git -C <path>`; a `cd` outside the project does not persist between commands.
 
-Work and commit inside the worktree with the [Commit](../SKILL.md#commit) rules.
+Handle the task itself in the normal flow inside the worktree; commit with the [Commit](../SKILL.md#commit) rules.
 
 ## Finish
 

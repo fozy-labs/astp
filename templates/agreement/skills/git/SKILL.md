@@ -26,7 +26,9 @@ Route by the first rule that matches, state the pick and the plan in one line, t
 2. The request is a single git verb (`status`, `log`, `diff`, …): free text, below.
 3. The request is a single word naming a branch, checked after `git fetch origin` — a local branch by its exact name first, else an `origin` branch with or without the `origin/` prefix: [switch](#switch-branch) to it, an `origin` one by the name without the prefix.
 4. Any other single word: ask whether to create a branch of that name from the updated default branch.
-5. Free text: pick the command it means, or treat it as an ad-hoc git task under [Safety](#safety). When the request also hands off work (a task, an issue or a PR to work on), continue with that work after the git step instead of stopping at [Report](#report).
+5. Free text: pick the command it means, or treat it as an ad-hoc git task under [Safety](#safety).
+
+This skill covers the git steps; any non-git task in the request runs in the normal flow after the git step instead of stopping at [Report](#report).
 
 | Command                                                                      | Does                                                                                                             |
 |------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
