@@ -297,17 +297,31 @@ describe("validateManifest", () => {
         );
     });
 
-    it.each([0, -1, 1.5, Number.NaN, "", "1", "01.0", "1.01", "1.0.0", "v1.0", null, true, {}])(
-        "rejects invalid schemaVersion %j",
-        (schemaVersion) => {
-            expect(() => validateManifest({ ...validManifestData, schemaVersion })).toThrow(
-                "Invalid manifest: schemaVersion must be a positive integer or 'major.minor' string",
-            );
-            expect(() => parseSchemaVersion(schemaVersion)).toThrow(
-                "Invalid manifest: schemaVersion must be a positive integer or 'major.minor' string",
-            );
-        },
-    );
+    it.each([
+        0,
+        -1,
+        1.5,
+        Number.NaN,
+        Number.MAX_SAFE_INTEGER + 1,
+        "",
+        "1",
+        "01.0",
+        "1.01",
+        "1.0.0",
+        "v1.0",
+        "2.9007199254740993",
+        `2.${"9".repeat(400)}`,
+        null,
+        true,
+        {},
+    ])("rejects invalid schemaVersion %j", (schemaVersion) => {
+        expect(() => validateManifest({ ...validManifestData, schemaVersion })).toThrow(
+            "Invalid manifest: schemaVersion must be a positive integer or 'major.minor' string",
+        );
+        expect(() => parseSchemaVersion(schemaVersion)).toThrow(
+            "Invalid manifest: schemaVersion must be a positive integer or 'major.minor' string",
+        );
+    });
 
     it("formats supported schema versions across single and multi-major ranges", () => {
         expect(formatSupportedSchemaVersions({ 1: 0 })).toBe("1.0");

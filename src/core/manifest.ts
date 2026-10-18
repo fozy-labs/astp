@@ -29,13 +29,17 @@ const VALID_CATEGORIES: ReadonlySet<ItemCategory> = new Set(["agent", "skill", "
 const LABEL_REGEX = /^[a-z][a-z0-9_-]*$/;
 
 export function parseSchemaVersion(raw: unknown): SchemaVersion {
-    if (typeof raw === "number" && Number.isInteger(raw) && raw >= 1) {
+    if (typeof raw === "number" && Number.isSafeInteger(raw) && raw >= 1) {
         return { major: raw, minor: 0 };
     }
     if (typeof raw === "string") {
         const match = raw.match(SCHEMA_VERSION_REGEX);
         if (match) {
-            return { major: Number(match[1]), minor: Number(match[2]) };
+            const major = Number(match[1]);
+            const minor = Number(match[2]);
+            if (Number.isSafeInteger(major) && Number.isSafeInteger(minor)) {
+                return { major, minor };
+            }
         }
     }
     throw new Error("Invalid manifest: schemaVersion must be a positive integer or 'major.minor' string");
