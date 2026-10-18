@@ -21,7 +21,7 @@
         },
         "fozy-labs": {
             "name": "fozy-labs",
-            "version": "1.5.4",
+            "version": "1.5.5",
             "description": "Fozy Labs stack skills — DI, FSD, rx-api, signals",
             "use-when": "The project uses @fozy-labs packages (simplest-di, rx-toolkit) or Feature-Sliced Design (FSD v2.1)",
             "default": false,
@@ -223,7 +223,7 @@
         },
         "docs": {
             "name": "docs",
-            "version": "1.3.3",
+            "version": "1.3.4",
             "description": "Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas",
             "use-when": "The agent writes or maintains Markdown documentation, specs, changelogs, Mermaid diagrams or .mmd statechart schemas",
             "default": false,
@@ -270,7 +270,7 @@
         },
         "thinking": {
             "name": "thinking",
-            "version": "1.0.0",
+            "version": "1.0.1",
             "description": "Reasoning skills — design decision derivation, plus optional experimental analysis, software architecture, and testing",
             "use-when": "The project needs structured reasoning for UI/visual design derivation, root-cause and option analysis, software architecture, or testing",
             "default": false,
@@ -444,7 +444,7 @@
         },
         "ponytail": {
             "name": "ponytail",
-            "version": "1.0.0",
+            "version": "1.0.1",
             "description": "Ponytail skills — smallest complete changes, change reviews, repository audits and a shortcut debt ledger",
             "use-when": "The user wants minimal-diff coding, pre-commit change reviews, whole-repo quality audits or tracking deliberate shortcuts",
             "default": false,
