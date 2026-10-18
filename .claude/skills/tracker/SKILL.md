@@ -8,7 +8,7 @@ description: Working with a Git host (GitHub, GitLab and others) — issues, PRs
 
 ## Posting
 
-- Anything posted to the tracker is visible to others and hard to take back: post only on a clear command from the user, and show the text first unless the user already approved it.
+- Anything posted to the tracker is visible to others and hard to take back: unless a rule below allows posting directly, post only on a clear command from the user and show the text first unless the user already approved it.
 - Name the repository explicitly in every write command; do not rely on the current directory.
 - Pass any multi-line body through a file, never inline: the shell needs extra escaping and the command line has a length cap.
 - Before opening an issue or a PR/MR, search for an existing one and update it instead of opening a duplicate.
@@ -24,6 +24,7 @@ GitHub, `fozy-labs/astp`. Run `gh-bot`: it takes `gh` commands and flags and pos
 | Find issues / PRs      | `gh-bot issue list --repo fozy-labs/astp --state all --search "<words>"`, same with `pr list`                             |
 | Open an issue          | `gh-bot issue create --repo fozy-labs/astp --title "<title>" --body-file <file> --type <type> --label <label>`            |
 | Open a PR              | `gh-bot pr create --repo fozy-labs/astp --base main --head <branch> --draft --title "<title>" --body-file <file>`         |
+| Reply to review thread | `gh-bot api repos/fozy-labs/astp/pulls/<number>/comments/<comment_id>/replies -F body=@<file>`                            |
 | Mark a PR ready        | `gh-bot pr ready <number> --repo fozy-labs/astp`                                                                          |
 | Labels                 | `gh-bot label list --repo fozy-labs/astp`; set with `gh-bot issue edit <number> --repo fozy-labs/astp --add-label <label>`, `pr edit` alike |
 | Issue type             | `Task`, `Bug`, `Feature`, `Epic`; set with `gh-bot issue edit <number> --repo fozy-labs/astp --type <type>`               |
@@ -50,7 +51,8 @@ On every issue and PR/MR you open, set the labels, type and fields (e.g. priorit
 <pull_requests>
 ## PRs/MRs
 
-- Open a PR as a draft; mark it ready only after CI passes and Devin Review, which starts on its own, raises nothing open.
+- Open a PR as a draft; mark it ready only after CI passes, Devin Review (which starts on its own) raises nothing open, and every review thread is answered.
+- Answer every review thread: after a fix is pushed, reply with the commit hash directly; before declining or arguing a finding, get the user's approval.
 - The title follows Conventional Commits, as in [CLAUDE.md](../../../CLAUDE.md).
 - Write the body with the PR-body skill if one is installed; the repository has no PR template, so otherwise use `## Summary`, then `## Notes` when needed, then `#### Test plan` as a checklist.
 - Link the issue the PR resolves with `Closes #12`.
