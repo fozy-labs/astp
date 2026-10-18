@@ -29,7 +29,7 @@ flowchart TD
 
 ## Start
 
-1. Run `git fetch origin` when `<target>` is on `origin`. If `<path>`, `<branch>` or `origin/<branch>` already exists: [clean up](#clean-up) the local worktree and branch first when its PR is merged (if `origin/<branch>` still exists on the remote, ask for another task name); otherwise ask whether to resume the existing worktree/branch or use another task name. For a new task: `git worktree add --track -b <branch> <path> <target>` — `--track` makes `<target>` the branch's upstream.
+1. Run `git fetch origin` when `<target>` is on `origin`. Then `git worktree add --track -b <branch> <path> <target>` — `--track` makes `<target>` the branch's upstream. `<path>`, `<branch>` or `origin/<branch>` already exists: [clean up](#clean-up) the local worktree and branch first when its PR is merged (if `origin/<branch>` still exists, ask for another task name), otherwise ask for another task name.
 2. Copy gitignored files from the main checkout: those matching `.worktreeinclude` patterns when the repo has one, else `.env*` files outside dependency folders.
 3. Install dependencies with the project's install command; else, by the lockfile, in frozen mode: `npm ci`, `pnpm install --frozen-lockfile`, `yarn install --immutable` (Yarn 1: `--frozen-lockfile`), `bun install --frozen-lockfile`. A failed install: report and ask.
 4. IDE named: open the worktree with the IDE's command-line launcher — for JetBrains IDEs, the Toolbox shell script such as `webstorm`. No launcher found: give the user the path.
@@ -46,7 +46,7 @@ Once the task is done, use the finish action (`PR`, `merge` or `push`) from the 
 3. Update `<target>`:
    - Remote `<target>` (`origin/<base>`): `git fetch origin <base>` — do not touch the main checkout.
    - Local `<target>` (`--current` or a local-only base) that tracks a remote branch: `git -C <worktree> pull --ff-only` in the worktree where `<target>` is checked out (`git worktree list`), else `git fetch <remote> <remote branch>:<target>`. Diverged: stop and report. A local `<target>` without a remote branch stays as it is: a merge works locally, a PR needs `<target>` pushed first — ask.
-4. `git -C <path> rebase <target>` — when `<branch>` already has commits on `origin/<branch>` that a rebase would rewrite, ask first per [Safety](../SKILL.md#safety) or skip the rebase. A conflict: `git -C <path> rebase --abort`, report the files, stop.
+4. `git -C <path> rebase <target>`. A conflict: `git -C <path> rebase --abort`, report the files, stop.
 5. Then:
    - **PR**: `git -C <path> push origin <branch>`, then open or update the PR against `<target>` without `origin/` — through the `tracker` skill when installed, otherwise ask before running host commands. Keep the worktree and branch: [Clean up](#clean-up) removes them once the PR is merged.
    - **push**: `git -C <path> push origin <branch>`; keep the worktree and branch.
