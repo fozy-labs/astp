@@ -46,10 +46,10 @@ Once the task is done, use the finish action (`PR`, `merge` or `push`) from the 
 3. Update `<target>`:
    - Remote `<target>` (`origin/<base>`): `git fetch origin <base>` — do not touch the main checkout.
    - Local `<target>` (`--current` or a local-only base) that tracks a remote branch: `git -C <worktree> pull --ff-only` in the worktree where `<target>` is checked out (`git worktree list`), else `git fetch <remote> <remote branch>:<target>`. Diverged: stop and report. A local `<target>` without a remote branch stays as it is: a merge works locally, a PR needs `<target>` pushed first — ask.
-4. `git -C <path> rebase <target>`. A conflict: `git -C <path> rebase --abort`, report the files, stop.
+4. `git -C <path> rebase <target>`. When `origin/<branch>` already has commits that the rebase would rewrite, ask first per [Safety](../SKILL.md#safety): if declined, skip the rebase for `PR` or `push`, or stop for `merge`. A conflict: `git -C <path> rebase --abort`, report the files, stop.
 5. Then:
-   - **PR**: `git -C <path> push origin <branch>`, then open or update the PR against `<target>` without `origin/` — through the `tracker` skill when installed, otherwise ask before running host commands. Keep the worktree and branch: [Clean up](#clean-up) removes them once the PR is merged.
-   - **push**: `git -C <path> push origin <branch>`; keep the worktree and branch.
+   - **PR**: `git -C <path> push origin <branch>` (with `--force-with-lease` when the user approved rewriting pushed commits), then open or update the PR against `<target>` without `origin/` — through the `tracker` skill when installed, otherwise ask before running host commands. Keep the worktree and branch: [Clean up](#clean-up) removes them once the PR is merged.
+   - **push**: push `<branch>` the same way; keep the worktree and branch.
    - **merge**: the branch to fast-forward is `<target>` without `origin/`. In the worktree where that branch is checked out (`git worktree list`), run `git -C <worktree> merge --ff-only <branch>`; if it is not checked out in any worktree, run `git fetch . <branch>:<target branch>` in the main checkout. Then `git worktree remove <path>` and delete `<branch>` (`git branch -d <branch>`, or `-D` when `<target>` was `origin/<base>` and `<target branch>` is not `HEAD`).
 
 ## Clean up
