@@ -1,120 +1,101 @@
 ---
 name: software-architecture
 description: >-
-  Decide software structure, module and package boundaries, dependency direction, where I/O,
-  allocation, branching and error handling live, when an abstraction or internal boundary pays
-  its cost, and how to document and physically enforce architectural invariants. Use when
-  splitting or merging modules or crates, designing an API or facade, untangling circular or
-  heavy dependencies, isolating platform or serialization code, reviewing structural PRs, or
-  writing ARCHITECTURE.md. Not for choosing how to test a boundary or fuzz a subsystem (that
-  is testing), judging empirical benchmark claims (that is analysis), or visual/UI layout
-  decisions (that is design-derivation).
+  Decide the structure of software when writing or changing code in a real repository:
+  where a boundary goes and how much care it deserves, who may know whom (invariants
+  stated as absences, and how to enforce them), where I/O, the clock, allocation, errors
+  and branching live, how large a module, function or crate should be against its
+  interface, and what to depend on or own (libraries, build, CI, automation). Use when
+  adding a module, crate, layer or dependency, splitting or merging code, when one change
+  keeps breaking unrelated parts, when I/O sits deep inside logic, when reviewing a design
+  or an ARCHITECTURE file, or when shaping the build and CI. Runs a gated procedure from
+  one reconstructed model (Alex Kladov's practice). Not for: the content of a decision
+  (data structures, algorithms, domain facts); how to test (testing); splitting a system
+  into services, HTTP or cloud design; pattern catalogues.
 license: MIT
 ---
 
 # software-architecture
 
-## Contents
-
-- [Where this comes from](#where-this-comes-from)
-- [What this skill refuses to be](#what-this-skill-refuses-to-be)
-- [The six-concept spine](#the-six-concept-spine)
-- [How a decision is derived](#how-a-decision-is-derived)
-- [By job](#by-job)
-- [Cross-skill ownership](#cross-skill-ownership)
-- [Output contract](#output-contract)
-- [Reference index](#reference-index)
-
 ## Where this comes from
 
-This skill encodes one reconstructed reasoning model, not a textbook survey of architecture patterns. It was rebuilt from Alex Kladov's (matklad's) essays (2017–2026), his `rust-analyzer` and TigerBeetle architecture and style documents, commit messages, pull-request reviews and lecture transcripts. Ted Kaminski's essays and other TigerBeetle authors' texts (`TIGER_STYLE.md`) enter only to tag origins or narrow scope. None of the authors took part, reviewed or endorsed this skill.
+This skill is one reconstructed reasoning model, not a body of architecture knowledge. It was rebuilt from the design practice of Alex Kladov (matklad) in rust-analyzer and TigerBeetle: his blog (206 posts, 2017–2026), rust-analyzer's design documents, style guide and blog, TigerBeetle's documents, blog and pull requests, 215 commits checked in both repositories, streams and talks. He did not take part in it, review it or endorse it. An adversarial verification pass checked 234 extracted moves against that corpus: 82 held as stated, 56 held only in a narrower scope, 91 rest on a single occurrence and are quarantined as [hypotheses](references/limits.md#hypotheses), 5 were cut (3 another person's, 1 inverted, 1 absent). Of seven proposed concepts five survived; of 69 named tricks, 47 instruct here ([arithmetic](references/limits.md#verification-arithmetic)).
 
-A two-part kill test on 10 of his own structural decisions in `rust-analyzer` and TigerBeetle (48 turning points: 12 contemporaneous concept steps, 4 retold concept steps, 25 tacit steps, 7 external) found that his concepts carry **who may know whom** (absence invariants, boundary stakes, physical enforcement, and pushing I/O and branching to the edge), while **domain facts** carry the internal data structures and algorithms. When domain facts that an agent reads from the repository (`T-domain`, 13 steps) are separated from open structural judgement (`T-judgement`, 12 steps), the concept spine carries 57% of the structural choices (16 of 28), and the rest of his repertoire operates as a bag of named tricks with explicit signing contexts ([tricks](references/tricks.md)). Extraction across 5 corpus slices produced 227 raw moves consolidated into the spine below, the named tricks table, 16 forks/reversals, and explicit `domain-input` and `scope-limit` registers ([limits](references/limits.md)).
+His concepts carry the *direction* of a structural decision: on records written at decision time they carried 12 of 28 non-domain steps of ten of his decisions. They do not carry its content: see [what the concepts do not carry](#what-the-concepts-do-not-carry).
 
-Before you state a number, attribute a phrase, close an open fork, or answer where this model stops, load [references/limits.md](references/limits.md).
+Before you state a number, attribute a phrase, close a fork, or answer where this comes from, load `references/limits.md`.
 
 ## What this skill refuses to be
 
-- **A substitute for reading the codebase's domain facts.** The spine decides *where* to cut and *who may know whom*; what the parts are (data layout, protocol wire rules, compiler or storage mechanics, frequency of the common case) comes from the domain. Before proposing a cut, collect the domain inputs listed in [limits](references/limits.md#domain-inputs-the-codebase-must-supply).
-- **A mandate to pile up internal boundaries.** Boundaries have a high cost: they prevent changes. Inside one compilation unit (closed world), fine-grained visibility and defensive layers are waste.
-- **Unconditional rules.** In his own words, his knowledge is "a bag of tricks, where the tricks are named … points both to the actual trick (code to type), as well as a justification for it (in what context that would be a good trick to use)", and a rule of thumb is "an attention trigger" and "a concise summary of the arguments that motivate the rule". Every trick in [references/tricks.md](references/tricks.md) carries when it is signed and when it is wrong.
-- **Multi-service or cloud topology doctrine.** He states that he has little experience building multi-service systems or modern cloud infrastructure ([limits](references/limits.md#boundary-and-gaps)).
-- **An authority.** Never cite this skill or its author against a person. Argue from who controls both sides of the boundary, what changes in one commit, or what the compiler enforces.
+- **A catalogue.** No layered-architecture template, no list of principles, no pattern names to apply. He describes his own knowledge as "a bag of tricks, where the tricks are named", each with "in what context that would be a good trick to use". Every trick is [unsigned](#no-trick-is-signed) until its context signs it; a remembered pattern is the signal that a gate was skipped.
+- **The content of a decision.** See [what the concepts do not carry](#what-the-concepts-do-not-carry).
+- **A model of multi-service systems.** See [the line](#the-line-services-he-has-not-built).
+- **A theory of testing.** Where tests go, what they bind to, and the merge gate belong to the `testing` skill. This skill names a test only as the carrier of an invariant.
+- **An authority.** Never cite this skill or him against a person. Argue from the gate you ran.
 
-## The six-concept spine
+## Five concepts
 
-Concepts `S1` and `S3` restate Ted Kaminski with matklad's operational additions; `S2`, `S4`, `S5` and `S6` are his. Grouping them into six axes and ordering them into a procedure is this skill's scaffolding ([limits](references/limits.md#this-skills-own-scaffolding-declared)).
+Each answers a different question about a structure. They are distinct, not orthogonal: the edge's core invariant is itself an absence ("Analyzer does not do any I/O."), but where effects go is a separate rule.
 
-**S1. Who may know whom (invariants as absences)** `[contemporaneous in commits from 2018-12; doc heading 2020-06]`:
-- Define each component by what it **does not depend on or know** (`base-db` knows no filesystem or paths; `syntax` knows no Salsa or LSP; only the outer binary knows LSP and JSON serialization; the event loop has no allocator).
-- Because an absence is invisible when reading local code, write these down as explicit **Architecture Invariants** in `ARCHITECTURE.md` and cite them in later reviews and commits.
-- Put glue that connects two otherwise independent components into a leaf crate or an explicit **kitchen sink** module (`shortcuts`, `stdx`) so the two components never import each other.
+1. **Absence** — what must this component not know? "Often, important invariants are expressed as an _absence_ of something, and it's pretty hard to divine that from reading the code." His commits state such absences from 2018 ("File module source does not depend on syntax") to 2025. The enforcement step belongs to it: internal boundaries "seem to crumble under the pressure of feature requests, unless the boundary in question is physically reified", because "It's very hard to notice that something is _not_ being done!" The dependency half ("what modules it does not depend upon") is Ted Kaminski's; the absence as an invariant that the code cannot show is Kladov's.
+2. **Edge** — where do I/O, the clock, the environment, allocation, failure and branching live? At the caller, `main` or the event loop; the core takes its input as data. "Analyzer does not do any I/O. It starts in an empty state and all input data is provided via `apply_change` API." (rust-analyzer guide, 2019); "Push IO and error handling up" (commit, 2020); a "sans-io ReceiveBuffer" (TigerBeetle, 2025). TigerBeetle's static allocation and I/O-free transaction core are Joran Dirk Greef's design; Kladov's part is named in [limits](references/limits.md#voices-that-are-not-his).
+3. **Control** — how much care does this interface deserve? "Figure out hard system boundaries between “your system” and “not your system”, and do design those carefully. Anything else that looks like a boundary isn't. It is useful to spend some effort designing those things as well, but it's more important to make sure that you can easily change them." His test is control of the other side: "You often don't control the other side of this boundary, so changing serializable types is hard." The principle restates Kaminski; the additions are his ([limits](references/limits.md#voices-that-are-not-his)).
+4. **Ratio** — is this cut worth having? "you want to optimize the _ratio_ of module size to its interface. You need to divide the volume by the surface area. It's not about the size, it's about the shape!" Ousterhout's deep modules say the same of modules; he read the book and found it "good … But they weren't ground breaking for me." His difference: one ratio judges files, functions and dependencies alike; "cut through the glue, and get straight to the algorithmic core"; and fold a split back when "the impl is a tiny fraction of API anyway" (rust-analyzer, 2019).
+5. **Rent** — what may the project depend on? "try to understand which parts of a problem are fundamental and which are accidental". Rent the fundamental part from a platform or tool, own the accidental part. Installing Python on three operating systems "is also part of the fundamental complexity here and Again here we are happy to use dependency"; scripting a runtime install that the runtime's vendor does not provide would be "taking onto us some else's maintainance burden".
 
-**S2. Effects and decisions at the edge, pure core** `[contemporaneous from 2018-08]`:
-- Push I/O, OS calls, environment (`cwd`, env vars, `stdout`), memory/resource allocation (`hard mode` / static allocation at startup) and error reporting out to `main` or the caller (`sans-IO`).
-- **Push `if`s up and `for`s down:** centralize preconditions and control-flow branching in one top-level function and encode proven preconditions in callee types; make the work below straight-line and operate on batches (`O(1)` control plane over `O(N)` data plane).
-- Make the core infallible on bad user input — return `(T, Vec<Error>)` rather than aborting — and distinguish expected domain outcomes from genuine environment/I/O errors (`Result<Result<T, DomainErr>, IoErr>`) and from program bugs (panics/assertions, caught only at a failure-isolation boundary).
+## The procedure
 
-**S3. Boundary stakes (closed world vs open world)** `[restates Kaminski; review classes contemporaneous 2020-06]`:
-- For every interface, ask: **can one commit change both sides?**
-  - **Open world** (public library API, IPC/wire protocol, serialized formats, CLI flags after first user): high cost to change. Design carefully, minimize surface area, keep serialization in leaf crates, and lean on existing stability guarantees instead of inventing your own.
-  - **Closed world** (inside one compilation unit or application repo): refactoring is cheap. Skip `pub(super)` / `pub(in path)` ceremony, getters/setters, and speculative interfaces.
-- Scale code-review scrutiny to three change classes: (1) internals of one component (merge once happy path works, tests pass, unhappy path doesn't panic), (2) new `pub` API on a boundary (heavy iteration; split into its own PR), (3) new dependency edge in the build graph (rare, architectural scrutiny).
+The gate order is this skill's scaffolding, not a protocol he follows. Look at anything first; commit to no structure until the gates above it have a written answer.
 
-**S4. Physical reification against erosion** `[lecture 2019-03; contemporaneous in commits 2020-11 / 2024-08]`:
-- By **Kolmogorov's zero–one law of software engineering**, in a large codebase every pattern not statically rejected by the toolchain eventually exists, and informal "almost rules" ("module A shall not import module B") crumble under feature pressure.
-- If a cut must hold across time or contributors, reify it physically: a separate crate/package edge, a capability withheld from the function signature (no allocator or `Io` handle passed in), type erasure (`anyopaque` / `VTable`), `-Dunreachable_pub`, or a repository `tidy` ratchet check. Inside a single module, privacy plus local convention suffices.
+**Gate 1: Control.** List every interface the change touches and who controls its other side. Not you: a published library's API, a serialized type (an IPC boundary), a protocol whose other end someone else implements. Design those for stability and plan the upgrade: "Solid upgrade strategy for deployment trumps any design which seems perfect at a given moment in time." Keep everything else cheap to change. Visibility matters at the compilation-unit edge: "you have either closed world (all usages are known) or open world (usages are not-knowable)". rust-analyzer's review rule scales scrutiny by the boundary a change touches and splits API changes into their own pull request ([scope](references/limits.md#narrowed-the-scope-that-binds)). Tricks: [control](references/tricks.md#control).
 
-**S5. Locality and the narrow cut** `[contemporaneous in guide 2019-01; retold in essays 2021–2026]`:
-- **Modularity is locality** ("what happens inside a function, stays inside the function"): partition code so the most frequent change (editing a function body, a single file, or one feature) stays inside one component behind an interface it does not invalidate. Parallelism, incrementality and error resilience are three faces of that one cut; prefer **laziness** (skipping work altogether) over fine-grained incremental query tracking.
-- **Cut ratio (`volume ÷ surface area`, thin waist):** extract a module or data structure when its implementation volume is large relative to its interface, whether it is 10 or 10,000 lines long ([fork F8](references/limits.md#forks-and-reversals)). Phrase the outermost internal boundary in the consumer's presentation vocabulary (plain data), and give producer and consumer separate constructs across the "thin film" rather than coupling them on one giant enum.
+**Gate 2: Edge.** List every I/O, clock read, environment or working-directory read, allocation, fallible call and branch on outside state. Move each to the caller, `main` or the event loop; pass in what it produced. Separate genuine I/O failure from expected outcomes: "Hitting an io::Error is a legit problem. Finding more than one Cargo.toml is not." Give the code that talks to the OS its own component. When outside I/O delivers events, several are ready at once: take them all, then prioritize ("always be batching"). Keep the join: an API that spawns work with no handle loses causality, and "Broken once, causality link is not reforgable by a layer above." An error's destination decides its type: handled, a small closed set of codes; reported, rendered at an isolation boundary ("If you know the ultimate destination up front, it usually is simpler to render the error immediately."). Tricks: [edge](references/tricks.md#edge), [concurrency and failure](references/tricks.md#concurrency-and-failure).
 
-**S6. Concrete abstraction and binary privacy** `[contemporaneous 2020-05 / 2020-08]`:
-- **Concrete Abstraction smell:** if every call site `x.blag()` uses a known concrete type rather than an unmonomorphized type parameter `T`, delete the trait/generic and write concrete functions. At crate edges, wrap a monomorphic `_impl` in a thin generic shell so compile times do not explode across downstream crates.
-- **Binary Privacy:** a type is either plain data (all fields `pub`, no getters/setters) or an abstract data type guarding a local invariant (all fields private, mutated only inside its module). Never mix the two.
+**Gate 3: Absence.** For each component, write what it must not know or depend on, in that form: "`hir` should know nothing about URLs, markdown and html." Move code to the layer whose vocabulary it uses: "auto-import is purely an IDE concern, so it should be done outside of HIR". Record the absences where the next reader looks: for a project of 10k–200k lines (his stated range, a limit), an ARCHITECTURE file with a codemap. Then enforce the ones feature pressure will reach: a crate or package edge with a declared dependency, a lint, a type-erased handle, a capability never handed over, or a test (named by `testing`). Inside one module, privacy and a local convention are enough: "maintaining *local* conventions needs little effort." Tricks: [absence](references/tricks.md#absence).
 
-## How a decision is derived
+**Gate 4: Ratio.** For each cut, compare the body with its interface: "keep related things together, and independent things apart". Extract a self-contained data structure whatever its length; fold back a split whose implementation is a small part of its interface; treat an hourglass function or a dependency that only repackages another as glue. Phrase the outermost internal API in its consumer's vocabulary, as plain data ("Rather than talking in definitions and references, it talks in Strings and textual offsets."), for "a hypothetical _ideal_ client" rather than the one you have. Give producer and consumer their own constructs when they want different shapes. Screen limits override the ratio for lines and functions, not for files (numbers in [limits](references/limits.md#numbers)). The gate judges a cut; it does not find one: "The hard part is to realize that there is (or there could be) an interface in the first place." Tricks: [shape](references/tricks.md#shape).
 
-The step order below is this skill's construction ([limits](references/limits.md#this-skills-own-scaffolding-declared)):
+**Gate 5: Rent.** For each dependency, tool and platform, name the fundamental part it absorbs and the accidental part it adds. Read the lockfile, not the manifest: "it's important to realise what problems your application is and is not solving." What the bootstrap already needs is free: "This adds dependency on the git executable, but this is fine, as we need it to clone the repo anyway". The build system is "a bootstrap process: it is how you get from `git clone` to a working binary"; put the check logic there, in the project's own language, and let CI drive it and spread work over unlike machines. Not to the end: a CI that is "just a single line which calls into make CI. This is also incorrect." TigerBeetle keeps the platform matrix and runtime setup in CI on purpose. Tricks: [rent](references/tricks.md#rent).
 
-1. **Gather domain inputs first ([limits](references/limits.md#domain-inputs-the-codebase-must-supply)).** Identify the 99% common case vs the 1% rare case, data sizes, failure/availability posture (Erlang-style fault-isolated features vs SQLite/TigerBeetle-style total determinism), and language/build-graph constraints.
-2. **Classify each interface by S3 (open vs closed world).** Spend design budget on hard external/IPC boundaries and crate edges; strip ceremony inside a compilation unit.
-3. **Place cuts by S2 and S5.** Isolate OS/platform I/O, allocation and serialization at the outer leaf/shell (`main`, VFS, `MessageBus`); cut around the most frequent change so it stays local behind a narrow, consumer-vocabulary interface.
-4. **Orient dependencies by S1 and enforce by S4.** Write down "X does not know Y" invariants; put cross-cutting glue in a leaf or kitchen-sink module; physically reify any cut that feature pressure would erode (crate edge, withheld capability, `tidy` check).
-5. **Trim inside components by S6 and select named tricks.** Apply Binary Privacy, eliminate Concrete Abstractions, and check [references/tricks.md](references/tricks.md) for the specific code-level or build-level trick and its counter-case.
+**Then the tricks.** Pick a trick only where its *signed when* matches what the gates found, never because it is familiar: `references/tricks.md`. For an IDE, language server, compiler or incremental build, load `references/incremental.md` as well.
 
-## By job
+## No trick is signed
 
-| Job | Where to go |
-|---|---|
-| Applying a named code, API, control-flow, error or build trick (with its `signed when` / `wrong when` conditions) | [references/tricks.md](references/tricks.md) |
-| Designing module/crate boundaries, `ARCHITECTURE.md`, workspace layout, dependencies, or incremental/compiler/isolated systems | [references/boundaries-and-systems.md](references/boundaries-and-systems.md) |
-| Checking domain inputs, dated reversals/forks, numbers, foreign voices or scope limits | [references/limits.md](references/limits.md) |
-| Unpacking a term (`Architecture Invariant`, `thin waist`, `thin film`, `kitchen sink`, `binary privacy`, `early cutoff shield`) | [references/glossary.md](references/glossary.md) |
+Sans-io, pushing ifs up, call-site injection, a kitchen-sink module, a crate edge, a multicall binary, owning instead of depending: each is right in one context and wrong in another. Never recall a sign; read it off the context. Each row in `references/tricks.md` carries his condition for it and his case against it; where he gives none, it says *none stated*, and none is supplied.
 
-## Cross-skill ownership
+## What the concepts do not carry
 
-- **Owned by `software-architecture`:** boundary kinds (external vs internal, closed vs open world), boundary cost, narrow cut, cut ratio (`volume ÷ interface`); architecture invariants as absences, physical enforcement, erosion ("almost rules"); `ARCHITECTURE.md` and codemap; dependency structure bounding independent change, coarse independent chunks; org chart vs deployment topology (`Kafka vs Nabokov`).
-- **Owned by `testing` (named here, derived there):** purity × extent of a test; tests through a stable `check` function and snapshots; generative testing, minimization, swarm and deterministic simulation; assertions as checked runtime properties; Cargo test-binary layout (`tests/it/main.rs`).
+The content of a decision: which data structure, which algorithm, where a storage layout puts what, what a language or protocol allows. In his own decisions that came from domain expertise, and here it comes from yours: read it off the codebase, the user or your own knowledge, and say which. In a blind prediction test, a core built from his earlier writing gave the direction but missed the criterion that decided his case: constructor functions, the screen limit, the single binary, "one correct way". Finding where a cut could go is part of the content.
+
+His own 2026 account of architecture opens elsewhere, with Conway's law and incentives: rust-analyzer's features are crash-isolated "To attract weekend warriors", around a core held to a stricter bar. The model takes that as domain input: ask who will work on the code, and say what you assumed.
+
+## The line: services he has not built
+
+The practice behind this model is two systems, each one codebase: an IDE back end (rust-analyzer) and a replicated database (TigerBeetle). Beyond them his words are: "I don't have much experience building these kind of systems" (2024, of a multi-service system on Kafka); "I don't know how to best test modern HTTP applications built around inter-process communication." (2021); "I am not well-versed in cloud things" (2023).
+
+For service code, the model decides inside each process and at the edge of each service's own code: effects at the edge, absences, the cut ratio, rent or own, and every serialized message type as an IPC boundary whose other side you often do not control. It decides nothing that depends on how a network, a broker or another service behaves: how to split a system into services, consistency between them, timeouts, retries and redelivery, deployment topology, cloud infrastructure. One binary with subcommands for several services is a [hypothesis](references/limits.md#hypotheses) there, not a rule. At this line say *the model does not reach here*, make the call yourself, label it yours, and name what would show it wrong. Do not import another author's rule and present it as this model's.
 
 ## Output contract
 
-Every architectural proposal or review verdict states:
+Every structural proposal, change or design review carries:
 
-1. **Domain inputs read:** the common-case frequency, data/workload bounds, and reliability posture read from the repository before drawing cuts.
-2. **Boundary stakes (S3):** for each touched interface, whether one commit changes both sides (closed vs open world) and its review class.
-3. **Absence invariants (S1) and enforcement (S4):** what each component must *not* know (`X does not know Y`) and what physical mechanism (crate edge, withheld parameter, type erasure, `tidy` check, or module privacy) enforces it.
-4. **Effects and locality (S2, S5):** where I/O, allocation, environment and branching live, how frequent changes are stopped from propagating, and why the cut is narrow relative to the volume behind it.
-5. **Signed tricks and forks:** for any trick used from [references/tricks.md](references/tricks.md), why its `signed when` condition holds and its `wrong when` condition does not; for any open fork in [references/limits.md](references/limits.md#forks-and-reversals), both branches named.
-6. **Status of numbers and scope limits:** every number tagged as `norm`, `limit` or `illustration`, and any area where the model declares a scope limit stated plainly.
+1. each interface touched, who controls its other side, and for those you do not control, the upgrade path;
+2. each effect (I/O, clock, environment, allocation, failure, branch on outside state) and where it lives, or why it stays where it is;
+3. each component's absences, where they are written, and how each is enforced (crate or package edge, lint, type erasure, withheld capability, test) or why privacy in one module is enough;
+4. each cut added, removed or moved: what is behind it against its interface, and the vocabulary of the outermost API;
+5. each dependency or tool: what it solves here, its fundamental and accidental parts, rented or owned;
+6. each trick used, with the signed-when that matched;
+7. the domain content you used and where it came from, labelled as not the model's;
+8. each call at [the line](#the-line-services-he-has-not-built) or outside the model, labelled yours, with what would show it wrong;
+9. every number with its status.
 
 ## Reference index
 
-Load a reference file when its condition fires, never preventively.
+Load a file when its condition fires, never preventively. Every file has a row.
 
 | Load this file | At this moment |
 |---|---|
-| [references/tricks.md](references/tricks.md) | Choosing or reviewing a specific code, API, control-flow, error-handling, type or build/CI pattern. |
-| [references/boundaries-and-systems.md](references/boundaries-and-systems.md) | Structuring crates/modules, writing `ARCHITECTURE.md`, managing dependencies/vendoring, designing incremental pipelines, or setting failure-isolation posture. |
-| [references/limits.md](references/limits.md) | Before proposing a cut (to check required domain inputs), stating a number, attributing a quote, touching a fork/reversal, or working on multi-service/concurrent code. |
-| [references/glossary.md](references/glossary.md) | When a term from this skill or from matklad's corpus is used or met. |
+| `references/tricks.md` | After the gates, before applying any named move; a familiar pattern comes to mind. |
+| `references/incremental.md` | The system is an IDE, language server, compiler, or an incremental build or analysis. |
+| `references/limits.md` | Before stating a number, attributing a phrase, touching a fork or a hypothesis, citing the model, or answering where it comes from; at the line. |
+| `references/glossary.md` | A term from this skill or from his writing is used or met, especially "boundary", "invariant", "kitchen sink", "hourglass". |

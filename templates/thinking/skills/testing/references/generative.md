@@ -1,61 +1,75 @@
-# Generative Testing, Oracles and Deterministic Simulation
+# Generated inputs and verdicts
 
-> Loaded when: Designing or reviewing fuzzers, property tests, PRNG generators, minimization, assertions/oracles, or deterministic simulation.
+> Loaded when: Writing a fuzz, property, exhaustive or simulation test; choosing an oracle or assertions; a generated test failed and needs reproducing or shrinking; a bug escaped the fuzzers.
+
+Gates 4 and 5 in detail. Scopes that bind are in [limits](limits.md#narrowed-the-scope-that-binds); techniques he did not originate are tagged there under [voices](limits.md#voices-that-are-not-his).
 
 ## Contents
 
-- [Inputs as finite entropy](#inputs-as-finite-entropy)
-- [Oracles and assertions](#oracles-and-assertions)
-- [Minimization and reproduction](#minimization-and-reproduction)
-- [Deterministic simulation](#deterministic-simulation)
-- [Debugging and escaped bugs](#debugging-and-escaped-bugs)
+- [The generator](#the-generator)
+- [Aiming the generator](#aiming-the-generator)
+- [The verdict](#the-verdict)
+- [Reproducing and shrinking](#reproducing-and-shrinking)
+- [Components and whole systems](#components-and-whole-systems)
+- [The model before the fuzzer](#the-model-before-the-fuzzer)
 
-## Inputs as finite entropy
+## The generator
 
-- **Reach for a generative test first; fall back to a snapshot when you cannot fuzz.** Once tests are data-driven (`check(input)`), feed them generated inputs and seed the generator with your handwritten examples.
-- **Unify fuzzing and property testing as a finite PRNG byte stream.** A generator is a deterministic function of a finite slice of random bytes drawn from a PRNG; coverage guidance is optional. When the byte stream runs out of entropy mid-generation, abort the run and treat it as a pass ("innocent until proven guilty").
-- **Make the seed the sole input.** Encode the entropy length and PRNG seed into a single `u64` (32-bit length + 32-bit seed) and print the exact reproduction command (`seed`, commit, target) before running, so any failure replays deterministically.
-- **Use a simple, self-contained PRNG with closed intervals.** A small, deterministic PRNG without external dependencies suffices; expose range helpers with inclusive bounds (`int_inclusive(min, max)`) so boundary values are natural to express.
-- **When the space of small inputs is enumerable, test all of it.** Bugs in combinatorial logic (parsers, trees, concurrent interleavings, graph routes) usually trigger on small inputs (such as up to 6–7 elements). Replace the random byte source with a **rigged PRNG** that enumerates every decision path in lexicographic order: you get 100% coverage of the small space, and the first failure found is automatically the smallest.
-- **Shape random distributions toward boundaries and collisions:**
-  - Bias sizes toward small, tricky values while keeping a tail of purely random inputs.
-  - Fuzz both the **positive space** (valid inputs that must round-trip) and the **negative space** (corrupted inputs that must be rejected), aiming at the boundary between them: generate a valid input, then flip one bit or field.
-  - Draw keys and identifiers from a deliberately small range so collisions and repeats happen often.
-  - **Swarm testing:** randomize the operation weights and configuration per seed (enabling a random subset of operations and disabling others for the whole run), because a uniform mix of operations rarely drives a data structure into extreme states (such as a completely full or completely empty queue).
-  - Verify that the generator actually reaches interesting states (assert minimum counts of valid and invalid cases hit across a batch, or place coverage marks on tricky branches).
-- **Fuzz a component alone against its whole contract.** Alongside system-level tests, write a standalone **unit-fuzzer** that calls a component's public methods in random order with random arguments against its full interface contract ([fork F28](limits.md#forks)).
+- Write the test to read its choices from a finite stream of random bytes. Fuzzing and property testing are then one harness: "Fuzzing and property based testing are the same thing. You can use fuzzer to drive your property based tests".
+- Generate as you go: pick each next operation from the current state, not a whole case up front. When the bytes run out, the test passes: "We assume that the code is innocent until proven guilty".
+- Make the seed the only input, so a failure is a commit plus a seed (and an entropy size) that replays it exactly.
+- Use a fresh seed per run, printed before the code under test can crash: "over its lifetime, the test is going to be re-run many thousand times over, and it is wasteful to not take advantage of that". Fix the seed only for statistical assertions.
+- Give the random API closed intervals: "close interval removes a possibility of a subtle crash."
+- Once tests are data, generate them, and seed the generator with the examples: "A nice way to get one is to `sort | unique` all the unit tests."
 
-## Oracles and assertions
+## Aiming the generator
 
-- **Write assertions in production code so "does not crash" becomes a deep oracle.** Generative inputs without an oracle still catch bugs if the code under test asserts its own invariants densely.
-  - **Pair assertions** across boundaries: assert the property both at the caller before passing data and inside the callee before using it.
-  - **Assert implications positively** as `if (a) assert(b)` rather than negated compound booleans, matching how the invariant is thought about.
-  - **In long-running processes that must stay available (such as an IDE server), use recoverable assertions (`never!`)** that log or fail in tests while taking a safe fallback branch in production.
-- **Co-design the system and its test harness to have an oracle:**
-  - **Exact model comparison:** apply the same generated sequence of operations to the optimized data structure and to a trivial reference implementation (such as an in-memory map or array) and assert that their outputs and states match after every step.
-  - **Two independent computations:** compute a tricky quantity two different ways (such as incremental tracking vs a full scan, or two algorithms) and assert they agree — in production as well as in tests.
-  - **Keep a couple of magic smoke checks** (known fixed input/output pairs) next to the generative test to catch trivial regressions where both paths break together.
+- When small inputs can be enumerated, test all of them: "_Most_ of the bugs involve small, tricky examples." A generator that takes a PRNG can enumerate: "If you wrote a function that takes a PRNG and generates a random object, you already have a function capable of enumerating all objects."
+- Bias toward small, tricky inputs (a small alphabet, repeats, all-equal values) and keep some fully random ones: "You still want some amount of purely random inputs, just in case."
+- Get repeats by drawing from a much smaller range than the type allows.
+- Generate invalid inputs as well as valid ones: "Testing only positive space is a common pitfall."
+- Swarm testing: at the start of each run, draw a weight per operation, so some runs push the system to an extreme and some leave features out: "you should sample the probabilities themselves!" Under a uniform choice "our queue is very short on average. We never exercise large queues!"
+- Make rare failure paths common: trigger the failures on purpose (an allocator that really fails), or design the separate unhappy path out, because "Such “cold code” is the preferred habitat for bugs!"
+- Check that the fuzzer reaches what it exists for: "repeat the test many times, counting all the sad and happy cases, and assert that they are reasonable".
 
-## Minimization and reproduction
+## The verdict
 
-- **A copy-pasteable seed and a one-line repro command beat a complex shrinking framework.** Because the generator is driven by a `u64` seed, printing the seed gives immediate, zero-friction replay ([fork F7](limits.md#forks)).
-- **Minimize by entropy length.** Since a shorter byte stream forces the generator to make fewer and smaller choices, shrink a failing case by retrying with shorter slices of fresh entropy in a loop, keeping any shorter seed that still fails.
-- **Coarse-grained minimization across runs:** when several seeds fail in a campaign, prefer the seed with the shortest wall-clock or tick runtime — seeds that fail faster are simpler to debug ([fork F26](limits.md#forks)).
-- **Before debugging a failure, simplify by deleting code.** Once you have a deterministic failing seed, delete or stub out unrelated features and code paths in the working tree while re-running the seed until the failure is as small as possible.
-- **Keep diagnostic output under one screen.** Debugging tools and trace dumps should fit on a single screen (or a bounded window around the crash), because humans cannot read gigabyte logs.
+- **No crash.** With no known expected result, assert general properties, at least that it does not crash or fails with a well-formed error. The strength of this oracle is the assertion density of the code under test.
+- **An exact model.** When the component has a simple specification, write a naive model that always knows the answer, apply the same operations to both, and compare: "For data structures, by far the best power-to-weight ratio testing strategy is property based testing, especially if you can come up with a model that behaves exactly as the ADT".
+- **Two computations.** "carry out the same computation in two different ways and check that the result is indeed the same", a check that "can be lifted straight out of tests into the production code".
+- **Co-design the harness.** When designing a reliable system, design its test harness with it: "co-designing system and its testing harness is a point of leverage (build an oracle!)".
+- **A humble PRNG goes far** with targeted generation and an oracle: "even a humble PRNG is brutally effective, if you put it to good use". He still wants coverage guidance.
 
-## Deterministic simulation
+Assertions in the code under test are what "no crash" checks:
 
-- **Externalize all I/O, time and scheduling so a whole cluster runs deterministically in one thread from one seed.** Pass storage, network and clocks in as explicit interfaces; drive the simulation loop by stepping virtual time and delivering messages in an order chosen from the seed's PRNG.
-- **Run both a whole-system simulator and targeted subsystem fuzzers.** Use the whole-system simulator to explore emergent interactions (and track performance regressions), not to assert intricate unit-level details; pair it with focused fuzzers for individual data structures and components whose contracts are too weak or OS-coupled for the simulator.
-- **Split simulation into a safety mode and a liveness mode:**
-  - **Safety mode:** inject extreme, unbounded network partitions, crashes and storage faults; assert that safety invariants never break.
-  - **Liveness mode:** after a chaotic phase, heal the network and storage for a core quorum and assert that all replicas converge and process requests within a bounded tick count. Because liveness bugs surface only as timeouts, triage them by shrinking the run, confirming deterministic replay, and simplifying.
-- **Simulate thread interleavings with managed threads.** To test lock-free or concurrent data structures without flaky `sleep` or thread-hammer loops, wrap thread operations so only one managed thread runs at a time, chosen at each step from the PRNG seed, and exhaustively enumerate small interleavings.
+- For an invariant the types cannot express, assert it in the code; "Assert liberally."
+- For a real contract, assert on both sides: "you do one check at the call site, and one check at the definition site".
+- Assert an implication as `if (a) assert(b)`.
+- "Negations are not easy! State invariants positively."
 
-## Debugging and escaped bugs
+## Reproducing and shrinking
 
-- **Read the code against your mental model before leaning on the fuzzer.** A fuzzer proves only the presence of bugs, not their absence, and is a tool for finding holes in your understanding. When hunting bugs or reviewing a change, read the entire subsystem (not just the diff) and compare what is in git against a precise mental model of the invariants.
-- **Think in invariants, not in failing examples.** When code fails, resist fumbling with `+ 1` / `- 1` until the example passes; state the loop or data invariant that must hold and derive the fix from it ([fork F18](limits.md#forks)).
-- **When a bug escapes your fuzzers, treat it as a bug in the fuzzer first.** Before landing the point fix and its regression test, change the fuzzer's generator, weights or oracle so it finds that bug (and its neighbours) automatically.
-- **Stack verification layers.** No single technique is ever thorough enough: layer static types, code reading, assertions, snapshot tests, subsystem fuzzers, deterministic simulation, and — where automated tests cannot reach — release trains and a manual QA checklist.
+- Reproduction before minimization: report a short seed plus the exact command that replays it. "for the user experience, it is critical that you don't have to piece together the command line yourself".
+- Minimize by entropy length: rerun with fresh, shorter random input while it still fails. "naive, but practically effective" is his label; Hypothesis shrinks smarter.
+- Among failing seeds, keep the one that fails fastest: "Seeds that failed faster are simpler." He calls it a stand-in for real minimization: a workaround by his own label.
+- Before debugging, make the failing case small: "first try to _remove_ as much code as I can, and only then investigate the problematic test case".
+- Code that exits on failure is tested from a parent process, and the search for crashes runs the system in a child process (in Zig, because "There's no unwinding in Zig").
+
+## Components and whole systems
+
+At TigerBeetle these are house design he retells and extends, not his invention.
+
+- A whole-system simulator plus a targeted fuzzer per subsystem: "Main fuzzer works out the seams between components, while minor fuzzers divide&conquerer the resulting combinatorial explosion."
+- Fuzz a reusable component alone: its public calls in random order, respecting their preconditions, checked for no crash plus a structural property.
+- The simulator's interface is domain-level: "TigerBeetle has IO, but we don’t mock IO. We mock storage (fixed sized sector aligned reads/writes) and network (message passing)."
+- Use the whole-system simulator to explore, performance at the protocol level included; strict assertions are hard to get from it.
+- Split simulation into a safety mode (random faults) and a liveness mode (heal a core, keep other faults permanent, require progress). A liveness failure shows only as a timeout.
+- Co-develop the fuzzer with the feature it tests. Sketching interfaces for fuzzing before the system exists is `software-architecture`'s.
+
+## The model before the fuzzer
+
+- "Don’t write fuzzers to find bugs in the code, write fuzzers to find bugs in your understanding of the problem."
+- Read the whole subsystem, not just the diff, against your understanding: "If you are reviewing a PR, don't review _just_ the diff, review the entire subsystem."
+- When code fails, look for the broken invariant instead of fumbling with plus or minus ones until green.
+- When a bug escaped the fuzzers: "your first order of business is to treat this event as a bug in the _fuzzer_ … Only then you are allowed to add a fix and a unit test!" ("unit test" here is an example-based regression test, see the [glossary](glossary.md)).
+- Layer defenses; no single technique suffices, and generative testing belongs below the outer layer too.

@@ -270,7 +270,7 @@
         },
         "thinking": {
             "name": "thinking",
-            "version": "1.0.1",
+            "version": "2.0.0",
             "description": "Reasoning skills — design decision derivation, plus optional experimental analysis, software architecture, and testing",
             "use-when": "The project needs structured reasoning for UI/visual design derivation, root-cause and option analysis, software architecture, or testing",
             "default": false,
@@ -387,13 +387,13 @@
                     ]
                 },
                 {
-                    "source": "thinking/skills/software-architecture/references/boundaries-and-systems.md",
-                    "target": "skills/software-architecture/references/boundaries-and-systems.md",
+                    "source": "thinking/skills/software-architecture/references/glossary.md",
+                    "target": "skills/software-architecture/references/glossary.md",
                     "category": "skill"
                 },
                 {
-                    "source": "thinking/skills/software-architecture/references/glossary.md",
-                    "target": "skills/software-architecture/references/glossary.md",
+                    "source": "thinking/skills/software-architecture/references/incremental.md",
+                    "target": "skills/software-architecture/references/incremental.md",
                     "category": "skill"
                 },
                 {
@@ -416,6 +416,11 @@
                     ]
                 },
                 {
+                    "source": "thinking/skills/testing/references/data.md",
+                    "target": "skills/testing/references/data.md",
+                    "category": "skill"
+                },
+                {
                     "source": "thinking/skills/testing/references/generative.md",
                     "target": "skills/testing/references/generative.md",
                     "category": "skill"
@@ -428,11 +433,6 @@
                 {
                     "source": "thinking/skills/testing/references/limits.md",
                     "target": "skills/testing/references/limits.md",
-                    "category": "skill"
-                },
-                {
-                    "source": "thinking/skills/testing/references/shape.md",
-                    "target": "skills/testing/references/shape.md",
                     "category": "skill"
                 },
                 {
