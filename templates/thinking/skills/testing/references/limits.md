@@ -1,122 +1,244 @@
-# Limits, Forks, Hypotheses and Numbers
+# Limits and forks
 
-> Loaded when: Before stating a number, attributing a quote, closing or touching a fork, using a single-source hypothesis, or answering where the model stops.
+> Loaded when: Before stating a number, attributing a phrase, touching a fork or a hypothesis, citing the model, or answering where it comes from; at the line.
 
-This file is the authority on statuses, forks, single-source hypotheses, numbers and voices. Where it and another file in this skill disagree, this file wins.
+This file is the authority on statuses, forks, numbers and voices. Where it and another file in this skill disagree, this file wins.
 
 ## Contents
 
 - [How to use this file](#how-to-use-this-file)
-- [Corpus and extraction arithmetic](#corpus-and-extraction-arithmetic)
+- [Corpus](#corpus)
+- [Verification arithmetic](#verification-arithmetic)
+- [Narrowed: the scope that binds](#narrowed-the-scope-that-binds)
+- [Practice or exposition](#practice-or-exposition)
 - [Forks](#forks)
 - [Hypotheses](#hypotheses)
 - [Numbers](#numbers)
-- [Voices that are not the author's](#voices-that-are-not-the-authors)
+- [Voices that are not his](#voices-that-are-not-his)
+- [Named here, owned elsewhere](#named-here-owned-elsewhere)
 - [This skill's own scaffolding, declared](#this-skills-own-scaffolding-declared)
 - [Boundary and gaps](#boundary-and-gaps)
 
 ## How to use this file
 
-1. **Check the standing before asserting.** Multi-source moves in `SKILL.md` and the other reference files instruct within their stated scope. A single-source move ([Hypotheses](#hypotheses)) may seed a guess and must name the observation that would falsify it; it may never instruct or justify an edit on its own.
-2. **Present an open fork as a fork.** Name both branches, state which one you took and on what evidence, and never present your choice as the model's ruling.
-3. **Never cite this skill against a person.** Argue from the test's refactor cost, purity or failure mode.
+1. **Check the standing before asserting.** Anything that instructs outside this file held as stated. A narrowed move holds only inside the scope below, and you state the scope. A hypothesis may seed a guess and must name the observation that would settle it; it may not instruct, argue or justify an edit.
+2. **Present an open fork as a fork.** Name both branches, say which you took and on what evidence. Never let your preference pass as the model's ruling.
+3. **Never cite this skill against a person.** It is a reconstruction with a measured survival rate. Argue from the gate you ran.
 
-## Corpus and extraction arithmetic
+## Corpus
 
-- **Corpus (`.research/matklad-corpus/`):** 206 blog posts on `matklad.github.io` (2017-03-12 to 2026-10-07), 15 `rust-analyzer` blog posts, 13 `matklad`-authored TigerBeetle blog posts, `rust-analyzer` and TigerBeetle architecture/style/testing docs (blamed per line), PR threads, forum comments (`lobste.rs`, `users.rust-lang.org`, `ziggit.dev`), and 7 talk/stream transcripts (`IronBeetle` 018/087/107/123, `HYTRADBOI` 2025, `Building Systems Simply` 2025, `ERA-01`).
-- **Kill test (`.research/testing/kill-test.md`):**
-  - Part (a), 10 decisions in `rust-analyzer` and TigerBeetle (56 turning points): 24 concept-carried (`C`, 20 published before the decision), 1 retold (`R`), 25 tacit (`T`), 6 external (`X`). `C + R` is 45% overall and 51% on strategy points, with 24 of 25 visible in the contemporaneous record.
-  - Part (b), transfer across 4 service/CLI cases: 33 decided, 22 partial, 3 gaps.
-- **Extraction (`.research/testing/moves.md`, `core.md`):** 158 distinct moves (76 procedure steps, 47 positions, 19 concepts, 10 tests, 6 anti-patterns). By evidence: 93 practised, 34 in later retellings, 31 in exposition only; 32 rest on a single source. Six core concepts (`K1`–`K6`) cover 112 of the 158 moves; 46 moves sit outside the core (8 worth/budget, 15 pure scope limits, 23 standalone procedures/positions).
+- **His writing:** the matklad.github.io blog, 206 posts from 2017-03-12 to 2026-10-07; rust-analyzer's `architecture.md`, `style.md`, 2018 test documents, 2019 guide and blog (15 of 17 posts signed by him); TigerBeetle's blog, `TIGER_STYLE.md` (only the lines blamed to him), `ARCHITECTURE.md` (5 of 8 commits his), pull-request bodies and comments; forum threads on ziggit, lobste.rs and users.rust-lang.org.
+- **Streams:** IronBeetle episodes 018, 087, 107 and 123, HYTRADBOI 2025, Building Systems Simply 2025, a rust-analyzer repository walkthrough and a 2019 Saint Petersburg meetup talk in Russian. All are auto-captions: wording is approximate and speakers are not marked.
+- **Practice records:** commits and pull requests in rust-analyzer (from the 2017 lexer test harness on) and TigerBeetle (to 2025), checked against `git log` and blame.
+- **Excluded as evidence:** the post on vibe-coding a terminal editor (2025-08-31), a second vibe-coding post (2026-01-20) and the editor's repository. They are AI-topic material older than 2026-07-15, which the owner's source criteria flag. No move here rests on them, and none concerns AI-assisted testing.
+- **Kill tests:** his concepts decide the shape of a test in contemporaneous records, and from 2021 on they predict his next decisions; every worth and budget decision was tacit. On four service cases the model decides our side of every I/O boundary and nothing about the outside system ([the line](../SKILL.md#the-line-our-side-of-the-io-boundary)).
+
+## Verification arithmetic
+
+Counts describe the verification pass, not any quantity in a test.
+
+- 162 extracted moves, 4 merged as duplicates. Of 158: 85 held as stated, 28 held only in a narrower scope, 43 rest on a single occurrence, 2 were cut as inverted; none was absent from the corpus or another person's. 72 % hold at the core.
+- After the pass, for this skill: 2 moves are not about testing (maximal version selection; his rules as attention triggers); 3 belong to `software-architecture` (sketch the fuzzable interface first; enforce an architecture invariant with a test; the testing story as a primary architectural concern); 1 lost its only evidence with the excluded sources (performance numbers need a real cluster); 3 are named with their owner unsettled ([below](#named-here-owned-elsewhere)).
+- What instructs: 79 moves as stated and 28 narrowed. What sits in [hypotheses](#hypotheses): 40 single moves and one step that verification kept as single.
+- The six concepts: five held as stated; impurity held narrowed. They are distinct but two depend on others: data carries binding, entropy presupposes data.
+- 28 forks: 16 closed (4 of them on one source, 2 with an open residue), 10 open, 2 dissolved with the excluded sources.
+
+## Narrowed: the scope that binds
+
+| Move | Holds only as |
+|---|---|
+| Impurity (the concept) | I/O, time and randomness are the cost: pass them in, leave extent natural. Purity and extent as a pair of axes, the impurity ladder, "test speed is categorical, rather than numerical" and half an order of magnitude per step are the framing of one essay, *Unit and Integration Tests* (2022). |
+| Do not unit-test internals or mock your own code | Do not keep per-function tests as the suite; do not mock your own code. Ted Kaminski narrows it: such tests helped while building. |
+| A fast suite for iteration and a separate conformance suite | Compiler test suites. |
+| An integration test drives the built binary as a separate process | TigerBeetle's own naming ("Although the term is not particularly well-defined, here it means a specific thing"). |
+| Test only the subset you use | Code that is not a library need not test API surface it does not serve. Fixing the rest when you come to use it is one stream. |
+| Benchmarks sized to a human-perceptible difference | Push the difference to human scale for intuition, not precision. About 300 ms is one post; another says about 2 s. |
+| A component outside the simulator gets its own fuzzer | One component (TigerBeetle's message bus), chosen for its bug history, not its weak contract; DJ wrote the fuzzer. |
+| A strict merge gate removes flakes | It pushes fixing them; flakes still reach main. |
+| Tests use no external resources | rust-analyzer's invariant that tests use no external resources and are reproducible, plus optimising purity. Its heavy tests use Cargo and a real disk. |
+| Fuzzers are tests too | A test in the suite is his advice; TigerBeetle runs a separate smoke job on CI, bounded at 60 s. |
+| Passing tests are silent | Keep passing tests silent. Failing on stderr is Zig's runner, which he endorses; running the test binary directly for a hang is one comment. |
+| Test fatal code in a child process | The child process for code that exits, in two sources. Snapshotting status, stdout and stderr is one stream (CLI parsing), and the design was forced. |
+| Tests help design in the large | The half that says not in the small is one post. |
+| External test data, debugged through a smoke test | The external-data half; the smoke-test half is one post. |
+| Coverage marks through logging | Marks through logging. The reason, that logic reads as executed with no test hooks, is a TigerBeetle team principle. |
+| Disable the change and watch the check fail | For a test of a specific condition and for fuzzer coverage. |
+| Known fuzz failures that do not affect users stay unfixed | rust-analyzer, for a product reason (availability over correctness). |
+| His experience stops outside compilers | Only "modern HTTP applications built around inter-process communication" (2021). Other statements are background, not testing limits. |
+| Pure algorithms are the easy case | Pure code is the easy case (two sources); for generative testing in particular, one post. |
+| Give a reliable system an oracle | Co-design the system and its harness. "Part of your job" and exposing internal facts for the oracle are one post. |
+| Start with a plain assert | Plain asserts inside `check`-style tests, a `check` with expected output from the start, a detailed message at the first real debug. |
+| Do not test against an approximation | Two claims: an approximate lexer makes interactive grammar testing "almost useless"; mocking your own code lowers fidelity and makes code brittle. |
+| Fuzz the positive and negative space | Generate valid and invalid inputs. Aiming at the boundary between them is one post; the reason, that bugs concentrate there, is Joran's. |
+| Repeats from a small range, near-duplicates by a bit flip | Repeats from a small range. The bit flip is one stream, worked out with Tobi. |
+| Run the system under test in a child process | His reason is Zig's: "There's no unwinding in Zig". |
+| A humble PRNG is enough | "Brutally effective" with targeted generation and an oracle. He still wants coverage guidance. |
+| Fuzz a component alone against its whole contract | The calls respect their preconditions; the checks are no crash plus a structural property; reusable components. |
+| Externalize all I/O, time included | TigerBeetle's simulator, whose interface is domain-level: storage sectors and message passing. |
+| A liveness failure shows as a timeout | The diagnosis; the debugging recipe is one live session. |
+
+## Practice or exposition
+
+Rule text (style guides, `TIGER_STYLE.md`) and "how we do it" documents count as exposition or retelling, not practice.
+
+- **Exposition only, no record of doing it:** printing test timings; a separate conformance suite; fire-and-forget APIs are untestable; layering defenses; disabling the change to watch the check fail; asserting liberally.
+- **Retold later, no record from the time:** suite time as a metric; baking a release under fuzzing; leaving known fuzz failures unfixed; recoverable assertions; the model before the fuzzer (partly rule text).
+- **Practice:** using the simulator to explore (commits 9d9723c00 and 56aced5eb).
+- **Record pointers:** the safety and liveness split is commit 2cae534ca. For the CLI parser and the used-subset rule, the code is the record and the rationale is narrated a week later on stream. The testing-story record is a lexer test harness committed while the lexer was a stub (2017-12-29).
 
 ## Forks
 
-Closed forks carry his stated criterion. On the 11 open forks (and the open residues of `F3`, `F6` and `F7`), name both branches when they apply.
-
 | Fork | Status | Deciding criterion |
 |---|---|---|
-| **F1** No internals in the test suite vs a simulator checker reading internal replica state | **open** | For general observability he says "make this extra data a part of the system's output"; for co-designed systems, "co-designing system and its testing harness is a point of leverage (build an oracle!)". No passage reconciles the VOPR state checker's internal inspection with the neural-network test. |
-| **F2** "Unit tests" as a scam vs "add the fix and a unit test" | closed | Homonym ([glossary](glossary.md#homonym-traps)): "scam" targets tests that pin internal APIs; "add a unit test" contrasts a deterministic example-based regression test with a randomized fuzzer. |
-| **F3** Fuzzers "as fast as test" (~300 ms) vs a 60 s CI fuzz budget | closed for tiers; **open** for the number | Tiering: keep each CI run quick while accumulating fuzz time across runs. The 60 s bound itself is trial and error ("I don't know"). |
-| **F4** Accept slow tests vs test speed is categorical | closed | Accept slow tests only where I/O cannot be isolated, and gate them out of the default local run. |
-| **F5** Deterministic simulation at the I/O boundary vs at domain objects | closed (one source) | Existing non-DST-aware app: mock at the VM/OS level (Antithesis style). Co-designed system: mock storage and network at the domain level. |
-| **F6** Simulation as the bulk vs "real tests" (real-process / cluster runs) | closed for performance; **open** for correctness | Performance numbers must be verified on a real cluster (`T-355`). Which correctness tests must also run as real processes is unstated. |
-| **F7** 2023 entropy-length minimization vs PR 1924's "poor man's" heuristic | closed as a workaround; **open** why | He labels the PR 1924 small-cluster triage a stand-in ("one day we'll get a real minimization") and says a copyable seed is more important than minimization; why the 2023 algorithm was not used in VOPR is unstated. |
-| **F8** No mocks vs one mock for the clock | closed | Never mock your own code; mock only impure external I/O, and prefer passing `now` / `tick` as values over a clock object. (In his 2025 terminal-editor repo, no clock mock was actually present.) |
-| **F9** Append-only test suite vs deleting/deduplicating tests with coverage marks | **open** | Early `rust-analyzer` docs declared the suite append-only; *A Trick for Test Maintenance* uses coverage marks to delete redundant tests. No passage accounts for dropping the append-only rule. |
-| **F10** Love and hate for external test-data files | closed | Keep the suite in external files and paste one failing input into an inline smoke test to get IDE tooling back while debugging. |
-| **F11** Tests give design feedback vs tests do not help design | **open** | He says public-API tests give design feedback, and also that tests do not help design in the small while crystallizing the data model in the large. |
-| **F12** Test at the human-visible boundary vs avoid too many LSP protocol tests | closed | At a protocol boundary with statically typed messages and heavy setup (LSP), keep protocol tests few and test one layer inward (`ide`, in UI terms). |
-| **F13** Ban `#[ignore]` (`fixme` tests instead) vs skip slow tests locally | **open** | Both are practised; that skipped slow tests still run on CI is our reconciliation, not stated by him. |
-| **F14** Tolerate known fuzz failures early on vs delete unreliable semi-checks | **open** | Stated in different project phases without an explicit rule connecting them. |
-| **F15** Micro-benchmark target of ~2 s (2025) vs ~300 ms (2026) | **open** | The 2026 post gives ~300 ms (<10 ms skews, >1 s slows iteration) without addressing the 2025 ~2 s figure. |
-| **F16** Strict NRSR eliminates flakes vs maintaining a main-failures flake list | closed | Once NRSR holds, every failure on `main` is a flake by definition; track them on a list to eliminate them. |
-| **F17** Fixed hardcoded seed vs fresh random seed per run | closed | Use a fresh printed seed per run once reproduction is easy; use a fixed seed (`92`) when asserting statistical properties that would otherwise flake once in a billion CI runs. |
-| **F18** Think in invariants first vs trial-and-error execution against opaque APIs | **open** | Implied in a 2026 AI post for opaque cloud APIs ("just run the code and see the result"); not reconciled with his invariant-first rule. |
-| **F19** Persist structured inputs for lasting regression tests vs drop old failing seeds after N commits | **open** | How a permanent regression corpus relates to the bounded rolling seed store is unstated. |
-| **F20** Strict properties in an idealized lab vs fuzzy acceptance in realistic simulation | closed (one source) | Run both: strict assertions in an idealized lab fuzzer, fuzzy acceptance criteria under realistic faults. |
-| **F21** Swarm-weighted operation mixes vs uniform fuzzer scheduling | closed | Get basic uniform coverage working first before guessing where to bias fuzzer time. |
-| **F22** Exact string snapshots vs `snap:ignore` redactions | closed | Redact only when output contains volatile environmental fields such as timestamps. |
-| **F23** Random-seeded fuzz runs inside the CI gate vs long fuzzing outside the gate | closed | Short smoke runs stay in the gate; long runs move to continuous level-triggered infrastructure. |
-| **F24** CLI parsing: "no fuzzers" vs writing a narrow CLI fuzzer in the same stream | closed | No whole-system simulation for CLI parsing; a narrow in-memory fuzzer alongside snapshots is fine. |
-| **F25** CLI tested with snapshots only vs MessageBus given a 1,000-line unit-fuzzer | **open** | He explains each case separately (CLI "isn't interesting"; MessageBus "gave us most of the troubles") without a general level-selection rule. |
-| **F26** Prioritize older failing seeds vs faster-failing seeds | closed | Faster-failing seeds are simpler (later statement with mechanism). |
-| **F27** Start with bare `assert`s vs rich diff-printing checks | closed | Start with bare `assert`s; add detailed messages on the first failure you debug. |
-| **F28** Test only the subset a single caller uses vs fuzz a component against its whole contract | **open** | No stated criterion separating an internal single-caller helper from a component fuzzed against its full contract. |
+| No internals in the suite vs a checker or a mark that reads internals | **open** | Two candidates in his words: make the needed fact "a part of the system's output", and "co-designing system and its testing harness is a point of leverage". Nothing links either to the neural-network test. |
+| Simulation vs real-process tests | **open** | Which correctness or performance checks need a real process: no criterion. The performance criterion came from an excluded source. |
+| Append-only suite vs editing tests | **open** | None. |
+| Do tests give design feedback? | **open** | None stated; public API as design in the large is our candidate. |
+| Skipping a test is banned vs slow tests are skipped | **open** | None stated; that skipped slow tests still run on CI is our candidate. |
+| Tolerate known fuzz failures vs remove checks that cannot be on the gate | **open** | None; project phase is our candidate. |
+| Benchmark length: about 2 s vs about 300 ms | **open** | Newer by date only. |
+| Two low-stakes components, two levels (the CLI parser without simulation, the message bus with its own large fuzzer) | **open** | Each has a reason, no comparison; bug history is our candidate. |
+| Test the used subset vs the whole contract | **open** | None; one consumer vs a contract others rely on is our candidate. |
+| Persist the structured input vs forget old failures | **open** | None. |
+| A smoke fuzz "as fast as test" vs 60 s on CI | closed for tiers, open for the value | "You want to make each individual CI run as quick as possible, while racking up the total fuzzing time over multiple runs." The value: "I don't know what's a reasonable time bound for smoke fuzzing." |
+| Minimization by entropy length (2023) vs a stand-in heuristic (2024) | closed as a stated workaround | He labels the heuristic a stand-in for real minimization; why the earlier method went unused is open. |
+| "Unit tests" a scam vs "a fix and a unit test" | closed | A homonym: see the [glossary](glossary.md). |
+| Accept slow tests vs speed matters | closed | Slow only where I/O cannot be isolated, and gated as slow. |
+| Simulate at the I/O boundary vs at domain objects | closed (one source) | An existing application: simulate the machine; a system built with its simulator: mock storage and network at the domain level. |
+| External test data: love and hate | closed | "I first paste the input into this smoke test, and then get my IDE tooling back." |
+| Human-visible boundary vs few tests at a typed protocol boundary | closed (one source) | Typed messages make protocol errors hard. |
+| Strict gate vs flakes on main | closed | "Maintain an easily accessible list of recent main failures" (one post). |
+| Fixed seed vs fresh seeds | closed | Fresh once a run is reproducible; fixed for statistical assertions. |
+| Strict properties in an idealized lab vs a realistic simulation | closed (one source) | "The acceptance criteria has to be fuzzy in a realistic simulation, but can be very strict in the lab." |
+| Swarm weights vs uniform fuzzer scheduling | closed | "I'd personally would like to get at least basic coverage going before trying to guess what we should spend more time fuzzing." |
+| No redactions vs redactions | closed | Case need: timestamps in REPL tests. |
+| Random seeds inside the CI gate | closed | Quick runs stay on the gate; long simulation leaves it. |
+| CLI: no fuzzers, then a fuzzer | closed (one source) | Fuzzing "in a very narrow sense". |
+| Older seeds vs faster-failing seeds | closed | "Seeds that failed faster are simpler." |
+| Plain assert vs a diff-printing check | closed | Plain asserts first; a detailed message the first time a real failure is debugged. |
+
+Two forks dissolved: *no mocks vs one mock for the clock* and *invariants first vs trial and error*. Their second branch came only from the excluded sources.
 
 ## Hypotheses
 
-Every item below rests on a **single source** (`S = 1`) in the corpus. It may seed a hypothesis that names its own falsifier; it must not instruct or be restated as a rule in other files.
+Each rests on one occurrence. It may seed a guess that names its own falsifier; it may not instruct, and it is not restated elsewhere in this skill.
 
-- **Purity and suite organization:** the 5-step purity ladder (`T-101`, one essay); skipping deduplication of fast tests (`T-125`); keeping the test suite strictly append-only (`T-145`); adding the failing regression test as a separate commit before the fix (`T-147`); removing checks that cannot be reliable enough for the merge gate (`T-131`); defining every failure on `main` as a flake only after NRSR holds (`T-132`); closing child `stdin` so children exit when the parent dies (`T-157`); sending diagnostics to a capturable sink (`T-158`); maximal version selection concentrating ecosystem testing (`T-159`); thread-hammer tests as unsatisfactory on their own (`T-153`).
-- **Shaping and fixtures:** avoiding too many tests at a statically typed protocol boundary like LSP (`T-204`); ordering a parser's test suite progressively for TDD with only `ok` tests normative (`T-213`); making internal facts part of the normal output for observability (`T-307`); avoiding `#[should_panic]` tests in applications (`T-317`).
-- **Generative testing and simulation:** keeping individual fuzz iterations cheap (`T-123`); weighting fuzzers uniformly until coverage is measured (`T-126`); fuzzing a detached commit in a separate worktree (`T-141`); not using deterministic simulation for CLI parsing (`T-110`); checking strict properties in an idealized lab alongside fuzzy criteria in realistic simulation (`T-304`); keeping a couple of known-value smoke examples next to a generative test (`T-305`); letting the simulator's checker compare internal replica state (`T-315`); triaging a simulator failure against the fault model before blaming the code (`T-316`); persisting structured inputs rather than seeds for lasting regression tests (`T-331`); deriving a fuzzer's operations mechanically from the public API (`T-336`); choosing the simulation boundary by whether the app was co-designed for DST (`T-344`); modelling simulated latencies in nanoseconds so random timestamps permute events (`T-351`); scripting a scenario with predicates over a fault-free simulator (`T-352`); simulation testing the implementation while model checking tests the algorithm (`T-353`).
-- **Scope remarks from a single source:** interactive PRNG decision sequences not replaying across commits (`T-238`); 2018 note that coverage marks were untried in large projects (`T-241`, later practised in `rust-analyzer` and TigerBeetle); the Cargo integration-tests post being about Cargo layout rather than testing philosophy (`T-242`); hand-writing tricky `macro_rules!` inputs because generating them well was unsolved (`T-245`).
+**Level and budget.**
+- Rank tests on a ladder of impurity and move each one step down (one essay).
+- Put the testing strategy in the specification and start with one simple end-to-end test (one post, about service systems he says he has little experience with).
+- Skip whole-system simulation for code that cannot hurt the database (CLI parsing); test it with examples, snapshots and a narrow fuzzer (one stream).
+- In a small project, do not organise tests for speed (one post).
+- Keep each fuzz iteration cheap by re-using memory (one post).
+- Do not deduplicate tests that run twice when they are fast (one comment).
+- Weight fuzzers uniformly until coverage can be measured (one review).
+- Write few tests at a protocol boundary whose messages are typed (rust-analyzer's LSP boundary).
+- Pick a smoke-fuzz bound (60 s), then revise it up or down (one pull request, which later moves the CI target to about 10 minutes).
+
+**Gate and history.**
+- Remove a check too unreliable for the merge gate (one post).
+- With a green-main guarantee, every failure on main is a flake; re-run tests on main to collect them (one post).
+- Fuzz a detached commit in its own worktree and open the pull request when it passes (one post).
+- Keep the suite append-only: add a new test for a found bug (rust-analyzer, 2018).
+- Commit the failing test first, as a separate commit (one post).
+- Set up a ratchet, a list of known violations the tests enforce, before fixing anything (one post).
+- He has no not-rocket-science rule for continuous fuzzing yet (2024); reaching zero known fuzz failures will take years (2025). Two claims, one source each.
+
+**External world.**
+- Thread-hammer tests are unsatisfying: a timing-dependent failure cannot be reproduced, debugged or minimized (one post).
+- Children exit when stdin closes, so spawned test processes clean up after a crash (one post).
+- Send diagnostics to stderr in production and to an in-memory buffer in tests (one post).
+- Separate the tricky-to-test integration bits into a separate project with slow, less reliable tests (one post).
+- Run threads as managed threads, one at a time, scheduled from a seed (one post; his harness is "just a toy").
+- For an existing application, simulate at the machine level; for a co-designed one, at domain objects (one forum thread).
+
+**Data and snapshots.**
+- Order a parser's suite progressively; only the `ok` cases are normative (rust-analyzer, 2018).
+- Keep a couple of known-value examples next to a generative test, as "magic smoke checks" (one post).
+- Make an internal fact a test needs part of the output through an observability point (one post).
+- In an application, do not write `#[should_panic]` tests (rust-analyzer's style guide).
+- Bound debugging output to one screen (one stream).
+
+**Generative and simulation.**
+- Check strict properties in an idealized lab and fuzzy criteria in a realistic simulation (one post).
+- For a lasting regression test, persist the structured input, not the seed ("I think", one post).
+- Derive the fuzzer's operations from the public API, so a new method breaks the build until covered (one queue fuzzer; "This is not such a big deal of course").
+- Rig the generator to enumerate in order, so the first failure is the smallest (one post).
+- Tighten the simulator's checker when an invariant can be stated more precisely (one commit).
+- When the simulator fails, first check the failure against its fault model (one stream).
+- Model simulated latencies in nanoseconds, so random timestamps reorder events (one commit).
+- Script a scenario with predicates over a fault-free simulator (one post, partly speculation).
+- Simulation tests the implementation, model checking the algorithm (one sentence, mixed-voice document).
+- Hand-write inputs such as big `macro_rules` that cannot yet be generated well (one stream).
+
+**Reading notes.**
+- His property-testing library is "simplistic" but enough so far (one post).
+- A demo that hunts a bug he already knows is weak evidence (one post).
+- In 2018 coverage marks were untried by him in large projects; later practice superseded this.
+- His post on Cargo integration tests is about Cargo only.
 
 ## Numbers
 
-No number leaves this skill without its status (`norm`, `limit`, or `illustration`).
+No number leaves this skill without its status.
 
-| Number | Status | Meaning in the corpus |
-|---|---|---|
-| ~300 ms per micro-benchmark | norm | His 2026 target for interactive benchmark iteration (`F15`). |
-| < ~10 ms / > 1 s per benchmark | limit | Below ~10 ms startup noise skews results; above 1 s iteration slows down. |
-| ~2 s per benchmark | norm (superseded) | His 2025 target, superseded in 2026 by ~300 ms (`F15`). |
-| fast = seconds, slow = low-digit minutes | norm | Target runtimes for a project's fast and slow test suites. |
-| ~10 min CI for a 200k-line Rust project | norm | His rough baseline for a well-tuned Rust CI pipeline. |
-| 1,000 similar tests | norm | The unit in which he prices the cost of a single test's speed or maintenance. |
-| `u64` seed = 32-bit length + 32-bit seed | norm | Input encoding for `arbtest` and TigerBeetle fuzzers. |
-| 100 ms `arbtest` default budget | norm | Default per-test run budget in his property-testing crate. |
-| 5 s local / 60 s per fuzzer / 10 min CI / unbounded fleet | norm (60 s provisional) | Tiered fuzzing budgets; the 60 s bound is explicitly trial and error (`F3`). |
-| 50:50 fuzzer time split (`main` vs PRs); 10 min budget, 30 min hang, concurrency 8 | norm | TigerBeetle continuous fuzzing orchestrator defaults. |
-| weekly release, fuzz bake over the weekend | norm | TigerBeetle release cadence under continuous fuzzing. |
-| ¼ MiB file-size check | norm | Repository `tidy` check threshold. |
-| ≤ 10 `snap:ignore` markers per snapshot | limit | Tool cap on redactions in a single snapshot. |
-| 4 KB / 500 lines / 100 KB debug window | limit | Tool caps implementing the "one screen of output" rule. |
-| 6 vs 7 letters; inputs `0..8`; length ≤ 7 | limit / illustration | Small-input bound where combinatorial bugs already trigger ("Longer failures are not likely"). |
-| ½ order of magnitude per purity step | illustration | Unmeasured rule of thumb for the purity ladder. |
-| seeds `92` and `42` | illustration | `92` is his personal constant seed; `42` is his anti-example of a cliché constant. |
-| < 500 lines (snapshot lib), ~300 lines (`arbtest`), ~1,000 lines (subsystem fuzzer) | illustration | Sizes of self-contained project-specific test tools; 500 lines is his personal tool-complexity ceiling. |
+| Number | Status |
+|---|---|
+| about 300 ms per micro-benchmark, under ~10 ms skews and over 1 s slows iteration | his rule of thumb (2026), one post; open against about 2 s (2025) |
+| fast suite = seconds, slow suite = low-digit minutes | norm, a project target |
+| a thousand similar tests | the unit he prices a test in |
+| half an order of magnitude per impurity step | illustration, one essay, no data |
+| about 300 ms per fuzzer ("as fast as test") | a limit he set aside after one case |
+| 60 s per smoke fuzzer | provisional ("for now") |
+| 5 s locally, 10 min on CI, unbounded on the fleet | norm, tiering by purpose; values shift between pull requests |
+| fuzz budget 10 min, hang 30 min, concurrency 8; "half an hour per fuzzer" | tool defaults and his target |
+| fuzzing time split 50:50 between pull requests and main | scheduling norm |
+| a 64-bit seed = 32-bit entropy length + 32-bit seed | norm, his input format |
+| 100 ms | his crate's default time budget |
+| seeds kept for N commits, M per commit | a limit; values not given |
+| ≤ 10 ignorable markers per snapshot | limit of his tool |
+| weekly release, fuzzed over the weekend | TigerBeetle process |
+| about 10 min CI for a 200k-line Rust project | "rough baseline" |
+| inputs 0..8; 6 against 7 letters | his small-input heuristic ("Longer failures are not likely.") |
+| small exhaustive bounds (lengths to 7, n = 5, 81133 interleavings in 8.65 s) | illustration: small spaces are enumerable |
+| suite timings, generator settings, coverage thresholds, library sizes (< 500 lines), seed 92, log sizes | illustration, single projects |
+| debugging window 4 KB / 500 lines / 100 KB | tool settings inside a hypothesis |
 
-## Voices that are not the author's
+Not his, never attribute to him: 92 % of critical bugs (Yuan et al.); "One minute of VOPR time is equivalent to days" (Evan Schwartz); "3.3 seconds of VOPR … 39 minutes" (Phil Eaton and Joran Dirk Greef); at least two assertions per function (`TIGER_STYLE.md`, not his lines); return codes 90/80 and range 0..30 (Tobi); 1,000 → 5,000 runs (speaker unclear).
 
-Never attribute these to matklad:
-- **Ted Kaminski (`docs/kaminski/`):** "test at system boundaries" wording (credited by matklad in `rust-analyzer` `architecture.md`). Under project rules Kaminski may only narrow or cut.
-- **Joran Dirk Greef (`docs/tigerbeetle/TIGER_STYLE.md`):** most of `TIGER_STYLE.md`, including "≥ 2 assertions per function", simulation from day one, and static memory limits. Only lines blamed to Alex Kladov count as his.
-- **PR and doc interlocutors misattributed in earlier excerpts:** `tb-pr-1114.md` lines 24/30/43/56 are **Phil Eaton (`eatonphil`)**; `tb-pr-1913.md:53`, `tb-pr-1607.md:41` and ~87% of `internals/testing.md` are **DJ (`sentientwaffle`)**; `tb-pr-3262.md:18` is **`batiati`**; `internals/vopr.md` ("One minute of VOPR time is equivalent to days") is **Evan Schwartz**; TigerBeetle's swarm/random-enum helpers (`9fe39720f`, 2022-10-13) were written by **Jamie Brandon** before matklad joined; in `IronBeetle 123`, the `90/80` return codes and `0..30` range are co-host **Tobi's**; the `92%` of critical bugs figure is **Yuan et al.**
-- **Borrowed origins he credits:** purity/extent axes from *Software Engineering at Google*; expect tests from **Jane Street** and `insta`; coverage marks from the **Dart analysis server**; the not-rocket-science rule from **Graydon Hoare**; `sans-IO` from **Gary Bernhardt** / the sans-io community (he disagrees with Bernhardt on how quickly integrated tests become slow).
-- **Pre-cutoff AI posts (`2025-08-31-vibe-coding-terminal-editor.dj`, `2026-01-20-vibecoding-2.dj`):** predating the 2026-07-15 AI freshness cutoff; excluded from any AI-testing claims, and the 2025 post's account of a clock mock and `sync()`/`snapshot()` does not match the repository at that commit.
+## Voices that are not his
+
+Never attribute these to Kladov. None of them instructs here.
+
+- **Joran Dirk Greef:** `TIGER_STYLE.md`'s golden rule (positive and negative space, bugs at the boundary), "Assertions are a force multiplier for discovering bugs by fuzzing", crash on corruption; the TigerBeetle simulator itself (2021). The simulator and the rule of a targeted fuzzer per subsystem are TigerBeetle house design, which Kladov retells and extends.
+- **DJ (sentientwaffle):** the message-bus fuzzer, which Kladov changes on stream; the release call as release manager; a post on fuzzer blind spots, which narrows several moves.
+- **Jamie Brandon:** swarm weights in TigerBeetle's fuzz helpers (2022-10-13), before Kladov's swarm work (2025-04). Swarm testing itself comes from a paper he credits.
+- **Tobi (Tobias Ziegler), IronBeetle 123:** the swarm options and the zero-weight question, the return-code check that a fuzzer reaches its cases, the near-duplicate bit flip (worked out together). Speaker changes in that stream are unmarked.
+- **Evan Schwartz, Phil Eaton, batiati:** VOPR notes and a stubbed clock; lines in pull request 1114; a request for a fixed seed.
+- **Ted Kaminski:** the boundary vocabulary, which Kladov credits; the narrowing of the move against unit-testing internals. He narrows, never adds.
+- **Credited origins:** expect tests (Jane Street) and `insta`; coverage marks (the Dart analysis server); the not-rocket-science rule (Graydon Hoare); sans-IO; the `arbitrary` crate; the IntelliJ Rust team's parser fixtures; cold-code ideas (Candea and Fox, Yuan et al., Joe Duffy).
+- TigerBeetle's `releases.md` and `HACKING.md` have no blame rows and are not counted as his.
+
+## Named here, owned elsewhere
+
+- **`software-architecture`:** what a boundary is (kinds, cost, narrow cut); invariants as absences, their physical enforcement and erosion; testing as a primary architectural concern, decided with the first line of code; where layers go; sketching interfaces for fuzzing before the system exists; enforcing an architecture invariant with an ordinary test (this skill may name such a test as the invariant's carrier).
+- **Owner not settled** (proposed: `software-architecture`). Named where testing needs them, never derived here:
+  - structured concurrency: "This API is fundamentally untestable." of fire-and-forget work, and sleeps in tests as its symptom;
+  - compartmentalisation by the cost of failure: rust-analyzer's merge bar ("PRs with new features land when there's a reasonable certainty that the happy case works correctly."), and a long-running rust-analyzer process that recovers from a broken assertion where TigerBeetle crashes.
 
 ## This skill's own scaffolding, declared
 
-- **The six-concept grouping (`K1`–`K6`), their orthogonality claim, and the assignment of 112 moves to them.** The concepts are his; the grouping is ours.
-- **The 4-step decision ordering in `SKILL.md`.** Only "If I can't fuzz, I write a snapshot test" is his stated order.
-- **The output contract and the split into five reference files.**
+- **The six names** (binding, data, impurity, entropy, verdict, commit) and the assignment of moves to them are ours; each concept and its words are his.
+- **The dependencies:** that data carries binding (he introduces `check` as the remedy for API-bound tests) and that entropy presupposes data ("once you formulated the tests in terms of data … you can generate test cases easily") are his; the edge from entropy to verdict is ours.
+- **The gate order** and the rule to commit to no test before the gates above it are answered are ours. His only stated order is generative first, snapshot when you cannot fuzz; in one stream he went the other way, from examples to a fuzzer fed by them.
+- **The operations table:** each sign is his; the table is ours.
+- **The line:** the four service cases are ours; what the model decides there was read off his material.
+- **The output contract** is ours.
 
 ## Boundary and gaps
 
-Outside these bounds the model has no ruling; say so out loud when a task lands here:
-- **Whether a test is worth its cost and how much budget to spend (`T-236`, `T-237`):** his own decisions here were tacit or trial and error.
-- **Fuzzing thoroughness (`T-235`):** he states that TigerBeetle has no good way yet to measure whether fuzzers explore the state space efficiently.
-- **Benchmarking a large, living project (`T-243`, `T-244`):** he states he has no grand vision for it and that each benchmark exercises only a narrow slice.
-- **Modern HTTP / cloud / IPC service internals (`T-232`):** SQL and migration correctness, database races across concurrent requests, fake-database fidelity, third-party API drift, partial failure after a lost response, and message-broker ack order, redelivery and poison messages.
+Outside these the model has no verdict. *The model does not reach here* is a legitimate output.
+
+- **His stated scope and the outside system:** quoted and listed at [the line](../SKILL.md#the-line-our-side-of-the-io-boundary). The scope sentence is from *How to Test* (2021-05-31). His later TigerBeetle work is a database built with all I/O externalized; the corpus has no material on HTTP handlers, SQL, queues or payment APIs. Migrations and acknowledgement order could be closed only by our own inference, poison messages only by importing another author; this skill does neither.
+- **Worth and budget.** Tacit at every turning point of his practice. Directions only: the price of a thousand similar tests; making a test trivial to add; the merge bar by the cost of failure ([named](#named-here-owned-elsewhere)).
+- **When to stop.** No criterion ([his words](../SKILL.md#what-this-skill-refuses-to-be)). TigerBeetle's fuzzing thoroughness went unmeasured from 2024-05 to 2026-04: "as embarrassing as it is, we currently don't have a reasonable way to track our fuzzing thoroughness".
+- **Oracles and fault models in a simulator.** Tacit, except one stream that states the fault model.
+- **Benchmarking a large, living project.** Unsolved by his own account.

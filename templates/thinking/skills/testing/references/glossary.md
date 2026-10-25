@@ -1,53 +1,50 @@
 # Glossary
 
-> Loaded when: When a term from this skill or from matklad's corpus is used or met.
+> Loaded when: A term from this skill or from his writing is used or met, especially "unit test", "integration test", "fuzzer".
 
-Each entry states matklad's operative sense and what follows from it. Use one term per concept; do not rotate synonyms. Origin tags: `coin.` = his coinage or naming; `re-spec.` = common word used in a narrower or wider sense; `borr.` = borrowed from the named source.
+His coinages and the common words he uses in his own sense. Each row says what follows from the term. Use one term per concept; do not rotate synonyms.
 
 ## Homonym traps
 
-Check which sense is meant before acting on any occurrence of these words.
-
-| Term | Sense in this model | What follows |
+| Term | His sense | What follows |
 |---|---|---|
-| **unit test** | Three distinct senses across his writing: (1) *the scam* (2021, 2024) — tests of internal code rather than features, pinning internal APIs; (2) *2020 `rust-analyzer`* — pure, `std`-less compiler snippet tests; (3) *2026* — a deterministic example-based regression test, contrasted with a randomized fuzzer. | Never write sense (1). Write sense (2) and sense (3). Replace the "unit vs integration" debate with **purity** and **extent**. |
-| **integration test** | In Cargo, merely a test file placed under `tests/`; at TigerBeetle, a test binary that contains zero system code and drives the built binary as a separate child process. | In Cargo, put all integration tests in a single `tests/it/main.rs` crate so link cost stays `O(1)`. Judge tests by purity and extent, not by directory. |
-| **fuzzer** | Any test driven by PRNG-generated data, with or without coverage guidance. Fuzzing, property-based testing and deterministic simulation are "just different names for the same thing". | Techniques from one (seed replay, entropy-length shrinking, swarm weights) apply directly to the others. |
-| **snapshot / expect test** | A "self-aware string literal" passed as a value to `check` that rewrites itself in source on mismatch. | Treat a snapshot as an ordinary value argument to `check`, not as a separate assertion macro or external tool. |
-| **simulation** | A deterministic whole-system run where the `u64` seed is the only input and storage/network are mocked at the domain level (or VM level for legacy apps), not raw OS syscalls. | Place the simulation seam where domain faults (dropped/reordered messages, misdirected writes) can be injected cleanly. |
-| **boundary** | Owned by `software-architecture`. In `testing`: the stable surface where tests attach (public API for a library; what a human sees on screen for an application). | Concentrate tests here so internal refactors never touch the test suite. |
-| **"real tests"** | His ironic label for multi-process / cluster tests contrasted with simulation. | Not a badge of superiority; simulation carries the bulk of correctness testing where available, while real clusters verify performance (`F6`). |
-| **oracle** | The mechanism that knows the right answer (assertions in the code, a simpler reference model, or a second computation). | Co-design the system and its harness so an oracle exists; without one, lean on dense assertions plus "does not crash". |
+| **unit test** | Three senses. (1) A test of code rather than a feature, nailing internal API: the thing to avoid. (2) In rust-analyzer (2020), a snippet-in compiler test without the real standard library: praised. (3) In 2026, an example-based regression test, set against a generative one: added after the fuzzer finds the bug. | Read the date and the contrast before using an occurrence. |
+| **integration test** | In Cargo, only where the `#[test]` lives; at TigerBeetle, a test binary that contains no system code and drives a separate process. | Classify a test by what it binds to and what I/O it touches, not by this word. |
+| **fuzzer** | Any test driven by generated random data, coverage guidance not required; fuzzing and property testing are one harness. | Advice for one transfers to the other. |
+| **simulation** | A deterministic whole-system run whose only input is the seed, with storage and network mocked at the domain level, not at system calls. | The fake sits where domain faults can be injected. |
+| **"real tests"** | Ironic: real-process tests, set against simulation. | Not a ranking of worth. |
+| **oracle** | The known right answer a test compares with. | A generated test without one checks only that nothing crashes. |
+| **boundary** | Owned by `software-architecture`. Testing's use only: tests concentrate on stable boundaries, and for an application "The boundary is what a human in front of a display sees." The vocabulary is Ted Kaminski's, credited. | Name the boundary; do not re-derive what it is. |
+| **test** (widened) | "a program that checks a property of a repository of code at a particular commit. Any property". | Lint, format, generated files and small benchmarks are tests the test command runs. |
+| **full coverage** | Every small input enumerated, not line coverage. | Enumerate when the small space is finite. |
 
 ## Terms
 
-| Term | Origin | Sense and what follows |
-|---|---|---|
-| **neural network test** | `coin.` | Ask whether your test suite would still work if the entire implementation were replaced with an opaque neural network. If yes, it tests features; if no, it pins implementation details. |
-| **`check` function** | `coin.` | The single helper function that calls the API under test. Every test case is one call to `check(input, expected)`, isolating the suite from API signature changes. |
-| **data-driven testing** | `coin.` | Tests whose input and output are plain data (often strings with markup) over a pure core. Once tests are data, they can be generated. |
-| **test friction** | `re-spec.` | The effort required to add one more test. Invest in project-specific helpers until adding a test takes less effort than the fix. |
-| **Test Driven Design Ossification** | `coin.` | When tests call internal APIs directly and freeze the internal design against refactoring. Delete or lift such tests to a stable boundary. |
-| **purity / extent** | `borr.` (SWE at Google, re-specified) | **Purity** measures how much I/O, threads, clocks or processes a test touches (sets speed and flakiness). **Extent** measures how much code it traverses. Optimize purity ruthlessly; leave extent natural. |
-| **slow / heavy tests** | `re-spec.` | Tests that cannot avoid real I/O or heavy work. Skip them by default locally via an env var and run them unconditionally on CI. |
-| **coverage marks** | `borr.` (Dart analysis server) | A greppable string label placed on a code branch (`hit!("name")`) and asserted in the test (`check_hit("name")`). Proves the test hit the branch and links branch to test. Emit through logging (`log.covered.debug`) in production code. |
-| **full coverage** | `re-spec.` | Exhaustive enumeration of all small inputs (via a rigged PRNG), not line-coverage percentage. |
-| **inline tests** | `coin.` | Small input snippets written in comments right next to parser grammar rules and extracted into test runs. |
-| **minicore** | `coin.` | A single minimal standard-library stub with per-test feature flags, keeping compiler/IDE tests fast and free of the real `std`. |
-| **repeatable REPL / magic smoke checks** | `coin.` (REPL credits Ian Henry) | Using self-updating snapshots to inspect data while iterating; keeping 1–2 fixed known-value examples alongside a generative test. |
-| **test (widened)** | `re-spec.` | Any program that checks a property of the repository at a commit — formatting, `tidy` lints, codegen freshness, architecture checks, and benchmark smoke runs all run under the test command. |
-| **not rocket science rule (NRSR)** | `borr.` (Graydon Hoare) | Advance `main` only to commit hashes whose full automated check suite has already passed. |
-| **flake (operational)** | `re-spec.` | Under NRSR, any test failure on `main` is a flake by definition. Track `main` failures on a dedicated list. |
-| **ratchet** | `coin.` | A repository check committed upfront with an explicit allowlist of existing violations, preventing new ones while old ones are fixed incrementally. |
-| **level-triggered testing** | `borr.` (electronics) | Running long fuzzers continuously and reporting a state table `(commit × fuzzer × seed)` rather than blocking PR gates or firing edge-triggered alerts. |
-| **finite PRNG / out of entropy** | `borr.` (`arbitrary`, generalized) | Treating the fuzzer input as a finite random byte slice whose length bounds test complexity. Exhausting the slice aborts the run as a pass. |
-| **rigged PRNG** | `coin.` | A byte generator that systematically enumerates all decision branches for small inputs instead of sampling randomly, guaranteeing the first failure is minimal. |
-| **coarse-grained minimization** | `coin.` | Using failure runtime as a proxy for complexity across failing seeds: keep the seed that fails fastest. |
-| **swarm testing** | `borr.` (Groce et al.) | Choosing a random subset and weight distribution of operations per seed so each run drives the system into a skewed corner of the state space. |
-| **positive / negative space** | `borr.` (TigerStyle, re-specified) | Valid inputs that must succeed vs invalid/corrupted inputs near the boundary that must be rejected. Fuzz both. |
-| **unit-fuzzer** | `coin.` | A standalone fuzzer for a single component with I/O mocked, complementing the whole-system simulator. |
-| **safety mode / liveness mode** | `coin.` (TigerBeetle) | Two simulator regimes: unbounded faults checking that nothing bad happens (safety) vs a healed quorum checking that progress resumes within a tick bound (liveness). |
-| **cold code ("there's no (re)try")** | `coin.` | Rarely executed error, retry or fallback paths where bugs hide. Either design the branch out or lower thresholds in tests so it runs constantly. |
-| **managed thread** | `coin.` | A thread wrapper scheduled deterministically one step at a time from a PRNG seed to test concurrent code reproducibly. |
-| **`snap:ignore` (redaction)** | `borr.` (`insta`) | An inline wildcard marker masking volatile output spans (timestamps, paths) inside a snapshot. |
-| **`now` / `tick`** | `borr.` | Passing time into logic as a plain timestamp value per call (`now`) or a periodic step (`tick`), eliminating clock mocks and sleeps. |
+| Term | What follows |
+|---|---|
+| **neural-network test** | A suite that would survive replacing the code with an opaque model tests features; one that would not tests code. |
+| **`check` function** | The one place that calls the API; tests become data, and an API change touches one function. |
+| **data-driven testing** | A pure core, data in and data out, so tests can be generated. |
+| **Test Driven Design Ossification** | His name for tests that block refactors: a cost, not safety. |
+| **expect test, snapshot test** | A "self-aware string literal" that rewrites itself on mismatch; a value `check` takes, not a separate tool. Credited to Jane Street and `insta`. |
+| **redaction, `<snap:ignore>`** | An explicit marker for a volatile span in a snapshot. |
+| **repeatable REPL** | Snapshots used for exploration, not only for change. |
+| **sans-IO** | The caller does I/O, the callee computes; the core is tested without I/O. Credited. |
+| **purity, extent** | Purity: how much I/O, threads, time and processes a test touches, which drives speed and flakiness. Extent: how much code it runs, not worth minimizing. The pair is one essay's framing. |
+| **`now`, `tick`** | Pass the current instant per call, or push time in at a fixed cadence; no clock object to mock. |
+| **slow / heavy tests** | Opt-in locally through an environment variable, always run on CI. |
+| **minicore** | rust-analyzer's minimal core library shared by tests, so fixtures stay fast and need no real standard library. |
+| **inline tests** | Test snippets as comments beside parser code, collected into files. |
+| **coverage marks** | A test names the branch it must hit; find the test for a branch, and catch a test that stopped covering it. Borrowed from the Dart analysis server. |
+| **not-rocket-science rule** | Main advances only to commit hashes whose test results are known. Graydon Hoare's, credited. |
+| **level-triggered testing** | Long fuzzing reports a state (commit × seed), not events: a table, not a gate. |
+| **seed record** | Commit, fuzzer, seed, timings, command and pass count, kept for a bounded number of commits. |
+| **finite PRNG, entropy, out of entropy** | The input is a byte string that can run out; its length is the test's size, so shrink it to minimize; running out is a pass ("innocent until proven guilty"). From the `arbitrary` crate, generalized. |
+| **rigged PRNG** | A generator that enumerates instead of sampling. |
+| **coarse-grained minimization, poor man's minimization** | Run time, or a small correctness-only cluster, as a stand-in for real minimization: workarounds by his own label. |
+| **swarm testing** | Randomize the operation distribution per run, not only the operations. From the swarm-testing paper; at TigerBeetle the helpers predate his use. |
+| **positive / negative space** | Valid data against invalid data: fuzz both. The wording comes from `TIGER_STYLE.md`'s golden rule, not his lines. |
+| **unit-fuzzer** | A fuzzer for one component with I/O mocked, beside the whole-system simulator. |
+| **safety mode, liveness mode** | Random faults check safety; a healed core must make progress, and a timeout is the failure. |
+| **cold code** | Rarely run paths, "the preferred habitat for bugs": design them out or trigger them often. |
+| **semi-check** | A check too unreliable for the merge gate (the removal rule is a [hypothesis](limits.md#hypotheses)). |

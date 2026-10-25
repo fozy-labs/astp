@@ -1,116 +1,135 @@
 ---
 name: testing
 description: >-
-  Decide what to test, where to place the test boundary, how to shape tests as data, how to
-  choose between self-updating snapshots and seed-driven generative testing, how to keep a
-  suite fast and flake-free on the merge gate, and where the model stops on I/O and service
-  code. Use when adding or refactoring tests, designing a test harness or a fuzzer, reviewing
-  a brittle or slow test suite, replacing mocks of internal code, or setting up CI checks and
-  ratchets. Not for deciding software module boundaries themselves (that is
-  software-architecture), judging third-party benchmark claims (that is analysis), or SQL,
-  migration and message-broker fault semantics where the model declares a gap.
+  Decide what to test, where, how and at which level when writing or changing code in a
+  real repository: which boundary a test binds to, mocks against real I/O, example and
+  snapshot tests against generated ones (fuzz, property, simulation), the oracle for a
+  randomized test, seeds and minimization, slow and flaky tests, what the merge gate runs,
+  continuous fuzzing, benchmarks as tests. Use when adding tests for a feature or a bug
+  fix, when a refactor breaks many tests, when tests are slow or flaky, when reviewing a
+  test plan or a suite, or when code under test does I/O, reads the clock or uses
+  randomness. Runs a gated procedure from one reconstructed model (Alex Kladov's practice).
+  Not for: whether a test is worth its cost or when to stop; how an outside system behaves
+  (real or fake database, migrations, vendor API drift, lost responses, redelivered
+  messages); where module boundaries go (software-architecture); framework tutorials or
+  coverage targets.
 license: MIT
 ---
 
 # testing
 
-## Contents
-
-- [Where this comes from](#where-this-comes-from)
-- [What this skill refuses to be](#what-this-skill-refuses-to-be)
-- [The six core concepts](#the-six-core-concepts)
-- [How a decision is derived](#how-a-decision-is-derived)
-- [By job](#by-job)
-- [Cross-skill ownership](#cross-skill-ownership)
-- [Output contract](#output-contract)
-- [Reference index](#reference-index)
-
 ## Where this comes from
 
-This skill is one reconstructed reasoning model, not a general testing handbook. It was rebuilt from Alex Kladov's (matklad's) essays (2017–2026), rust-analyzer and TigerBeetle architecture and style documents, pull-request discussions, forum threads and live streams. He did not take part, review or endorse it. A kill test on 10 of his own testing decisions (56 turning points) found 25 concept-carried steps (24 in the contemporaneous record, 20 published before the decision; 51% of strategy turning points) and 25 tacit steps: his concepts carry the *shape* of a test, while worth/budget and domain fault models are tacit. A transfer test across four service and CLI scenarios scored 33 decided, 22 partial, 3 gaps. Extraction produced 158 moves (93 in practice, 34 in later retellings, 31 in exposition only; 32 single-source), 28 forks (17 closed by his stated criterion, 11 open) and 6 core concepts covering 112 moves.
+This skill is one reconstructed reasoning model, not a body of testing knowledge. It was rebuilt from the testing practice of Alex Kladov (matklad): his blog (206 posts, 2017–2026), rust-analyzer's design documents and commits, TigerBeetle's blog, documents and pull requests, his IronBeetle and conference streams, and forum threads. He did not take part in it, review it or endorse it. An adversarial verification pass checked 158 extracted moves against that corpus: 85 held as stated, 28 held only in a narrower scope, 43 rest on a single occurrence and are quarantined as [hypotheses](references/limits.md#hypotheses), 2 were cut as inverted; none was absent from the corpus or another person's. Six of the moves that held do not instruct here ([why](references/limits.md#verification-arithmetic)).
 
-Before you state a number, attribute a phrase, touch an open fork or a single-source hypothesis, or answer where this comes from, load [references/limits.md](references/limits.md).
+His concepts carry the *shape* of a test, and his contemporaneous records show them deciding it. They do not carry whether a test is worth its cost, nor how an outside system behaves: see [the line](#the-line-our-side-of-the-io-boundary).
+
+Before you state a number, attribute a phrase, close a fork, or answer where this comes from, load `references/limits.md`.
 
 ## What this skill refuses to be
 
-- **A test-budget calculator.** None of the six core concepts decides whether a test is worth its cost or when to stop fuzzing; in his own work those calls are tacit or trial and error ([limits](references/limits.md#boundary-and-gaps)). Only the direction holds: the testing bar follows the cost of failure.
-- **A source of domain oracles or fault models.** The model gives the form of an oracle (assertions in the code, a reference model, two independent computations), not the domain invariants or storage/network fault physics.
-- **A doctrine for external services, databases and queues.** He states that his background is compilers and deterministic systems and that he does not know how best to test HTTP applications built around inter-process communication. The model decides our side of an I/O boundary and stops at the external system's behaviour ([suite](references/suite.md#service-and-io-boundaries)).
-- **An authority.** Never cite this skill or its author against a person. Argue from the refactor cost, the purity step, or the failure mode of the test in front of you.
+- **A catalogue.** No test pyramid and no coverage percentage: neither occurs in his material. Arrange-Act-Assert occurs once, as the style whose assertions pin the result's shape. Every operation is [unsigned](#no-operation-is-signed) until the gates sign it; a remembered recipe is the signal that a gate was skipped.
+- **A worth or stopping rule.** His material has no core for whether a test pays for itself or when to stop; on thoroughness: "it's always a question whether a particular test is thorough enough. And it never is". Make the call, and label it yours.
+- **A model of the outside system.** See [the line](#the-line-our-side-of-the-io-boundary).
+- **A theory of boundaries.** What a boundary is, its kinds and cost, where layers go, and invariants as absences belong to the `software-architecture` skill. This skill places tests on boundaries; it never re-derives them.
+- **An authority.** Never cite this skill or him against a person. Argue from the gate you ran.
 
-## The six core concepts
+## Six concepts and how they depend
 
-The six concepts are his; grouping them as six orthogonal axes and assigning moves to them is this skill's scaffolding ([limits](references/limits.md#this-skills-own-scaffolding-declared)).
+Each concept answers a different question about a test. They are distinct, not orthogonal.
 
-**K1. Stable boundary**: a test suite is worth what it lets you change.
-- Bind tests to features at a stable boundary — the public API when the API is the product, or what a human sees for an application — not to internal functions or classes.
-- Operational test (the **neural network test**): could you reuse the suite if the implementation were replaced with an opaque neural network? Tests that call internal APIs directly are a liability that blocks refactoring.
+1. **Binding** — what a test binds to. "The core characteristic of the test suite is how easy it makes changing the software under test." So: "test features, not code!" The neural-network test: "Can you re-use the test suite if your entire software is replaced with an opaque neural network?" And: "Tests which directly call various API functions are a liability, because they make refactoring the API significantly more complicated."
+2. **Data** — a test's form. "introduce the `check` function which encapsulates API under test"; input and expected output are data; the expected output is a text snapshot, where "a mismatch between expected and actual causes the gold value to be updated in-place." `check` is how binding is carried out: he introduces it as the remedy for API-bound tests.
+3. **Impurity** — a test's cost. I/O, time and randomness make a test slow and flaky, not the amount of code it runs: "it's IO (and sleep-based synchronization) that kills performance, not just code volume." Pass them in ("Let the caller do input and output, and let the callee do compute"), and "just let the tests have their natural extent."
+4. **Entropy** — a test's input. Once a test is data, it can be generated. A generator reads a finite string of random bytes ("the fuzzer _is_ a random number generator"), so the seed is the input: "just two numbers, entropy size and seed, are needed to reproduce a single run of the test". Entropy presupposes data.
+5. **Verdict** — what decides a test with no known expected output: the code's own assertions ("depending on the assertion density and depth of the code under test, “it does not crash” can cover quite a bit of ground!"), an exact model ("compare with the known right answer, with an oracle"), or the same result computed two ways.
+6. **Commit** — a test's place in history: "a test is a program that checks a property of a repository of code at a particular commit. Any property". "Only advance the tip of the master branch to a commit hash, for which you _already know_ the tests results."
 
-**K2. Test as data**: one `check` function, input and expected output as plain data, output as a self-updating text snapshot.
-- Encapsulate the API under test in a single `check(input, expected)` helper so each test body is one call and all variation sits in the input data.
-- Serialize the output to text and compare it against an inline or file snapshot that updates in place on mismatch (`expect` style), keeping the snapshot a first-class value rather than a macro.
+```mermaid
+graph LR
+  B[Binding] -->|carried by| D[Data]
+  D -->|presupposed by| E[Entropy]
+  E -.->|no expected output| V[Verdict]
+  I[Impurity]
+  C[Commit]
+```
 
-**K3. Purity × extent**: cost comes from impurity, and test speed is categorical.
-- Classify tests by **purity** (how much generalized I/O, threads, clocks or child processes they touch) and **extent** (how much code they exercise), not as "unit vs integration" ([glossary](references/glossary.md#homonym-traps)).
-- Ruthlessly push purity down: let the caller do I/O and the callee compute (sans-I/O), and pass time (`now` / `tick`) and randomness in as plain values. Leave extent natural while keeping each test focused.
+Solid edges are dependencies in his material; the dotted edge is this skill's construction.
 
-**K4. Inputs are entropy**: once a test is data, generate it from a finite random byte stream so the seed is the input.
-- Treat a fuzzer or property test as a deterministic function of a finite PRNG byte stream (`u64` seed encoding length and RNG seed). Replay, entropy-length minimization, exhaustive small-input enumeration and swarm testing (randomizing the operation mix per run) all act on that byte stream.
+## The procedure
 
-**K5. Verdict from assertions**: "does not crash" is as strong as the assertions in the code; otherwise compare against a model or a second computation.
-- Pair generative inputs with dense invariants asserted in production code (paired at call and definition sites, positive implications `if (a) assert(b)`), an exact simpler reference model, or two independent computations of the same result. Co-design a reliable system and its test harness so it has an oracle.
+The gate order follows the dependencies above. It is this skill's scaffolding, not a protocol he follows. Look at anything first; commit to no test until the gates above it have a written answer.
 
-**K6. Commit-checked property**: a test is any program that checks a property of the repository at a commit, and `main` advances only to commits whose checks already passed.
-- Run lint, tidy, formatting, codegen freshness, architecture-invariant checks and benchmark smoke runs from the normal test command.
-- Enforce the **not rocket science rule** (NRSR): gate `main` on a fast, deterministic suite; gate unavoidable slow tests behind an environment variable locally while running them on CI; run unbounded fuzzing continuously as level-triggered state (commit × seed) outside the merge gate.
+**Gate 1: Binding.** Name the feature in one line and the most stable boundary where it is visible: for a library, the public API; for an application, "The boundary is what a human in front of a display sees." Bind to an API only when the API is the product: test a public library through the API its consumers use, and keep the logic tested as data in, data out. Give each layer its own integrated tests through its own input and output, so work on a lower layer does not wait for the stack to rebuild (a compile-time cost; it depends on the language). Run the neural-network test on the plan: if swapping the implementation would force rewriting the tests, they bind to code.
 
-## How a decision is derived
+**Gate 2: Impurity.** List every I/O, clock read, random draw, thread and process the test touches. For each one: pass it in as data (time as a value: "If time is a meaningful part of the input data, it should be modeled explicitly."; the random generator as an argument); stub it, if it is impure I/O you do not own; or keep it real. When I/O cannot be isolated, "just accept that the tests are going to be slow, and might need extra effort to avoid flakiness", and gate it as a slow test. Do not shrink a test's extent to make it fast. A sleep in a test is the symptom of work started with no handle to join: of a fire-and-forget API he says "This API is fundamentally untestable." (structured concurrency, named here and [owned elsewhere](references/limits.md#named-here-owned-elsewhere)).
 
-The ordering below is this skill's construction ([limits](references/limits.md#this-skills-own-scaffolding-declared)); his only stated ordering rule inside it is step 3 ("If I can't fuzz, I write a snapshot test").
+**Gate 3: Data.** One `check` per feature; each test body is a single call to it; all variation lives in the input data. Where the expected output is known, render the outcome as readable text and compare it with a snapshot that updates in place; mark volatile parts such as timestamps as ignorable. Make adding a test trivial: "if writing a test is more effort than the fix itself, testing tends to go out of the window." Detail: `references/data.md`.
 
-1. **Place the cut (K1).** Name the feature and the outermost stable boundary where its effect is visible. Refuse tests that pin internal signatures unless that API is the shipped product.
-2. **Strip impurity (K3).** Push I/O, clocks and randomness to the caller so the test runs in-memory on one thread. Where real processes or I/O are part of what is tested, embrace them, join pending work explicitly instead of sleeping, and gate slow runs ([suite](references/suite.md#purity-and-suite-speed)).
-3. **Choose the form (K2, K4, K5).** When the space of valid inputs or operations can be generated and an assertion, model or differential oracle exists, write a seed-driven generative test (or enumerate all small inputs). Otherwise, write a single `check` function with a self-updating text snapshot and a couple of magic smoke examples ([shape](references/shape.md), [generative](references/generative.md)).
-4. **Place in the loop (K6).** Fast, deterministic checks enter the default test command and the merge gate. Unbounded generative runs go to a continuous level-triggered runner, and any escaped bug first becomes a fix to the generator or oracle before a regression test is added.
+**Gate 4: Entropy** (only once Gate 3 holds). His order: "If I need to test something, I write a property/fuzz/randomized test. If I can't fuzz, I write a snapshot test." When the small inputs can be enumerated, test all of them. Feed the examples to the generator. Detail: `references/generative.md`.
 
-Steps 2 and 4 require a worth/budget judgement that the core does not supply: weigh it against the cost of failure and state that call as yours.
+**Gate 5: Verdict.** For generated input, name the oracle and what it is as strong as. *Does not crash* is the floor and is as strong as the assertions in the code under test; an exact model or a second computation is stronger. Detail: `references/generative.md`.
 
-## By job
+**Gate 6: Commit.** Name the run the test joins: the merge gate (fast and reliable; main advances only to commits whose results are known), the slow tier ("introduce the concept of slow tests early on, arrange the skipping of such tests by default and only exercise them on CI"), or continuous runs (long fuzzing stays off the gate and runs over commits). Any checked property of the repository, such as formatting, lint, generated files or a benchmark at small size, is a test the normal test command runs. Detail: `references/suite.md`.
 
-| Job | Where to go |
-|---|---|
-| Designing `check` helpers, fixtures, snapshots, redactions or coverage marks | [references/shape.md](references/shape.md) |
-| Writing a fuzzer, property test, oracle, minimizer or deterministic simulation | [references/generative.md](references/generative.md) |
-| Speeding up a suite, organizing Cargo/process tests, setting up CI gates, ratchets, or testing service/I/O code | [references/suite.md](references/suite.md) |
-| Checking a number, a fork, a single-source hypothesis, an attribution, or a scope limit | [references/limits.md](references/limits.md) |
-| Unpacking a term (`unit test`, `purity`, `check`, `coverage marks`, `level-triggered`, `swarm`) | [references/glossary.md](references/glossary.md) |
+**Then watch it fail.** For a test of a specific condition, disable the condition and see the check fail; for a fuzzer, check that it reaches the cases it exists for. Scope: [limits](references/limits.md#narrowed-the-scope-that-binds).
 
-## Cross-skill ownership
+## No operation is signed
 
-This skill shares its source author with `software-architecture`. Each shared concept has one home:
-- **Owned by `software-architecture` (named here, derived there):** boundary kinds, boundary cost, narrow cut and cut ratio; architecture invariants as absences and physical enforcement against erosion.
-- **Owned by `testing`:** purity × extent; tests through a stable `check` function and self-updating snapshots; generative testing, minimization, swarm and deterministic simulation; assertions as checked properties in code; Cargo test-binary layout; benchmarks as tests; time passed as data (`now` / `tick`); coverage marks through logging; stacking verification layers; manual QA checklists and release trains where automated tests cannot reach.
-- **Shared with `analysis`:** reading the entire subsystem against your mental model before running the fuzzer ([generative](references/generative.md#debugging-and-escaped-bugs)).
+Mocking, snapshotting, fuzzing, a real process, a slow test, reading internals: each is a gain in one context and a loss in another. Never recall a sign; read it off the gates.
+
+| Operation | Gain when | Loss when |
+|---|---|---|
+| Mock or stub | it stands in for impure I/O you do not own | it stands in for your own code: "mocking your own code (as opposed to mocking impure IO) reduces fidelity of the tests, and makes the code more brittle"; or it approximates a real component and differs from it in the interesting cases |
+| Call the API from the test | the API is the product | anywhere else; route the call through `check` |
+| Per-function tests of internals | — (no case in his material) | they stay as the suite: "Software that is hard to change because thousands of test nail existing internal APIs." |
+| Text snapshot | the outcome renders as text; you cannot fuzz; you want a repeatable REPL | the output is volatile and left unredacted |
+| Generate input | the test is data and an oracle exists; pure code is the easy case | the test is not yet data: Gate 3 first |
+| Real process, real I/O | the I/O cannot be isolated, or the feature is the process boundary | it becomes the bulk where a simulator exists (TigerBeetle) |
+| Whole-system simulation | all I/O, time included, goes through interfaces designed with the simulator (TigerBeetle) | — (no criterion for an existing application: [hypotheses](references/limits.md#hypotheses)) |
+| Slow test | skipped locally, always run on CI | a skip used for a test that does not pass yet: "assert the wrong behavior and add a fixme explaining why it is wrong." |
+| Read internal state | a coverage mark ties a test to the branch it must hit | the suite asserts on internals, failing the neural-network test |
+| Fixed seed | statistical assertions: "One in a billion events do happen in CI!" | anywhere else: a fresh seed per run, printed first |
+| Add to the merge gate | the check is reliable and fast | a long fuzz run: run it continuously instead |
+
+## The line: our side of the I/O boundary
+
+His own scope, from *How to Test* (2021, before his TigerBeetle work): "Compilers are pure self-contained functions. I don't know how to best test modern HTTP applications built around inter-process communication."
+
+For service code (a handler on a database, an API client, a queue consumer, a CLI that downloads and writes files), the model decides the shape of every test on our side of the I/O boundary:
+
+- bind to the feature at the outermost boundary, with natural extent; never pin internal APIs (an assertion on which internal function or prompt was called pins API shape);
+- render the response or outcome as a text snapshot, timestamps and other changing fields marked ignorable;
+- pass time in as a value and randomness as a seeded argument;
+- wait on outstanding work; never sleep;
+- stub external I/O, never your own modules; keep live calls in the slow tier;
+- generate invalid input as well as valid, and trigger failure paths on purpose through the stub: "Such “cold code” is the preferred habitat for bugs!";
+- for a CLI, drive the real binary on a temporary directory: "the test looks at the command's output and the resulting state of the file system, and asserts the relevant facts";
+- no merging past a failing test.
+
+It decides nothing that depends on how the outside system behaves: how far to trust a fake database against a real one, and how many tests of each; SQL and migration correctness; races between requests inside the database; vendor API drift; a request applied whose response was lost; broker acknowledgement order, redelivery and poison messages. It points the way and leaves the choice on the end state after a failed run and on what the file system guarantees on a crash. At this line say *the model does not reach here*, make the choice yourself, label it yours, and name what would show it wrong. Do not import another author's rule and present it as this model's.
 
 ## Output contract
 
-Every testing decision or review verdict states:
+Every test plan, new test, or review of a suite carries:
 
-1. **Feature and boundary (K1):** what user-visible feature or public contract is tested, and why this boundary survives internal refactoring.
-2. **Purity and extent (K3):** which rung of the purity ladder the test sits on, which impurities (I/O, time, RNG) were pushed out, and why any remaining I/O cannot be isolated.
-3. **Form and oracle (K2 / K4 / K5):** whether the test is `check` + snapshot, exhaustive small-input enumeration, or seed-driven generation, and what serves as the oracle.
-4. **Gate placement (K6):** default local + CI gate, CI-only slow suite, ratchet with an allowlist, or level-triggered continuous fuzzing.
-5. **Open forks and worth calls:** any open fork touched ([limits](references/limits.md#forks)) with both branches named, and any worth/budget or external-service choice marked as your call rather than the model's.
-6. **Standing of numbers and hypotheses:** every number tagged as `norm`, `limit` or `illustration`, and any single-source move marked as a hypothesis with its falsifier.
+1. the feature in one line, the boundary it binds to, and the neural-network answer, or why the API is the product;
+2. each I/O, clock, random source, thread or process the test touches, and whether it is passed as data, stubbed or real;
+3. the `check` it goes through and the expected output's form (snapshot, ignorable parts), or why the input is generated;
+4. for generated input: the seed and entropy size, the oracle, and what the oracle is as strong as;
+5. the run it joins (merge gate, slow tier, smoke, continuous) and, for random tests, the command that replays a failure;
+6. how you saw it fail: what you disabled, or the count or mark showing the case is reached;
+7. each decision on [the line](#the-line-our-side-of-the-io-boundary) or about worth and stopping, with your choice labelled yours;
+8. every number with its status.
 
 ## Reference index
 
-Load a reference file when its condition fires, never preventively.
+Load a file when its condition fires, never preventively. Every file has a row.
 
 | Load this file | At this moment |
 |---|---|
-| [references/shape.md](references/shape.md) | Designing or reviewing test helpers (`check`), fixtures, snapshot/expect tests, redactions, inline tests, or coverage marks. |
-| [references/generative.md](references/generative.md) | Designing or reviewing fuzzers, property tests, PRNG generators, minimization, assertions/oracles, or deterministic simulation. |
-| [references/suite.md](references/suite.md) | Optimizing suite or compile speed, organizing test binaries, setting up NRSR gates, ratchets, benchmarks-as-tests, or testing I/O and service boundaries. |
-| [references/limits.md](references/limits.md) | Before stating a number, attributing a quote, closing or touching a fork, using a single-source hypothesis, or answering where the model stops. |
-| [references/glossary.md](references/glossary.md) | When a term from this skill or from matklad's corpus is used or met. |
+| `references/data.md` | Writing or changing a `check`, a snapshot, a fixture or test infrastructure; a refactor breaks many tests; a test does not pass yet. |
+| `references/generative.md` | Writing a fuzz, property, exhaustive or simulation test; choosing an oracle or assertions; a generated test failed and needs reproducing or shrinking; a bug escaped the fuzzers. |
+| `references/suite.md` | Changing CI, the merge gate or the test runner; a suite is slow or flaky; placing a slow test, a fuzzer or a benchmark. |
+| `references/limits.md` | Before stating a number, attributing a phrase, touching a fork or a hypothesis, citing the model, or answering where it comes from; at the line. |
+| `references/glossary.md` | A term from this skill or from his writing is used or met, especially "unit test", "integration test", "fuzzer". |
