@@ -247,6 +247,12 @@ describe("validateManifestSources", () => {
         );
     });
 
+    it("ignores unrestricted references under a platform-excluded skill root", () => {
+        const manifest = createManifest();
+        manifest.bundles.docs.items[0]!.platforms = ["!claude-code"];
+        expect(validateManifestSources(manifest)).toEqual([]);
+    });
+
     it("reports a malformed skill target", () => {
         const manifest = createManifest();
         manifest.bundles.docs.items.push(skillItem("docs", "instructions/x.md"));

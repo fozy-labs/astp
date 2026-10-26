@@ -279,10 +279,30 @@ export function validateManifestSources(manifest: Manifest): string[] {
 
         const declaredSkills = new Set(
             bundle.items
-                .filter((item) => isSkillItem(item) && itemSupportsPlatform(item, "claude-code"))
+                .filter(
+                    (item) =>
+                        isSkillItem(item) &&
+                        itemSupportsPlatform(item, "claude-code") &&
+                        item.target.endsWith("/SKILL.md"),
+                )
                 .map((item) => skillNameFromTarget(item.target))
                 .filter((name) => name !== null),
         );
+        const skillRoots = new Set(
+            bundle.items
+                .filter((item) => isSkillItem(item) && item.target.endsWith("/SKILL.md"))
+                .map((item) => skillNameFromTarget(item.target)),
+        );
+        const referencedSkills = new Set(
+            bundle.items
+                .filter((item) => isSkillItem(item) && itemSupportsPlatform(item, "claude-code"))
+                .map((item) => skillNameFromTarget(item.target)),
+        );
+        for (const skillName of referencedSkills) {
+            if (skillName && !declaredSkills.has(skillName) && !skillRoots.has(skillName)) {
+                errors.push(`bundle '${bundle.name}': skill '${skillName}' has no skills/${skillName}/SKILL.md item`);
+            }
+        }
         for (const skillName of declaredSkills) {
             const hasSkillMd = bundle.items.some(
                 (item) =>
