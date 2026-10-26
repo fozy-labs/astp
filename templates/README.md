@@ -66,7 +66,7 @@ The `manifest.json` file defines all available bundles and their contents. It is
 | `description` | `string` | Human-readable description for display in prompts. |
 | `use-when` | `string` *(optional)* | Non-empty guidance on when to install or use the bundle; shown in `astp list`, omitted from interactive prompts. |
 | `default` | `boolean` | Whether this bundle is pre-selected by default in the interactive wizard. |
-| `platforms` | `Platform[]` *(optional)* | Coding agents this bundle supports — `"claude-code"` is the only value today. Defaults to all platforms when omitted. |
+| `platforms` | `PlatformFilter[]` *(optional)* | Coding agents this bundle supports — `"claude-code"` is the only value today. Defaults to all platforms when omitted. |
 | `items` | `TemplateItem[]` | Files included in this bundle. |
 
 ### Platform values
@@ -77,6 +77,8 @@ The `manifest.json` file defines all available bundles and their contents. It is
 
 The same `target` path lands under the platform's own root, so write bundle items as if they live directly under `skills/<name>/SKILL.md`, `agents/...`, etc.
 
+A platform filter is `"claude-code"` or its negation `"!claude-code"`. Positive entries form an allowlist; negated entries exclude a platform. With negations only, every platform except the excluded ones is supported. The same rules apply to bundles, units and blocks.
+
 ### TemplateItem fields
 
 | Field | Type | Description |
@@ -86,6 +88,7 @@ The same `target` path lands under the platform's own root, so write bundle item
 | `category` | `string` | Category: `agent`, `skill`, or `rule`. |
 | `optional` | `boolean` *(optional)* | Unchecked by default on `install` and `update`. For a skill, set on its `SKILL.md` item only. |
 | `labels` | `string[]` *(optional)* | Distinct `[a-z][a-z0-9_-]*` tags (e.g. `["experimental"]`, `["deprecated"]`) shown in prompts and `astp list`. For a skill, set on its `SKILL.md` item only. |
+| `platforms` | `PlatformFilter[]` *(optional)* | Platforms this unit supports, including `"!<name>"` exclusions. For a skill, set on its `SKILL.md` item only; the filter covers the whole directory. |
 
 ### Path conventions
 
@@ -140,7 +143,7 @@ Ready-made text.
 
 Rules:
 
-- Block names match `[a-z][a-z0-9_]*`. Attributes: `name="…"` (required), `description="…"` (optional non-empty description shown in prompts and `astp list`), `use-when="…"` (optional non-empty guidance shown in `astp list`, omitted from interactive prompts), `labels="…"` (optional comma-separated distinct `[a-z][a-z0-9_-]*` tags, e.g. `labels="experimental"`), `optional` (not selected by default), `required` (always installed, never shown in the wizard). `optional` and `required` cannot combine. Write the opening tag with `name`, `description`, `use-when` and `labels` in double quotes, no spaces around `=`.
+- Block names match `[a-z][a-z0-9_]*`. Attributes: `name="…"` (required), `description="…"` (optional non-empty description shown in prompts and `astp list`), `use-when="…"` (optional non-empty guidance shown in `astp list`, omitted from interactive prompts), `labels="…"` (optional comma-separated distinct `[a-z][a-z0-9_-]*` tags, e.g. `labels="experimental"`), `platforms="…"` (optional comma-separated platform filters, e.g. `platforms="!claude-code"`), `optional` (not selected by default), `required` (always installed, never shown in the wizard). `optional` and `required` cannot combine. Write the opening tag with `name`, `description`, `use-when`, `labels` and `platforms` in double quotes, no spaces around `=`.
 - Tags are whole lines at column 0 outside code fences; blocks do not nest. In a file with blocks, all text except the frontmatter lives inside blocks. Outside a code fence, no line inside a block may equal an installed tag (`<name>` or `</name>`) of any block in the file.
 - `<FILL_INSTRUCTION>` tells the consumer's agent to fill the block in place; while one is present, the CLI keeps a `<SETUP_REQUIRED>` block at the top of the installed file.
 - On install a block renders as `<project_map>…</project_map>` — the name becomes the tag. `SETUP_REQUIRED`/`FILL_INSTRUCTION` are CLI tags and are always uppercase.

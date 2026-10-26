@@ -350,10 +350,7 @@ describe("E2E: blocks", () => {
         await install();
         await fillFile();
         const file = filePath();
-        await fs.writeFile(
-            file,
-            (await fs.readFile(file, "utf8")).replace("Extra ready-made text.", "My own extra."),
-        );
+        await fs.writeFile(file, (await fs.readFile(file, "utf8")).replace("Extra ready-made text.", "My own extra."));
 
         await update();
         expect(await fs.readFile(file, "utf8")).toContain("My own extra.");
@@ -385,10 +382,7 @@ describe("E2E: blocks", () => {
         await install();
         await fillFile();
         const file = filePath();
-        await fs.writeFile(
-            file,
-            (await fs.readFile(file, "utf8")).replace("Extra ready-made text.", "My own extra."),
-        );
+        await fs.writeFile(file, (await fs.readFile(file, "utf8")).replace("Extra ready-made text.", "My own extra."));
         contents[RULES_FILE] = tplV1().replace(/<astp-block name="extra">[\s\S]*?<\/astp-block>\n\n?/, "");
 
         await update(true);
@@ -820,6 +814,33 @@ describe("E2E: blocks", () => {
                 [expect.objectContaining({ targetPath: PLAIN_FILE })],
                 `astp install blocks --skill ${PLAIN_FILE} --force --target project`,
             );
+        });
+
+        it("filters blocks by platform in install, list, check and update", async () => {
+            contents[RULES_FILE] =
+                `${tplV1()}<astp-block name="hidden" platforms="!claude-code" required>\nHidden.\n</astp-block>\n`;
+            await install();
+
+            expect(await fs.readFile(filePath(), "utf8")).not.toContain("<hidden>");
+            expect((await lockUnit())!.blocks).not.toHaveProperty(`${RULES_FILE}#hidden`);
+
+            const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+            await executeList({ bundle: "blocks", json: true, platform: "claude-code", target: "project" });
+            const listed = JSON.parse(String(write.mock.calls[0]?.[0])).units[0];
+            write.mockRestore();
+            expect(listed.blocks.map((block: { name: string }) => block.name)).not.toContain("hidden");
+
+            manifest = createBlocksManifest("1.1.0");
+            contents[RULES_FILE] = contents[RULES_FILE]!.replace(
+                '<astp-block name="extra">',
+                '<astp-block name="extra" platforms="!claude-code">',
+            );
+            await executeCheck({ platform: "claude-code", target: "project" });
+            expect(mockShowCheckReport.mock.calls.at(-1)![0].updates).toHaveLength(1);
+
+            await update();
+            expect(await fs.readFile(filePath(), "utf8")).not.toContain("<extra>");
+            expect((await lockUnit())!.blocks).not.toHaveProperty(`${RULES_FILE}#extra`);
         });
 
         it("list --json reports blocks with key, status, description, use-when and flags", async () => {

@@ -1,26 +1,30 @@
 import path from "node:path";
 
-import type { TemplateItem } from "@/types/index.js";
+import type { Platform, PlatformFilter, TemplateItem } from "@/types/index.js";
+import { supportsPlatform } from "@/types/index.js";
 
-export interface FileTemplateUnit {
+interface TemplateUnitMetadata {
+    optional?: boolean;
+    labels?: string[];
+    platforms?: PlatformFilter[];
+    description?: string | null;
+}
+
+export interface FileTemplateUnit extends TemplateUnitMetadata {
     kind: "file";
     relativePath: string;
     item: TemplateItem;
-    optional?: boolean;
-    labels?: string[];
 }
 
-export interface SkillTemplateUnit {
+export interface SkillTemplateUnit extends TemplateUnitMetadata {
     kind: "skill";
     relativePath: string;
     items: TemplateItem[];
-    optional?: boolean;
-    labels?: string[];
 }
 
 export type TemplateUnit = FileTemplateUnit | SkillTemplateUnit;
 
-export function groupTemplateItems(items: TemplateItem[]): TemplateUnit[] {
+export function groupTemplateItems(items: TemplateItem[], platform?: Platform): TemplateUnit[] {
     const skillRoots = items
         .filter((item) => item.category === "skill" && item.target.endsWith("/SKILL.md"))
         .map((item) => path.posix.dirname(item.target));
@@ -35,6 +39,7 @@ export function groupTemplateItems(items: TemplateItem[]): TemplateUnit[] {
                 item,
                 ...(item.optional !== undefined ? { optional: item.optional } : {}),
                 ...(item.labels !== undefined ? { labels: item.labels } : {}),
+                ...(item.platforms !== undefined ? { platforms: item.platforms } : {}),
             });
             continue;
         }
@@ -46,9 +51,12 @@ export function groupTemplateItems(items: TemplateItem[]): TemplateUnit[] {
             throw new Error(`Skill item '${item.target}' has no owning SKILL.md in the bundle.`);
         }
         const rootTarget = `${owningRoot}/SKILL.md`;
-        if (item.target !== rootTarget && (item.optional !== undefined || item.labels !== undefined)) {
+        if (
+            item.target !== rootTarget &&
+            (item.optional !== undefined || item.labels !== undefined || item.platforms !== undefined)
+        ) {
             throw new Error(
-                `Skill item '${item.target}' cannot set 'optional' or 'labels'; set them on '${rootTarget}'.`,
+                `Skill item '${item.target}' cannot set 'optional', 'labels' or 'platforms'; set them on '${rootTarget}'.`,
             );
         }
 
@@ -61,11 +69,12 @@ export function groupTemplateItems(items: TemplateItem[]): TemplateUnit[] {
         if (item.target === rootTarget) {
             if (item.optional !== undefined) skillUnit.optional = item.optional;
             if (item.labels !== undefined) skillUnit.labels = item.labels;
+            if (item.platforms !== undefined) skillUnit.platforms = item.platforms;
         }
         skillUnit.items.push(item);
     }
 
-    return units;
+    return platform ? units.filter((unit) => supportsPlatform(unit.platforms, platform)) : units;
 }
 
 export function resolveUnitPaths(

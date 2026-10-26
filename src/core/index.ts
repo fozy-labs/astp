@@ -41,3 +41,4 @@ export { compareVersions, loadInstalled } from "./version.js";
 export { groupTemplateItems, resolveUnitPaths } from "./units.js";
 export type { UnitBlockFile } from "./unit-blocks.js";
 export { readUnitBlockFiles } from "./unit-blocks.js";
+export { readUnitDescription } from "./unit-descriptions.js";

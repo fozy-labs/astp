@@ -149,7 +149,8 @@ function validateBundle(key: string, data: unknown): void {
         if (!VALID_CATEGORIES.has(category as ItemCategory)) {
             throw new Error(`${at}.category must be one of: ${[...VALID_CATEGORIES].join(", ")}`);
         }
-        const { optional, labels } = item as Record<string, unknown>;
+        const { optional, labels, platforms } = item as Record<string, unknown>;
+        validatePlatforms(platforms, at);
         if (optional !== undefined && typeof optional !== "boolean") {
             throw new Error(`${at}.optional must be a boolean`);
         }
@@ -172,16 +173,20 @@ function validateBundle(key: string, data: unknown): void {
     });
     assertNoCollisions(targets, `Invalid bundle '${key}': items`);
 
-    if ("platforms" in bundle && bundle.platforms !== undefined) {
-        if (!Array.isArray(bundle.platforms) || bundle.platforms.length === 0) {
-            throw new Error(`Invalid bundle '${key}': platforms must be a non-empty array when present`);
-        }
-        for (const platform of bundle.platforms) {
-            if (typeof platform !== "string" || !VALID_PLATFORMS.has(platform as Platform)) {
-                throw new Error(
-                    `Invalid bundle '${key}': unknown platform '${String(platform)}'. Expected one of: ${[...VALID_PLATFORMS].join(", ")}`,
-                );
-            }
+    validatePlatforms(bundle.platforms, `Invalid bundle '${key}'`);
+}
+
+function validatePlatforms(value: unknown, at: string): void {
+    if (value === undefined) return;
+    if (!Array.isArray(value) || value.length === 0) {
+        throw new Error(`${at}: platforms must be a non-empty array when present`);
+    }
+    for (const filter of value) {
+        const platform = typeof filter === "string" && filter.startsWith("!") ? filter.slice(1) : filter;
+        if (typeof platform !== "string" || !VALID_PLATFORMS.has(platform as Platform)) {
+            throw new Error(
+                `${at}: unknown platform '${String(filter)}'. Expected one of: ${[...VALID_PLATFORMS].join(", ")}`,
+            );
         }
     }
 }

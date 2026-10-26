@@ -8,6 +8,7 @@ import {
     groupTemplateItems,
     loadInstalled,
     readUnitBlockFiles,
+    readUnitDescription,
     resolveBundle,
     resolveUnitPaths,
     syncBundle,
@@ -139,15 +140,18 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
         const downloaded: DownloadedBundle[] = [];
         for (const { bundle, source } of candidates) {
             try {
-                const units = groupTemplateItems(bundle.items);
+                const units = groupTemplateItems(bundle.items, platform);
                 validateUnitTargets(target.rootDir, units);
                 const tempDir = await downloadBundle(source.source, bundle);
                 tempDirs.push(tempDir);
                 await assertBundleSources(tempDir, bundle.name, units);
                 await assertBundleBlocks(tempDir, bundle.name, units);
                 const unitBlockFiles = new Map<string, Map<string, UnitBlockFile>>();
-                for (const unit of units)
-                    unitBlockFiles.set(unit.relativePath, await readUnitBlockFiles(tempDir, unit));
+                for (const unit of units) {
+                    const description = await readUnitDescription(tempDir, unit);
+                    if (description) unit.description = description;
+                    unitBlockFiles.set(unit.relativePath, await readUnitBlockFiles(tempDir, unit, platform));
+                }
                 downloaded.push({ bundle, source, tempDir, units, unitBlockFiles });
             } catch (error) {
                 if (options.bundle !== undefined) throw error;
@@ -260,7 +264,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
         }
 
         const selectedUnits = plans.flatMap((plan) =>
-            groupTemplateItems(plan.bundle.items).filter((unit) => plan.selected.has(unit.relativePath)),
+            groupTemplateItems(plan.bundle.items, platform).filter((unit) => plan.selected.has(unit.relativePath)),
         );
         if (
             isInteractive() &&

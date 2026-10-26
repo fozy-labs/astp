@@ -222,6 +222,22 @@ describe("compareVersions", () => {
         });
     });
 
+    it("uses only units supported by the selected platform", () => {
+        const manifest = createManifest("1.0.0");
+        manifest.bundles.pipeline!.items.push({
+            source: "pipeline/agents/other.md",
+            target: "agents/other.md",
+            category: "agent",
+            platforms: ["!claude-code"],
+        });
+
+        const report = compareVersions(createInstalled("1.0.0"), manifest, "claude-code");
+        expect(report.updates[0]?.units ?? []).not.toContainEqual(
+            expect.objectContaining({ targetPath: "agents/other.md" }),
+        );
+        expect(report.upToDate).toHaveLength(1);
+    });
+
     it("does not downgrade when the installed version is newer", () => {
         const report = compareVersions(createInstalled("2.0.0"), createManifest("1.0.0"));
         expect(report.upToDate).toHaveLength(1);

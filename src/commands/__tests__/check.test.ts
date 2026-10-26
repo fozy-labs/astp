@@ -117,7 +117,7 @@ describe("executeCheck", () => {
         await executeCheck({ platform: "claude-code", target: "project" });
 
         expect(mockFetchManifest).toHaveBeenCalled();
-        expect(mockCompareVersions).toHaveBeenCalledWith([testInstalledBundle], testManifest);
+        expect(mockCompareVersions).toHaveBeenCalledWith([testInstalledBundle], testManifest, "claude-code");
         expect(mockShowCheckReport).toHaveBeenCalledWith(mixedReport, "project", []);
     });
 

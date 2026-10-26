@@ -214,14 +214,21 @@ describe("validateManifest", () => {
         }
     });
 
-    it("accepts optional and labels on items", () => {
+    it("accepts optional, labels and platform filters on items", () => {
         const item = {
             ...rule("core", "rules/a.md"),
             optional: true,
             labels: ["experimental", "deprecated", "v2_0"],
+            platforms: ["claude-code", "!claude-code"],
         };
         const result = validateManifest(withBundle("core", [item]));
         expect(result.bundles.core.items[0]).toEqual(item);
+    });
+
+    it.each([[], ["jetbrains"], ["!jetbrains"], "claude-code"])("rejects invalid item platforms %j", (platforms) => {
+        expect(() => validateManifest(withBundle("core", [{ ...rule("core", "rules/a.md"), platforms }]))).toThrow(
+            /items\[0\].*platform/,
+        );
     });
 
     it.each([

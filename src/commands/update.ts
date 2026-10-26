@@ -9,6 +9,7 @@ import {
     hasFillInstruction,
     loadInstalled,
     readUnitBlockFiles,
+    readUnitDescription,
     syncBundle,
     validateUnitTargets,
 } from "@/core/index.js";
@@ -78,6 +79,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                 compareVersions(
                     installedState.bundles.filter((bundle) => opened.get(bundle.bundleName) === entry),
                     entry.manifest,
+                    platform,
                 ),
             ),
         );
@@ -132,7 +134,19 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             const bundle = manifest.bundles[bundleName];
             if (!bundle) continue;
             const installed = installedState.bundles.find((entry) => entry.bundleName === bundleName);
-            const units = groupTemplateItems(bundle.items);
+            const units = groupTemplateItems(bundle.items, platform);
+            validateUnitTargets(target.rootDir, units);
+            s.start(`Downloading ${bundleName}...`);
+            const tempDir = await downloadBundle(source, bundle);
+            tempDirs.push(tempDir);
+            s.stop(`Downloaded ${bundleName}.`);
+            await assertBundleSources(tempDir, bundleName, units);
+            await assertBundleBlocks(tempDir, bundleName, units);
+            for (const unit of units) {
+                const description = await readUnitDescription(tempDir, unit);
+                if (description) unit.description = description;
+            }
+
             const manifestPaths = new Set(units.map((unit) => unit.relativePath));
             const tracked = new Set(
                 installed?.units
@@ -153,20 +167,12 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                 ...newUnits.filter((unit) => !checked.has(unit.relativePath)).map((unit) => unit.relativePath),
             ]);
 
-            validateUnitTargets(target.rootDir, units);
-            s.start(`Downloading ${bundleName}...`);
-            const tempDir = await downloadBundle(source, bundle);
-            tempDirs.push(tempDir);
-            s.stop(`Downloaded ${bundleName}.`);
-            await assertBundleSources(tempDir, bundleName, units);
-            await assertBundleBlocks(tempDir, bundleName, units);
-
-            if (forceOnly.has(bundleName) && !(await hasRestorableEdit(tempDir, units, installed))) continue;
+            if (forceOnly.has(bundleName) && !(await hasRestorableEdit(tempDir, units, installed, platform))) continue;
 
             const blockSelections: BlockSelections = new Map();
             for (const unit of units) {
                 if (!selected.has(unit.relativePath)) continue;
-                const blockFiles = await readUnitBlockFiles(tempDir, unit);
+                const blockFiles = await readUnitBlockFiles(tempDir, unit, platform);
                 if (blockFiles.size === 0) continue;
                 const lockUnit = installedState.lock.bundles[bundleName]?.units[unit.relativePath];
                 const selections = await selectUpdateBlocks(unit.relativePath, blockFiles, lockUnit);
@@ -235,12 +241,13 @@ async function hasRestorableEdit(
     tempDir: string,
     units: ReturnType<typeof groupTemplateItems>,
     installed: InstalledBundle | undefined,
+    platform: Platform,
 ): Promise<boolean> {
     const editedKeys = (installed?.units ?? []).flatMap((unit) => unit.blocks?.edited ?? []);
     if (editedKeys.length === 0) return false;
     const blockFiles = new Map<string, UnitBlockFile>();
     for (const unit of units) {
-        for (const [target, file] of await readUnitBlockFiles(tempDir, unit)) blockFiles.set(target, file);
+        for (const [target, file] of await readUnitBlockFiles(tempDir, unit, platform)) blockFiles.set(target, file);
     }
     for (const key of editedKeys) {
         const hashIndex = key.lastIndexOf("#");

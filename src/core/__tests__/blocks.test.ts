@@ -151,6 +151,13 @@ describe("parseTemplateBlocks", () => {
         ]);
     });
 
+    it("parses positive and negated platforms on blocks", () => {
+        const content = '<astp-block name="a" platforms="claude-code, !claude-code">\nx\n</astp-block>\n';
+        const { blocks, errors } = parseTemplateBlocks(content);
+        expect(errors).toEqual([]);
+        expect(blocks[0]!.platforms).toEqual(["claude-code", "!claude-code"]);
+    });
+
     it.each([
         ["missing name", "<astp-block>\nx\n</astp-block>\n", /name/i],
         ["invalid name", '<astp-block name="Bad_Name">\nx\n</astp-block>\n', /invalid block name/i],
@@ -183,6 +190,22 @@ describe("parseTemplateBlocks", () => {
             "duplicate label value",
             '<astp-block name="a" labels="experimental, experimental">\nx\n</astp-block>\n',
             /duplicate block label 'experimental'/i,
+        ],
+        ["empty platforms", '<astp-block name="a" platforms="  ">\nx\n</astp-block>\n', /empty 'platforms'/i],
+        [
+            "duplicate platforms attribute",
+            '<astp-block name="a" platforms="claude-code" platforms="claude-code">\nx\n</astp-block>\n',
+            /duplicate 'platforms'/i,
+        ],
+        [
+            "unknown platform",
+            '<astp-block name="a" platforms="!jetbrains">\nx\n</astp-block>\n',
+            /unknown block platform '!jetbrains'/i,
+        ],
+        [
+            "duplicate platform",
+            '<astp-block name="a" platforms="claude-code, claude-code">\nx\n</astp-block>\n',
+            /duplicate block platform/i,
         ],
         [
             "optional with required",

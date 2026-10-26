@@ -8,11 +8,14 @@
 
 import { createHash } from "node:crypto";
 
+import type { PlatformFilter } from "../types/index.js";
+
 /** Same regex as `FM_REGEX` in frontmatter.ts — copied to keep this file dependency-free. */
 const FM_REGEX = /^(---[ \t]*\r?\n)([\s\S]*?)(---[ \t]*(?:\r?\n|$))/;
 
 const NAME_REGEX = /^[a-z][a-z0-9_]*$/;
 const LABEL_REGEX = /^[a-z][a-z0-9_-]*$/;
+const VALID_PLATFORMS = new Set(["claude-code"]);
 const BLOCK_OPEN = /^<astp-block(?=[\s>])((?:[^>"]|"[^"]*")*)>\s*$/;
 const BLOCK_OPEN_PREFIX = /^<astp-block(?=[\s>])/;
 const BLOCK_CLOSE = /^<\/astp-block>\s*$/;
@@ -38,6 +41,7 @@ export interface TemplateBlock {
     description: string | null;
     useWhen?: string;
     labels?: string[];
+    platforms?: PlatformFilter[];
     optional: boolean;
     required: boolean;
     /** Lines between the tag lines, each with its `\n`; ends with `\n` unless empty. */
@@ -189,6 +193,7 @@ export function parseTemplateBlocks(content: string): {
         description: string | null;
         useWhen: string | null;
         labels: string[];
+        platforms: PlatformFilter[];
         optional: boolean;
         required: boolean;
         line: number;
@@ -252,6 +257,7 @@ export function parseTemplateBlocks(content: string): {
                     description: open.description,
                     ...(open.useWhen ? { useWhen: open.useWhen } : {}),
                     ...(open.labels.length > 0 ? { labels: open.labels } : {}),
+                    ...(open.platforms.length > 0 ? { platforms: open.platforms } : {}),
                     optional: open.optional,
                     required: open.required,
                     content: lines.slice(contentStart, index).join(""),
@@ -293,6 +299,7 @@ function parseAttributes(
     description: string | null;
     useWhen: string | null;
     labels: string[];
+    platforms: PlatformFilter[];
     optional: boolean;
     required: boolean;
 } {
@@ -303,6 +310,8 @@ function parseAttributes(
     let sawUseWhen = false;
     const labels: string[] = [];
     let sawLabels = false;
+    const platforms: PlatformFilter[] = [];
+    let sawPlatforms = false;
     let optional = false;
     let required = false;
     for (const token of attrPart.match(/[^\s"]*(?:"[^"]*"[^\s"]*)+|[^\s"]+/g) ?? []) {
@@ -310,6 +319,7 @@ function parseAttributes(
         const descMatch = token.match(/^description="([^"]*)"$/);
         const useWhenMatch = token.match(/^use-when="([^"]*)"$/);
         const labelsMatch = token.match(/^labels="([^"]*)"$/);
+        const platformsMatch = token.match(/^platforms="([^"]*)"$/);
         if (nameMatch) {
             if (name) error(line, "duplicate 'name' attribute");
             name = nameMatch[1]!;
@@ -345,6 +355,27 @@ function parseAttributes(
                     }
                 }
             }
+        } else if (platformsMatch) {
+            if (sawPlatforms) error(line, "duplicate 'platforms' attribute");
+            sawPlatforms = true;
+            const raw = platformsMatch[1]!.trim();
+            if (!raw) {
+                error(line, "empty 'platforms' attribute");
+            } else {
+                const seen = new Set<string>();
+                for (const part of raw.split(",")) {
+                    const filter = part.trim();
+                    const platform = filter.startsWith("!") ? filter.slice(1) : filter;
+                    if (!VALID_PLATFORMS.has(platform)) {
+                        error(line, `unknown block platform '${filter}'`);
+                    } else if (seen.has(filter)) {
+                        error(line, `duplicate block platform '${filter}'`);
+                    } else {
+                        seen.add(filter);
+                        platforms.push(filter as PlatformFilter);
+                    }
+                }
+            }
         } else if (token === "optional") {
             optional = true;
         } else if (token === "required") {
@@ -360,7 +391,7 @@ function parseAttributes(
         name = "";
     }
     if (optional && required) error(line, "attributes 'optional' and 'required' cannot be combined");
-    return { name, description, useWhen, labels, optional, required };
+    return { name, description, useWhen, labels, platforms, optional, required };
 }
 
 // ── Installed parse ──────────────────────────────────────────────────

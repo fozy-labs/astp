@@ -65,7 +65,7 @@ describe("groupTemplateItems", () => {
         ).toThrow("Skill item 'skills/alpha/references/guide.md' has no owning SKILL.md");
     });
 
-    it("copies optional and labels from file items and root SKILL.md items onto the unit", () => {
+    it("copies unit metadata from file items and root SKILL.md items", () => {
         const units = groupTemplateItems([
             {
                 source: "bundle/skills/alpha/references/guide.md",
@@ -78,6 +78,7 @@ describe("groupTemplateItems", () => {
                 category: "skill",
                 optional: true,
                 labels: ["experimental"],
+                platforms: ["!claude-code"],
             },
             {
                 source: "bundle/rules/r.md",
@@ -92,6 +93,7 @@ describe("groupTemplateItems", () => {
             relativePath: "skills/alpha",
             optional: true,
             labels: ["experimental"],
+            platforms: ["!claude-code"],
         });
         expect(units[1]).toMatchObject({
             kind: "file",
@@ -101,29 +103,49 @@ describe("groupTemplateItems", () => {
         });
     });
 
-    it("rejects optional or labels on a non-root skill item", () => {
-        expect(() =>
-            groupTemplateItems([
-                { source: "bundle/skills/alpha/SKILL.md", target: "skills/alpha/SKILL.md", category: "skill" },
-                {
-                    source: "bundle/skills/alpha/references/guide.md",
-                    target: "skills/alpha/references/guide.md",
-                    category: "skill",
-                    optional: true,
-                },
-            ]),
-        ).toThrow("Skill item 'skills/alpha/references/guide.md' cannot set 'optional' or 'labels'");
-        expect(() =>
-            groupTemplateItems([
-                { source: "bundle/skills/alpha/SKILL.md", target: "skills/alpha/SKILL.md", category: "skill" },
-                {
-                    source: "bundle/skills/alpha/references/guide.md",
-                    target: "skills/alpha/references/guide.md",
-                    category: "skill",
-                    labels: ["experimental"],
-                },
-            ]),
-        ).toThrow("Skill item 'skills/alpha/references/guide.md' cannot set 'optional' or 'labels'");
+    it("filters whole skills by their root SKILL.md and file units by their own platforms", () => {
+        const items = [
+            {
+                source: "bundle/skills/alpha/SKILL.md",
+                target: "skills/alpha/SKILL.md",
+                category: "skill" as const,
+                platforms: ["!claude-code" as const],
+            },
+            {
+                source: "bundle/skills/alpha/references/guide.md",
+                target: "skills/alpha/references/guide.md",
+                category: "skill" as const,
+            },
+            {
+                source: "bundle/rules/r.md",
+                target: "rules/r.md",
+                category: "rule" as const,
+                platforms: ["claude-code" as const],
+            },
+        ];
+
+        expect(groupTemplateItems(items, "claude-code").map((unit) => unit.relativePath)).toEqual(["rules/r.md"]);
+        expect(groupTemplateItems(items).map((unit) => unit.relativePath)).toEqual(["skills/alpha", "rules/r.md"]);
+    });
+
+    it("rejects unit metadata on a non-root skill item", () => {
+        for (const metadata of [
+            { optional: true },
+            { labels: ["experimental"] },
+            { platforms: ["claude-code" as const] },
+        ]) {
+            expect(() =>
+                groupTemplateItems([
+                    { source: "bundle/skills/alpha/SKILL.md", target: "skills/alpha/SKILL.md", category: "skill" },
+                    {
+                        source: "bundle/skills/alpha/references/guide.md",
+                        target: "skills/alpha/references/guide.md",
+                        category: "skill",
+                        ...metadata,
+                    },
+                ]),
+            ).toThrow("Skill item 'skills/alpha/references/guide.md' cannot set 'optional', 'labels' or 'platforms'");
+        }
     });
 });
 

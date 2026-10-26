@@ -3,7 +3,9 @@ import path from "node:path";
 
 import { vi } from "vitest";
 
+import { executeCheck } from "@/commands/check.js";
 import { executeInstall } from "@/commands/install.js";
+import { executeUpdate } from "@/commands/update.js";
 import { downloadBundle, fetchManifest, groupTemplateItems } from "@/core/index.js";
 import type { Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
@@ -13,6 +15,7 @@ import {
     isInteractive,
     selectBundleItems,
     selectNewUnits,
+    showCheckReport,
     warnForeign,
     warnKeptRemoved,
     warnLegacyModified,
@@ -150,6 +153,56 @@ describe("E2E: install", () => {
         expect(await fs.readFile(skillPath, "utf8")).not.toContain("astp-source");
         const lock = await readLockFixture(rootDir);
         expect(lock.bundles.core.units["skills/orchestrate"]).toMatchObject({ kind: "skill", version: "1.0.0" });
+    });
+
+    it("filters whole skills and rules by platform through install, check and update", async () => {
+        manifest.bundles.core.items = [
+            {
+                source: "core/skills/visible/SKILL.md",
+                target: "skills/visible/SKILL.md",
+                category: "skill",
+            },
+            {
+                source: "core/skills/visible/references/ref.md",
+                target: "skills/visible/references/ref.md",
+                category: "skill",
+            },
+            {
+                source: "core/skills/hidden/SKILL.md",
+                target: "skills/hidden/SKILL.md",
+                category: "skill",
+                platforms: ["!claude-code"],
+            },
+            {
+                source: "core/skills/hidden/references/ref.md",
+                target: "skills/hidden/references/ref.md",
+                category: "skill",
+            },
+            {
+                source: "core/rules/hidden.md",
+                target: "rules/hidden.md",
+                category: "rule",
+                platforms: ["!claude-code"],
+            },
+        ];
+        await installBundle("core");
+
+        const rootDir = path.join(projectDir, ".claude");
+        expect(Object.keys((await readLockFixture(rootDir)).bundles.core.units)).toEqual(["skills/visible"]);
+        await expect(fs.access(path.join(rootDir, "skills/hidden"))).rejects.toThrow();
+        await expect(fs.access(path.join(rootDir, "rules/hidden.md"))).rejects.toThrow();
+
+        manifest.bundles.core.version = "1.1.0";
+        manifest.bundles.core.items[0]!.platforms = ["!claude-code"];
+        const tplDir = await setupTemplateDir(manifest, "core");
+        templateDirs.push(tplDir);
+        mockDownloadBundle.mockResolvedValue(tplDir);
+        await executeCheck({ platform: "claude-code", target: "project" });
+        expect(vi.mocked(showCheckReport).mock.calls.at(-1)![0].updates).toHaveLength(1);
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+        await expect(fs.access(path.join(rootDir, "skills/visible"))).rejects.toThrow();
+        await expect(readLockFixture(rootDir)).rejects.toMatchObject({ code: "ENOENT" });
     });
 
     // T38: astp install nonexistent --target project
@@ -531,10 +584,7 @@ describe("E2E: install", () => {
         mockSelectBundleItems.mockImplementation(
             async (entries) =>
                 new Map(
-                    entries.map((entry) => [
-                        entry.bundle.name,
-                        { units: entry.defaults, blocks: entry.blockDefaults },
-                    ]),
+                    entries.map((entry) => [entry.bundle.name, { units: entry.defaults, blocks: entry.blockDefaults }]),
                 ),
         );
 

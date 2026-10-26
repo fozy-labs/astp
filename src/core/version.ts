@@ -10,6 +10,7 @@ import type {
     InstalledFileMetadata,
     InstalledUnit,
     Manifest,
+    Platform,
     UpdateReport,
 } from "@/types/index.js";
 
@@ -72,7 +73,7 @@ export async function loadInstalled(rootDir: string): Promise<{ lock: Lock; bund
     return { lock, bundles: [...bundles.values()] };
 }
 
-export function compareVersions(installed: InstalledBundle[], manifest: Manifest): UpdateReport {
+export function compareVersions(installed: InstalledBundle[], manifest: Manifest, platform?: Platform): UpdateReport {
     const updates: BundleUpdate[] = [];
     const upToDate: InstalledBundle[] = [];
     const notInManifest: InstalledBundle[] = [];
@@ -80,7 +81,7 @@ export function compareVersions(installed: InstalledBundle[], manifest: Manifest
 
     for (const bundle of installed) {
         const manifestBundle = manifest.bundles[bundle.bundleName];
-        const manifestUnits = manifestBundle ? groupTemplateItems(manifestBundle.items) : [];
+        const manifestUnits = manifestBundle ? groupTemplateItems(manifestBundle.items, platform) : [];
         const manifestPaths = new Map(manifestUnits.map((unit) => [unit.relativePath, unit.kind]));
 
         for (const unit of bundle.units.filter((candidate) => candidate.origin === "legacy")) {
@@ -98,7 +99,7 @@ export function compareVersions(installed: InstalledBundle[], manifest: Manifest
             continue;
         }
 
-        const units = classifyUnits(bundle, manifestBundle);
+        const units = classifyUnits(bundle, manifestBundle, platform);
         const cmp = bundle.units.length === 0 ? 0 : compareSemver(bundle.version, manifestBundle.version);
         const diverged =
             units.some((unit) => ["missing", "new", "removed"].includes(unit.state)) ||
@@ -124,10 +125,10 @@ export function compareVersions(installed: InstalledBundle[], manifest: Manifest
     return { updates, upToDate, notInManifest, legacySkills };
 }
 
-function classifyUnits(installed: InstalledBundle, manifestBundle: Bundle): FileStatus[] {
+function classifyUnits(installed: InstalledBundle, manifestBundle: Bundle, platform?: Platform): FileStatus[] {
     const statuses: FileStatus[] = [];
     const installedByPath = new Map(installed.units.map((unit) => [`${unit.kind}\0${unit.relativePath}`, unit]));
-    const manifestUnits = groupTemplateItems(manifestBundle.items);
+    const manifestUnits = groupTemplateItems(manifestBundle.items, platform);
     const manifestPaths = new Map(manifestUnits.map((unit) => [unit.relativePath, unit.kind]));
     const declined = new Set(installed.declined);
 

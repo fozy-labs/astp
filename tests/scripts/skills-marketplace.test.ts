@@ -90,12 +90,25 @@ describe("selectBundles", () => {
         };
         expect(selectBundles(manifest).map((bundle) => bundle.name)).toEqual(["alpha", "docs", "legacy"]);
     });
+
+    it("excludes bundles with a negated Claude Code filter", () => {
+        const manifest = createManifest();
+        manifest.bundles.docs.platforms = ["!claude-code"];
+        expect(selectBundles(manifest).map((bundle) => bundle.name)).toEqual(["legacy"]);
+    });
 });
 
 describe("collectSkillNames", () => {
     it("derives one entry per skill directory, ignoring reference files", () => {
         const manifest = createManifest();
         expect(collectSkillNames(manifest.bundles.docs)).toEqual(["markdown-craft"]);
+    });
+
+    it("excludes a skill by its root SKILL.md filter even when references are unrestricted", () => {
+        const manifest = createManifest();
+        manifest.bundles.docs.items[0]!.platforms = ["!claude-code"];
+        expect(collectSkillNames(manifest.bundles.docs)).toEqual([]);
+        expect(selectBundles(manifest).map((bundle) => bundle.name)).toEqual(["legacy"]);
     });
 
     it("ignores non-skill items and malformed targets", () => {
@@ -279,7 +292,11 @@ describe("validateSkillFile", () => {
             "---\nname: markdown\ndescription: Rules\n---\n",
             /must match the directory 'markdown-craft'/,
         ],
-        ["a missing description", "---\nname: markdown-craft\n---\n", /missing required frontmatter field 'description'/],
+        [
+            "a missing description",
+            "---\nname: markdown-craft\n---\n",
+            /missing required frontmatter field 'description'/,
+        ],
         [
             "an empty description",
             "---\nname: markdown-craft\ndescription:\n---\n",
@@ -301,9 +318,9 @@ describe("block exclusions", () => {
         expect(collectSkillLocations(manifest, excluded).map((location) => location.skillName)).toEqual([
             "markdown-craft",
         ]);
-        expect(
-            buildMarketplace(manifest, excluded).plugins.flatMap((plugin) => plugin.skills),
-        ).toEqual(["./skills/markdown-craft"]);
+        expect(buildMarketplace(manifest, excluded).plugins.flatMap((plugin) => plugin.skills)).toEqual([
+            "./skills/markdown-craft",
+        ]);
     });
 
     it("drops a bundle whose skills are all excluded", () => {
