@@ -1,5 +1,10 @@
-import type { Bundle, Manifest } from "@/types/index.js";
-import { bundleSupportsPlatform, filterBundlesByPlatform, getBundlePlatforms } from "@/types/index.js";
+import type { Bundle, Manifest, Platform } from "@/types/index.js";
+import {
+    bundleSupportsPlatform,
+    filterBundlesByPlatform,
+    getBundlePlatforms,
+    supportsPlatform,
+} from "@/types/index.js";
 
 const claudeBundle: Bundle = {
     name: "docs",
@@ -41,6 +46,15 @@ describe("bundleSupportsPlatform", () => {
 
     it("treats a bundle without platforms as supporting every platform", () => {
         expect(bundleSupportsPlatform(unrestrictedBundle, "claude-code")).toBe(true);
+    });
+
+    it("applies negations and positive allowlists", () => {
+        const other = "other" as Platform;
+        expect(supportsPlatform(["!claude-code"], "claude-code")).toBe(false);
+        expect(supportsPlatform(["!claude-code"], other)).toBe(true);
+        expect(supportsPlatform(["claude-code"], other)).toBe(false);
+        expect(supportsPlatform(["claude-code", "!claude-code"], "claude-code")).toBe(false);
+        expect(getBundlePlatforms({ ...claudeBundle, platforms: ["!claude-code"] })).toEqual([]);
     });
 });
 

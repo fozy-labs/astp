@@ -35,11 +35,12 @@ export async function executeCheck(options: CheckOptions): Promise<void> {
             compareVersions(
                 installed.bundles.filter((bundle) => opened.get(bundle.bundleName) === entry),
                 entry.manifest,
+                platform,
             ),
         );
         const changed = installed.bundles.flatMap((bundle) => {
             const manifestBundle = opened.get(bundle.bundleName)!.manifest.bundles[bundle.bundleName];
-            const manifestUnits = manifestBundle ? groupTemplateItems(manifestBundle.items) : [];
+            const manifestUnits = manifestBundle ? groupTemplateItems(manifestBundle.items, platform) : [];
             return bundle.units
                 .filter((unit) => unit.origin === "lock" && (unit.state === "modified" || unit.blocks?.dirty))
                 .map((unit) => {

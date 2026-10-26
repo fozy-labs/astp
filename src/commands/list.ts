@@ -7,8 +7,8 @@ import {
     downloadBundle,
     groupTemplateItems,
     loadInstalled,
-    readDescription,
     readUnitBlockFiles,
+    readUnitDescription,
     resolveBundle,
     validateUnitTargets,
 } from "@/core/index.js";
@@ -75,7 +75,7 @@ async function list(
             const entry = installedSources.get(name) ?? listing;
             const bundle = entry.manifest.bundles[name];
             const installed = installedOf(name);
-            const total = bundle ? groupTemplateItems(bundle.items).length : (installed?.units.length ?? 0);
+            const total = bundle ? groupTemplateItems(bundle.items, platform).length : (installed?.units.length ?? 0);
             return {
                 name,
                 description: bundle?.description ?? null,
@@ -138,7 +138,7 @@ async function list(
     }
 
     const bundle = manifestBundle;
-    const units = groupTemplateItems(bundle.items);
+    const units = groupTemplateItems(bundle.items, platform);
     validateUnitTargets(target.rootDir, units);
     if (!options.json) s.start(`Downloading ${bundle.name}...`);
     const tempDir = await downloadBundle(listing.source, bundle);
@@ -152,13 +152,7 @@ async function list(
         const listed = await Promise.all(
             units.map(async (unit) => {
                 const current = installedByPath.get(`${unit.kind}\0${unit.relativePath}`);
-                const descriptionItem =
-                    unit.kind === "file"
-                        ? unit.item
-                        : unit.items.find((item) => item.target === path.posix.join(unit.relativePath, "SKILL.md"))!;
-                const description = readDescription(
-                    await fs.readFile(path.join(tempDir, descriptionItem.target), "utf8"),
-                );
+                const description = await readUnitDescription(tempDir, unit);
                 const status = !installed
                     ? "available"
                     : current
@@ -171,7 +165,7 @@ async function list(
                         ? "declined"
                         : "new";
                 const lockUnit = installedState.lock.bundles[bundle.name]?.units[unit.relativePath];
-                const blocks = [...(await readUnitBlockFiles(tempDir, unit))].flatMap(([fileTarget, file]) =>
+                const blocks = [...(await readUnitBlockFiles(tempDir, unit, platform))].flatMap(([fileTarget, file]) =>
                     file.blocks.map((block) => {
                         const key = `${fileTarget}#${block.name}`;
                         const blockStatus =

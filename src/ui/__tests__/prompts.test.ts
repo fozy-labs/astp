@@ -393,6 +393,28 @@ describe("BundleTreePrompt blocks", () => {
             }),
         );
     });
+
+    it("renders frontmatter descriptions in the install tree and new-unit prompt", async () => {
+        const entry = treeEntry("one", ["rules/working.md"]);
+        entry.units[0]!.description = "Working agreement";
+        const { prompt, result } = drivePrompt([entry]);
+        expect(prompt.renderRow(prompt.rows[1]!, false)).toContain("working.md — Working agreement");
+        result.catch(() => {});
+
+        vi.mocked(p.multiselect).mockResolvedValueOnce([] as never);
+        await selectNewUnits("one", entry.units);
+        expect(p.multiselect).toHaveBeenCalledWith(
+            expect.objectContaining({
+                options: [
+                    {
+                        value: "rules/working.md",
+                        label: "working.md — Working agreement",
+                        hint: "rules/working.md",
+                    },
+                ],
+            }),
+        );
+    });
 });
 
 describe("selectPlatform", () => {

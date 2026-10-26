@@ -68,7 +68,7 @@ export async function syncBundle(args: {
         conflictBlocks: [],
     };
     const rootDir = args.target.rootDir;
-    const units = groupTemplateItems(args.bundle.items);
+    const units = groupTemplateItems(args.bundle.items, args.target.platform);
     const manifestPaths = new Set(units.map((unit) => `${unit.kind}\0${unit.relativePath}`));
     const manifestUnitPaths = new Set(units.map((unit) => unit.relativePath));
     const currentByPath = new Map(args.installed?.units.map((unit) => [unit.relativePath, unit]) ?? []);
@@ -139,7 +139,7 @@ export async function syncBundle(args: {
                 continue;
             }
             const lockUnit = lockBundle.units[unit.relativePath];
-            const blockFiles = await readUnitBlockFiles(args.tempDir, unit);
+            const blockFiles = await readUnitBlockFiles(args.tempDir, unit, args.target.platform);
             const templateHasBlocks = blockFiles.size > 0;
             const lockHasBlocks = Boolean(lockUnit?.blocks || lockUnit?.declinedBlocks);
 

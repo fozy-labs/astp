@@ -9,12 +9,13 @@
  *
  * Repository-side tooling: it validates the *sources* committed here, while
  * `src/core/manifest.ts` validates a manifest downloaded by an installed CLI.
- * They share only types and `src/core/blocks.ts`, the pure block parser — a
- * single definition of the format.
+ * They share types, platform filtering and `src/core/blocks.ts`, the pure block
+ * parser — a single definition of each format.
  */
 
 import { parseTemplateBlocks } from "../src/core/blocks.ts";
 import type { Bundle, Manifest, TemplateItem } from "../src/types/index.js";
+import { bundleSupportsPlatform, itemSupportsPlatform } from "../src/types/platform.ts";
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -73,12 +74,9 @@ export interface SkillFrontmatter {
  * A bundle ships to the marketplace when it supports Claude Code *and* contains
  * at least one skill: the `skills` CLI installs skills only, so a bundle built
  * around agents and instructions would lose them in a partial install.
- *
- * Mirrors the default in `src/types/platform.ts`: a bundle without `platforms`
- * supports every platform.
  */
 export function supportsClaudeCode(bundle: Bundle): boolean {
-    return !bundle.platforms || bundle.platforms.includes("claude-code");
+    return bundleSupportsPlatform(bundle, "claude-code");
 }
 
 export function selectBundles(manifest: Manifest, excludedSkills: ReadonlySet<string> = new Set()): Bundle[] {
@@ -100,9 +98,15 @@ function isSkillItem(item: TemplateItem): boolean {
 export function collectSkillNames(bundle: Bundle, excludedSkills: ReadonlySet<string> = new Set()): string[] {
     const names = new Set<string>();
     for (const item of bundle.items) {
-        if (!isSkillItem(item)) continue;
+        if (!isSkillItem(item) || !itemSupportsPlatform(item, "claude-code")) continue;
         const name = skillNameFromTarget(item.target);
-        if (name && !excludedSkills.has(`${TEMPLATES_DIR}/${bundle.name}/skills/${name}`)) names.add(name);
+        if (
+            name &&
+            item.target === `skills/${name}/SKILL.md` &&
+            !excludedSkills.has(`${TEMPLATES_DIR}/${bundle.name}/skills/${name}`)
+        ) {
+            names.add(name);
+        }
     }
     return [...names].sort((a, b) => a.localeCompare(b));
 }
@@ -250,7 +254,10 @@ export function validateManifestSources(manifest: Manifest): string[] {
         }
     }
 
-    for (const bundle of selectBundles(manifest)) {
+    const sourceBundles = Object.values(manifest.bundles).filter(
+        (bundle) => supportsClaudeCode(bundle) && bundle.items.some(isSkillItem),
+    );
+    for (const bundle of sourceBundles) {
         if (typeof bundle.description !== "string" || bundle.description.length === 0) {
             errors.push(`bundle '${bundle.name}': description is required for a marketplace plugin`);
         }
@@ -270,9 +277,38 @@ export function validateManifestSources(manifest: Manifest): string[] {
             }
         }
 
-        for (const skillName of collectSkillNames(bundle)) {
+        const declaredSkills = new Set(
+            bundle.items
+                .filter(
+                    (item) =>
+                        isSkillItem(item) &&
+                        itemSupportsPlatform(item, "claude-code") &&
+                        item.target.endsWith("/SKILL.md"),
+                )
+                .map((item) => skillNameFromTarget(item.target))
+                .filter((name) => name !== null),
+        );
+        const skillRoots = new Set(
+            bundle.items
+                .filter((item) => isSkillItem(item) && item.target.endsWith("/SKILL.md"))
+                .map((item) => skillNameFromTarget(item.target)),
+        );
+        const referencedSkills = new Set(
+            bundle.items
+                .filter((item) => isSkillItem(item) && itemSupportsPlatform(item, "claude-code"))
+                .map((item) => skillNameFromTarget(item.target)),
+        );
+        for (const skillName of referencedSkills) {
+            if (skillName && !declaredSkills.has(skillName) && !skillRoots.has(skillName)) {
+                errors.push(`bundle '${bundle.name}': skill '${skillName}' has no skills/${skillName}/SKILL.md item`);
+            }
+        }
+        for (const skillName of declaredSkills) {
             const hasSkillMd = bundle.items.some(
-                (item) => isSkillItem(item) && item.target === `skills/${skillName}/SKILL.md`,
+                (item) =>
+                    isSkillItem(item) &&
+                    itemSupportsPlatform(item, "claude-code") &&
+                    item.target === `skills/${skillName}/SKILL.md`,
             );
             if (!hasSkillMd) {
                 errors.push(`bundle '${bundle.name}': skill '${skillName}' has no skills/${skillName}/SKILL.md item`);

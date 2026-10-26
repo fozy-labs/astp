@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Skill, agent and rule descriptions from frontmatter in install and update selection prompts.
+- `platforms` filters on bundle items and `<astp-block>` tags, including `!<name>` exclusions; bundle filters now support exclusions too.
+
 ## [0.5.0] - 2026-10-19
 
 ### Added

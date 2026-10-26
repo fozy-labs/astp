@@ -5,8 +5,7 @@
  * `claude-code` — Anthropic Claude Code CLI (installs under `.claude/` or `$CLAUDE_CONFIG_DIR`, else `~/.claude/`).
  */
 export type Platform = "claude-code";
-
-export const ALL_PLATFORMS = ["claude-code"] as const satisfies readonly Platform[];
+export type PlatformFilter = Platform | `!${Platform}`;
 
 // ── Remote Manifest Types (§3.1) ──────────────────────────────────────
 
@@ -32,10 +31,8 @@ export interface Bundle {
     "use-when"?: string;
     /** Whether this bundle is pre-selected by default in the interactive wizard. */
     default: boolean;
-    /**
-     * Platforms this bundle can be installed on. Defaults to all platforms when omitted.
-     */
-    platforms?: Platform[];
+    /** Platforms this bundle supports, with `!platform` exclusions. Defaults to all platforms. */
+    platforms?: PlatformFilter[];
     /** Files included in this bundle. */
     items: TemplateItem[];
 }
@@ -52,6 +49,8 @@ export interface TemplateItem {
     optional?: boolean;
     /** Informational tags (e.g. "experimental", "deprecated") shown in prompts and `astp list`. */
     labels?: string[];
+    /** Platforms this unit supports, with `!platform` exclusions. For skills, set on SKILL.md only. */
+    platforms?: PlatformFilter[];
 }
 
 export type ItemCategory = "agent" | "skill" | "rule";
@@ -151,5 +150,12 @@ export interface ForeignUnit extends FileStatus {
 
 // ── Re-exports ───────────────────────────────────────────────────────
 
-export { bundleSupportsPlatform, filterBundlesByPlatform, getBundlePlatforms } from "./platform.js";
+export {
+    ALL_PLATFORMS,
+    bundleSupportsPlatform,
+    filterBundlesByPlatform,
+    getBundlePlatforms,
+    itemSupportsPlatform,
+    supportsPlatform,
+} from "./platform.js";
 export { describeTarget, resolveTarget } from "./resolve-target.js";

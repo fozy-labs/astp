@@ -39,6 +39,7 @@ vi.mock("@/core/index.js", async (importOriginal) => ({
     fetchManifest: vi.fn(),
     loadInstalled: vi.fn(),
     readUnitBlockFiles: vi.fn(async () => new Map()),
+    readUnitDescription: vi.fn(async () => null),
     syncBundle: vi.fn(),
     writeLock: vi.fn(),
 }));

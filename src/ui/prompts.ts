@@ -480,7 +480,7 @@ export async function confirmInstall(
     target: InstallTarget,
     selectedUnits?: TemplateUnit[],
 ): Promise<boolean> {
-    const units = selectedUnits ?? bundles.flatMap((bundle) => groupTemplateItems(bundle.items));
+    const units = selectedUnits ?? bundles.flatMap((bundle) => groupTemplateItems(bundle.items, target.platform));
     const targetLabel = describeTarget(target);
 
     const confirmed = await p.confirm({
@@ -521,7 +521,8 @@ export async function selectBlocks(unitPath: string, blocks: BlockOption[], init
 }
 
 function unitLabel(unit: TemplateUnit): string {
-    return withLabels(pathLabel(unit.relativePath), unit.labels);
+    const head = withLabels(pathLabel(unit.relativePath), unit.labels);
+    return unit.description ? `${head} — ${unit.description}` : head;
 }
 
 function blockLabel(block: BlockOption): string {
