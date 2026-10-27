@@ -1,4 +1,4 @@
-import { describeUnitCounts } from "../format.js";
+import { describeUnitCounts, installRetry } from "../format.js";
 
 describe("describeUnitCounts", () => {
     it("labels units by kind and top-level install dir", () => {
@@ -29,5 +29,17 @@ describe("describeUnitCounts", () => {
 
     it("returns '0 files' for an empty list", () => {
         expect(describeUnitCounts([])).toBe("0 files");
+    });
+});
+
+describe("installRetry", () => {
+    it("includes the selected platform and target", () => {
+        expect(
+            installRetry("core", ["--force"], {
+                platform: "kimi-code",
+                type: "project",
+                rootDir: "/project/.kimi-code",
+            }),
+        ).toBe("astp install core --force --platform kimi-code --target project");
     });
 });

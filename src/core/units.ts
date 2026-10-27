@@ -1,7 +1,7 @@
 import path from "node:path";
 
 import type { Bundle, BundleRef, Platform, PlatformFilter, TemplateItem } from "@/types/index.js";
-import { supportsPlatform } from "@/types/index.js";
+import { resolveItemTarget, supportsPlatform } from "@/types/index.js";
 
 interface TemplateUnitMetadata {
     optional?: boolean;
@@ -27,13 +27,19 @@ export type TemplateUnit = FileTemplateUnit | SkillTemplateUnit;
 
 export function groupTemplateItems(input: TemplateItem[] | Bundle, platform?: Platform): TemplateUnit[] {
     const items = Array.isArray(input) ? input : input.items;
-    const skillRoots = items
+    const resolvedItems = platform
+        ? items.map((item) => {
+              const target = resolveItemTarget(item, platform);
+              return target === item.target ? item : { ...item, target };
+          })
+        : items;
+    const skillRoots = resolvedItems
         .filter((item) => item.category === "skill" && item.target.endsWith("/SKILL.md"))
         .map((item) => path.posix.dirname(item.target));
     const skills = new Map<string, SkillTemplateUnit>();
     const units: TemplateUnit[] = [];
 
-    for (const item of items) {
+    for (const item of resolvedItems) {
         if (item.category !== "skill") {
             units.push({
                 kind: "file",

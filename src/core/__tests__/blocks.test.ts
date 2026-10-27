@@ -85,6 +85,19 @@ function block(content: string, name = "a"): TemplateBlock {
     return { name, description: null, optional: false, required: false, content };
 }
 
+const NESTED = `<astp-block name="parent">
+Before.
+<astp-block name="child" optional>
+Child.
+<astp-block name="grandchild" optional>
+Grandchild.
+</astp-block>
+After child.
+</astp-block>
+After.
+</astp-block>
+`;
+
 describe("parseTemplateBlocks", () => {
     it("parses frontmatter and blocks with attributes", () => {
         const { frontmatter, blocks, errors } = parseTemplateBlocks(TEMPLATE);
@@ -152,10 +165,11 @@ describe("parseTemplateBlocks", () => {
     });
 
     it("parses positive and negated platforms on blocks", () => {
-        const content = '<astp-block name="a" platforms="claude-code, !claude-code">\nx\n</astp-block>\n';
+        const content =
+            '<astp-block name="a" platforms="claude-code, !claude-code, kimi-code, !kimi-code">\nx\n</astp-block>\n';
         const { blocks, errors } = parseTemplateBlocks(content);
         expect(errors).toEqual([]);
-        expect(blocks[0]!.platforms).toEqual(["claude-code", "!claude-code"]);
+        expect(blocks[0]!.platforms).toEqual(["claude-code", "!claude-code", "kimi-code", "!kimi-code"]);
     });
 
     it.each([
@@ -217,7 +231,6 @@ describe("parseTemplateBlocks", () => {
             '<astp-block name="a">\nx\n</astp-block>\n\n<astp-block name="a">\ny\n</astp-block>\n',
             /duplicate block name 'a'/i,
         ],
-        ["nested block", '<astp-block name="a">\n<astp-block name="b">\nx\n</astp-block>\n</astp-block>\n', /nested/i],
         ["unclosed block", '<astp-block name="a">\nx\n', /unclosed/i],
         ["stray closing tag", "<//ignored>\n</astp-block>\n", /stray/i],
         [
@@ -290,6 +303,18 @@ describe("parseTemplateBlocks", () => {
         ]);
     });
 
+    it("parses nested blocks in preorder with their parents", () => {
+        const { blocks, errors } = parseTemplateBlocks(NESTED);
+        expect(errors).toEqual([]);
+        expect(blocks.map((block) => [block.name, block.parent])).toEqual([
+            ["parent", undefined],
+            ["child", "parent"],
+            ["grandchild", "child"],
+        ]);
+        expect(blocks[0]!.content).toContain('<astp-block name="child"');
+        expect(blocks[1]!.content).toContain("After child.");
+    });
+
     it("normalizes CRLF before parsing", () => {
         const { frontmatter, blocks, errors } = parseTemplateBlocks(TEMPLATE.replace(/\n/g, "\r\n"));
         expect(errors).toEqual([]);
@@ -343,10 +368,18 @@ describe("parseInstalledBlocks", () => {
         expect(parsed.outsideText).not.toContain("Project Map");
     });
 
+    it("parses recorded blocks nested inside other recorded blocks", () => {
+        const parsed = parseInstalledBlocks("<a>\nA\n<b>\nB\n<c>\nC\n</c>\n</b>\n</a>\n", ["a", "b", "c"]);
+        expect(parsed).not.toBeNull();
+        expect(parsed!.blocks.get("a")!.parent).toBeUndefined();
+        expect(parsed!.blocks.get("b")!.parent).toBe("a");
+        expect(parsed!.blocks.get("c")!.parent).toBe("b");
+        expect(parsed!.blocks.get("a")!.content).toContain("<b>");
+    });
+
     it.each([
         ["recorded name opens twice", `${installed}<project_map>\nx\n</project_map>\n`, ["project_map"]],
         ["unclosed recorded block", "<a>\nx\n", ["a"]],
-        ["recorded block inside another", "<a>\n<b>\nx\n</b>\n</a>\n", ["a", "b"]],
         ["recorded block inside SETUP_REQUIRED", "<SETUP_REQUIRED>\n<a>\nx\n</a>\n</SETUP_REQUIRED>\n", ["a"]],
         ["stray recorded closing", "</a>\n", ["a"]],
         ["stray SETUP_REQUIRED closing", "</SETUP_REQUIRED>\n", []],
@@ -839,5 +872,344 @@ C
         expect(result.conflicts).toEqual([]);
         expect(result.content).not.toContain("FILL_INSTRUCTION");
         expect(result.content).toContain("New ready-made text.");
+    });
+
+    it("renders nested selected blocks without template tags", () => {
+        const result = merge({ templateContent: NESTED, selected: ["parent", "child", "grandchild"] });
+        expect(result.content).toBe(`<parent>
+Before.
+<child>
+Child.
+<grandchild>
+Grandchild.
+</grandchild>
+After child.
+</child>
+After.
+</parent>
+`);
+        expect(Object.keys(result.blocks)).toEqual(["parent", "child", "grandchild"]);
+    });
+
+    it("renders a parent without declined descendants", () => {
+        const result = merge({ templateContent: NESTED, selected: ["parent"] });
+        expect(result.content).toContain("<parent>\nBefore.\nAfter.\n</parent>");
+        expect(result.content).not.toContain("<child>");
+        expect(result.declinedBlocks).toEqual(["child", "grandchild"]);
+    });
+
+    it("updates a nested child without changing its parent's hash", () => {
+        const installed = merge({ templateContent: NESTED, selected: ["parent", "child", "grandchild"] });
+        const updated = merge({
+            templateContent: NESTED.replace("Grandchild.", "New grandchild."),
+            installed: installed.content,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent", "child", "grandchild"],
+        });
+        expect(updated.content).toContain("New grandchild.");
+        expect(updated.blocks.parent).toBe(installed.blocks.parent);
+        expect(updated.blocks.child).toBe(installed.blocks.child);
+        expect(updated.blocks.grandchild).not.toBe(installed.blocks.grandchild);
+        expect(updated.conflicts).toEqual([]);
+    });
+
+    it("inserts and removes nested blocks inside their parent", () => {
+        const installed = merge({ templateContent: NESTED, selected: ["parent"] });
+        const inserted = merge({
+            templateContent: NESTED,
+            installed: installed.content,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent", "child"],
+        });
+        expect(inserted.content).toContain("Before.\n<child>\nChild.\nAfter child.\n</child>\nAfter.");
+        expect(inserted.content).not.toContain("<grandchild>");
+
+        const removed = merge({
+            templateContent: NESTED,
+            installed: inserted.content,
+            lockHashes: inserted.blocks,
+            declined: inserted.declinedBlocks,
+            selected: ["parent"],
+        });
+        expect(removed.content).toBe(installed.content);
+        expect(removed.declinedBlocks).toEqual(["child", "grandchild"]);
+    });
+
+    it("merges parent and child conflicts independently", () => {
+        const installed = merge({ templateContent: NESTED, selected: ["parent", "child"] });
+        const edited = installed.content.replace("Before.", "Our before.").replace("Child.", "Our child.");
+        const updated = merge({
+            templateContent: NESTED.replace("Before.", "New before.").replace("Child.", "New child."),
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent", "child"],
+        });
+        expect(updated.conflicts).toEqual(["child", "parent"]);
+        expect(updated.content.match(/Our before\./g)).toHaveLength(1);
+        expect(updated.content.match(/Our child\./g)).toHaveLength(1);
+        expect(updated.content).toContain("New before.");
+        expect(updated.content).toContain("New child.");
+        expect(updated.content.match(/<child>/g)).toHaveLength(1);
+        expect(parseInstalledBlocks(updated.content, ["parent", "child"])).not.toBeNull();
+    });
+
+    it("keeps an edited nested subtree when its parent is deselected unless forced", () => {
+        const installed = merge({ templateContent: NESTED, selected: ["parent", "child"] });
+        const edited = installed.content.replace("Child.", "Our child.");
+        const kept = merge({
+            templateContent: NESTED,
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: [],
+        });
+        expect(kept.content).toBe(edited);
+        expect(kept.kept).toEqual(["child", "parent"]);
+        expect(kept.blocks).toEqual(installed.blocks);
+
+        const forced = merge({
+            templateContent: NESTED,
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: [],
+            force: true,
+        });
+        expect(forced.content).toBe("");
+        expect(forced.blocks).toEqual({});
+    });
+
+    it("keeps the parent of an edited child when the subtree leaves the template", () => {
+        const installed = merge({ templateContent: NESTED, selected: ["parent", "child"] });
+        const edited = installed.content.replace("Child.", "Our child.");
+        const result = merge({
+            templateContent: "",
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: [],
+        });
+        expect(result.content).toBe(edited);
+        expect(result.released).toEqual(["child", "parent"]);
+        expect(result.blocks).toEqual({});
+    });
+
+    it("preserves a released edited child when replacing its parent", () => {
+        const installed = merge({ templateContent: NESTED, selected: ["parent", "child"] });
+        const edited = installed.content.replace("Child.", "Our child.");
+        const withoutChild = `<astp-block name="parent">\nBefore.\nAfter.\n</astp-block>\n`;
+        const result = merge({
+            templateContent: withoutChild,
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent"],
+        });
+        expect(result.released).toEqual(["child"]);
+        expect(result.content).toContain("Our child.");
+        expect(result.content.match(/<child>/g)).toHaveLength(1);
+    });
+
+    it("moves existing blocks between root and nested positions without duplication or loss", () => {
+        const flat = `<astp-block name="parent">\nParent.\n</astp-block>\n<astp-block name="child">\nChild.\n</astp-block>\n`;
+        const nested = `<astp-block name="parent">\nParent.\n<astp-block name="child">\nChild.\n</astp-block>\n</astp-block>\n`;
+        const installed = merge({ templateContent: flat, selected: ["parent", "child"] });
+        const inward = merge({
+            templateContent: nested,
+            installed: installed.content,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent", "child"],
+        });
+        expect(inward.content.match(/<child>/g)).toHaveLength(1);
+        expect(inward.content).toContain("<parent>\nParent.\n<child>");
+        expect(parseInstalledBlocks(inward.content, ["parent", "child"])).not.toBeNull();
+
+        const outward = merge({
+            templateContent: flat,
+            installed: inward.content,
+            lockHashes: inward.blocks,
+            declined: inward.declinedBlocks,
+            selected: ["parent", "child"],
+        });
+        expect(outward.content).toBe(installed.content);
+    });
+
+    it("moves an edited existing child into a newly inserted parent", () => {
+        const flat = `<astp-block name="child">\nChild.\n</astp-block>\n`;
+        const nested = `<astp-block name="parent">\nParent.\n<astp-block name="child">\nChild.\n</astp-block>\n</astp-block>\n`;
+        const installed = merge({ templateContent: flat, selected: ["child"] });
+        const edited = installed.content.replace("Child.", "Our child.");
+        const result = merge({
+            templateContent: nested,
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent", "child"],
+        });
+        expect(result.content).toBe("<parent>\nParent.\n<child>\nOur child.\n</child>\n</parent>\n");
+    });
+
+    it("leaves a foreign parent and its descendants untouched", () => {
+        const template = tpl(NESTED);
+        const content = "<parent>\nForeign.\n</parent>\n";
+        const result = mergeBlockFile({
+            template,
+            installed: parseInstalledBlocks(content, ["parent", "child", "grandchild"]),
+            lockHashes: {},
+            declined: new Set(),
+            selected: new Set(["parent", "child", "grandchild"]),
+            force: false,
+        });
+        expect(result.content).toBe(content);
+        expect(result.foreign).toEqual(["parent"]);
+        expect(result.declinedBlocks).toEqual(["child", "grandchild", "parent"]);
+        expect(result.blocks).toEqual({});
+    });
+
+    it("inserts a new child at its template position inside an edited parent", () => {
+        const flat = `<astp-block name="parent">\nBefore.\nAfter.\n</astp-block>\n`;
+        const installed = merge({ templateContent: flat, selected: ["parent"] });
+        const edited = installed.content.replace("Before.", "Our before.");
+        const nested = `<astp-block name="parent">\nBefore.\n<astp-block name="child">\nChild.\n</astp-block>\nAfter.\n</astp-block>\n`;
+        const result = merge({
+            templateContent: nested,
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent", "child"],
+        });
+        expect(result.content).toContain("Our before.\n<child>\nChild.\n</child>\nAfter.");
+    });
+
+    it("preserves a moved edited child when its new parent conflicts", () => {
+        const flat = `<astp-block name="parent">\nBefore.\n</astp-block>\n<astp-block name="child">\nChild.\n</astp-block>\n`;
+        const nested = `<astp-block name="parent">\nNew before.\n<astp-block name="child">\nChild.\n</astp-block>\n</astp-block>\n`;
+        const installed = merge({ templateContent: flat, selected: ["parent", "child"] });
+        const edited = installed.content.replace("Before.", "Our before.").replace("Child.", "Our child.");
+        const result = merge({
+            templateContent: nested,
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent", "child"],
+        });
+        expect(result.conflicts).toEqual(["parent"]);
+        expect(result.content.match(/<child>/g)).toHaveLength(1);
+        expect(result.content).toContain("Our child.");
+        expect(parseInstalledBlocks(result.content, ["parent", "child"])).not.toBeNull();
+    });
+
+    it("does not use text inside code fences as a child insertion anchor", () => {
+        const flat = `<astp-block name="parent">\nBefore.\nAfter.\n</astp-block>\n`;
+        const nested = `<astp-block name="parent">\nBefore.\n<astp-block name="child">\nChild.\n</astp-block>\nAfter.\n</astp-block>\n`;
+        const installed = merge({ templateContent: flat, selected: ["parent"] });
+        const edited = "<parent>\n~~~\nAfter.\n~~~\nOur before.\nAfter.\n</parent>\n";
+        const result = merge({
+            templateContent: nested,
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent", "child"],
+        });
+        expect(result.content).toContain("Our before.\n<child>\nChild.\n</child>\nAfter.");
+        const parsed = parseInstalledBlocks(result.content, ["parent", "child"]);
+        expect(parsed!.blocks.get("child")!.content).toBe("Child.\n");
+    });
+
+    it("removes an unchanged obsolete parent after its child moves to root", () => {
+        const installed = merge({ templateContent: NESTED, selected: ["parent", "child"] });
+        const rootChild = `<astp-block name="child">\nChild.\nAfter child.\n</astp-block>\n`;
+        const result = merge({
+            templateContent: rootChild,
+            installed: installed.content,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["child"],
+        });
+        expect(result.content).toBe("<child>\nChild.\nAfter child.\n</child>\n");
+        expect(result.content).not.toContain("<parent>");
+        expect(result.released).toEqual([]);
+        expect(Object.keys(result.blocks)).toEqual(["child"]);
+    });
+
+    it("preserves dollar sequences in nested content during parent conflicts", () => {
+        const installed = merge({ templateContent: NESTED, selected: ["parent", "child"] });
+        const childText = "const value = $'\\n'; $$ $& $`;\n";
+        const edited = installed.content.replace("Before.", "Our before.").replace("Child.\n", () => childText);
+        const result = merge({
+            templateContent: NESTED.replace("Before.", "New Before."),
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent", "child"],
+        });
+        expect(result.conflicts).toEqual(["parent"]);
+        expect(result.content).toContain(`<child>\n${childText}After child.\n</child>`);
+    });
+
+    it("does not anchor a moved child to matching text inside a sibling", () => {
+        const flat = `<astp-block name="parent">
+Before.
+<astp-block name="sibling">
+After.
+</astp-block>
+After.
+</astp-block>
+<astp-block name="child">
+Child.
+</astp-block>
+`;
+        const nested = `<astp-block name="parent">
+New before.
+<astp-block name="sibling">
+After.
+</astp-block>
+<astp-block name="child">
+Child.
+</astp-block>
+After.
+</astp-block>
+`;
+        const installed = merge({ templateContent: flat, selected: ["parent", "sibling", "child"] });
+        const edited = installed.content.replace("Before.", "Our before.").replace("Child.", "Our child.");
+        const result = merge({
+            templateContent: nested,
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent", "sibling", "child"],
+        });
+        const parsed = parseInstalledBlocks(result.content, ["parent", "sibling", "child"]);
+        expect(parsed!.blocks.get("child")!.parent).toBe("parent");
+        expect(parsed!.blocks.get("child")!.content).toBe("Our child.\n");
+    });
+
+    it("uses an anchor that starts outside and contains a code fence", () => {
+        const flat = `<astp-block name="parent">\nBefore.\nAfter.\n</astp-block>\n`;
+        const nested = `<astp-block name="parent">
+Before.
+<astp-block name="child">
+Child.
+</astp-block>
+\`\`\`sh
+npm i
+\`\`\`
+</astp-block>
+`;
+        const installed = merge({ templateContent: flat, selected: ["parent"] });
+        const edited = installed.content.replace("Before.", "Our before.").replace("After.\n", "```sh\nnpm i\n```\n");
+        const result = merge({
+            templateContent: nested,
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent", "child"],
+        });
+        expect(result.content).toContain("<child>\nChild.\n</child>\n```sh\nnpm i\n```");
+        expect(parseInstalledBlocks(result.content, ["parent", "child"])!.blocks.get("child")!.parent).toBe("parent");
     });
 });

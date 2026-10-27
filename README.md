@@ -35,11 +35,14 @@ astp install fozy-labs --target project
 | `astp delete [bundle] [--skill <name>] [--force]` | Remove an installed bundle or selected units |
 | `astp list [bundle] [--source <spec>] [--json]` | List available and installed bundles or bundle units |
 
-All commands accept `--platform <claude-code>` and `--target <project|user>`, which skip the platform and target prompts; in a terminal the other prompts of each command still run. Resolved roots:
+All commands accept `--platform <claude-code|kimi-code>` and `--target <project|user>`, which skip the platform and target prompts; in a terminal the other prompts of each command still run. Resolved roots:
 
 | Platform | `--target project` | `--target user` |
 |----------|--------------------|-----------------|
 | `claude-code` | `<cwd>/.claude/` | `$CLAUDE_CONFIG_DIR`, else `~/.claude/` |
+| `kimi-code` | `<cwd>/.kimi-code/` | `$KIMI_CODE_HOME`, else `~/.kimi-code/` |
+
+`ponytail` supports both platforms. The `agreement` working-agreement rule supports both; its skills remain Claude Code-only.
 
 ### Sources
 
@@ -61,15 +64,15 @@ A manifest can also declare bundle `refs`: giget sources of external skill direc
 ### install
 
 ```bash
-astp install [bundle] [--source <spec>] [--skill <name>]... [--block <name>]... [--force] [--platform <claude-code>] [--target <project|user>]
+astp install [bundle] [--source <spec>] [--skill <name>]... [--block <name>]... [--force] [--platform <claude-code|kimi-code>] [--target <project|user>]
 ```
 
-Install template bundles. Locally modified or unmanaged files and skills are skipped by default (unmanaged ones are recorded as declined); use `--force` to overwrite them. Repeat `--skill` to add units by name or path, and `--block` to add blocks by name or by the `key` from `list --json`, installing the block's unit if needed; both keep the declined units and blocks, and scope `--force` to the named units and blocks. Without them, a non-interactive `install <bundle>` installs every non-optional unit, clears declined non-optional units, and re-selects every non-optional block. In a terminal, `install` asks to confirm; without `--skill` or `--block` it first opens a tree of bundles, units and blocks, listing every bundle when no name is given. Bundles that don't support the requested platform are rejected with a clear error.
+Install template bundles. Locally modified or unmanaged files and skills are skipped by default (unmanaged ones are recorded as declined). For a template with `<astp-block>` regions, an existing regular file with matching frontmatter is adopted instead: missing selected blocks are added, identical blocks are tracked, conflicting blocks are declined, and text outside blocks is preserved. Use `--force` to overwrite files instead. Repeat `--skill` to add units by name or path, and `--block` to add blocks by name or by the `key` from `list --json`, installing the block's unit if needed; both keep the declined units and blocks, and scope `--force` to the named units and blocks. Without them, a non-interactive `install <bundle>` installs every non-optional unit, clears declined non-optional units, and re-selects every non-optional block. In a terminal, `install` asks to confirm; without `--skill` or `--block` it first opens a tree of bundles, units and blocks, listing every bundle when no name is given. Bundles that don't support the requested platform are rejected with a clear error.
 
 ### update
 
 ```bash
-astp update [--force] [--platform <claude-code>] [--target <project|user>]
+astp update [--force] [--platform <claude-code|kimi-code>] [--target <project|user>]
 ```
 
 Update installed units to the latest version from each bundle's source in `astp.lock`. A non-interactive update also installs new non-optional units and keeps declined ones. Units and blocks dropped upstream are removed; modified ones are left in place and no longer tracked in `astp.lock`, unless `--force` is passed. Modified legacy units are kept unless `--force` is passed. In a terminal, it first asks which new units and blocks to install.
@@ -77,7 +80,7 @@ Update installed units to the latest version from each bundle's source in `astp.
 ### check
 
 ```bash
-astp check [--platform <claude-code>] [--target <project|user>]
+astp check [--platform <claude-code|kimi-code>] [--target <project|user>]
 ```
 
 Compare installed versions and unit state against each bundle's source in `astp.lock`. Out-of-sync bundles are reported and brought back in sync by `astp update`. Units changed locally are listed below the table; `astp update` keeps them.
@@ -85,7 +88,7 @@ Compare installed versions and unit state against each bundle's source in `astp.
 ### delete
 
 ```bash
-astp delete [bundle] [--skill <name>]... [--force] [--platform <claude-code>] [--target <project|user>]
+astp delete [bundle] [--skill <name>]... [--force] [--platform <claude-code|kimi-code>] [--target <project|user>]
 ```
 
 Remove the files of an installed bundle. Repeat `--skill` to select units by name or path. Without a bundle name, prompts to pick from the bundles found in the target. In a terminal, it asks to confirm. Modified files are kept by default — use `--force` to delete them too.
@@ -93,7 +96,7 @@ Remove the files of an installed bundle. Repeat `--skill` to select units by nam
 ### list
 
 ```bash
-astp list [bundle] [--source <spec>] [--json] [--platform <claude-code>] [--target <project|user>]
+astp list [bundle] [--source <spec>] [--json] [--platform <claude-code|kimi-code>] [--target <project|user>]
 ```
 
 List bundles and installed unit state. Add a bundle name for per-unit status, optional/label tags and descriptions, with each unit's blocks, their status, tags and descriptions; `use-when` on bundles and blocks is included in both text and `--json` output (`optional` and `labels` on units when set; `name`, `key`, `status`, `description`, `optional`, `required`, and `use-when` and `labels` when set on blocks).
@@ -115,7 +118,7 @@ List bundles and installed unit state. Add a bundle name for per-unit status, op
 - **thinking** ships `design-derivation` — a gated procedure for deriving visual and interface decisions (frame, value, scenario → charge and sign → surface and accuracy) instead of picking a remembered look, with no styles, palettes, or component recipes — plus three optional `experimental` skills: `analysis` (checking claims, metrics, options and causes), `software-architecture` (module boundaries, dependency direction, and invariants), and `testing` (test boundaries, data-driven and generative tests, and merge-gate suites). All four load their `references/*.md` on demand.
 - **docs** ships two skills. `markdown-craft` carries stack-agnostic rules for the Markdown an agent writes: one home per fact, one reader per document, diagram-first flows, and link hygiene, with references loaded on demand for Mermaid diagrams and for writing or reviewing a specification. `statechart-craft` covers the other kind of Mermaid an agent writes — a `.mmd` statechart schema: the `stateDiagram-v2` subset, the `%% @…` directives, the `statechart-convert` CLI and the typed file it emits, with references for the live visualizer and for the `toMermaid()` round trip.
 - **ponytail** ships four [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) skills with their MIT license and pinned-source attribution to DietrichGebert: the smallest-complete-change mode, change review, whole-repository audit and a ledger for deliberate shortcuts.
-- **agreement** ships the `working-agreement` rule, always loaded from `.claude/rules/`: how the agent fixes, ranks decisions, reads the user's messages and writes for the user; every section after the principles is a block you can deselect. Its `communication` skill, which the agent loads whenever it talks to the user, covers working out a request, asking questions, making offers and resolving dilemmas. The `tracker` skill covers posting to a Git host (GitHub, GitLab and others) — issues, PRs/MRs, labels, types and fields; its project settings, methodology and PR rules are blocks the consumer's agent fills in on install. The `/retro` command, run only by the user, reviews finished work and proposes changes to the agent's environment: `CLAUDE.md`, rules, skills, docs, checks and tools. The `/git` command, also user-only, commits, pushes, switches to an up-to-date branch, runs a task in a separate worktree, and installs approval prompts for destructive git commands; project overrides are an optional block.
+- **agreement** ships the `working-agreement` rule, always loaded from `.claude/rules/` on Claude Code and `.kimi-code/AGENTS.md` on Kimi Code: how the agent fixes, ranks decisions, reads the user's messages and writes for the user; every section after the principles is a block you can deselect. Its `communication` skill, which the agent loads whenever it talks to the user, covers working out a request, asking questions, making offers and resolving dilemmas. The `tracker` skill covers posting to a Git host (GitHub, GitLab and others) — issues, PRs/MRs, labels, types and fields; its project settings, methodology and PR rules are blocks the consumer's agent fills in on install. The `/retro` command, run only by the user, reviews finished work and proposes changes to the agent's environment: `CLAUDE.md`, rules, skills, docs, checks and tools. The `/git` command, also user-only, commits, pushes, switches to an up-to-date branch, runs a task in a separate worktree, and installs approval prompts for destructive git commands; project overrides are an optional block.
 - **modern-web-guidance** installs [Google Chrome's Modern Web Guidance](https://github.com/GoogleChrome/modern-web-guidance) directly from its upstream skill directory.
 
 The `design` bundle was renamed to `thinking`. astp does not move a renamed bundle on its own: if you installed `design`, run `astp delete design`, then `astp install thinking` — on the same `--target` you installed to.

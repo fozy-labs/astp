@@ -35,6 +35,8 @@ vi.mock("@clack/prompts", async (importOriginal) => ({
 }));
 
 const mockSelect = vi.mocked(p.select);
+const projectTarget: InstallTarget = { platform: "claude-code", type: "project", rootDir: "/project/.claude" };
+const userTarget: InstallTarget = { platform: "kimi-code", type: "user", rootDir: "/home/user/.kimi-code" };
 
 const UP = "\x1b[A";
 const DOWN = "\x1b[B";
@@ -418,10 +420,10 @@ describe("BundleTreePrompt blocks", () => {
 });
 
 describe("selectPlatform", () => {
-    it("skips the prompt when only one platform is supported", async () => {
-        expect(ALL_PLATFORMS).toHaveLength(1);
+    it("requires an explicit platform without a terminal when several are supported", async () => {
+        expect(ALL_PLATFORMS).toEqual(["claude-code", "kimi-code"]);
 
-        await expect(selectPlatform()).resolves.toBe(ALL_PLATFORMS[0]);
+        await expect(selectPlatform()).rejects.toThrow("--platform is required without a terminal");
 
         expect(mockSelect).not.toHaveBeenCalled();
     });
@@ -480,11 +482,11 @@ describe("legacy migration prompts", () => {
         };
 
         vi.mocked(p.log.info).mockClear();
-        showCheckReport(report, "user", []);
+        showCheckReport(report, userTarget, []);
 
         const reportText = String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0]);
         expect(reportText).toContain("core: legacy skill skills/current");
-        expect(reportText).toContain("run `astp update --target user` to migrate.");
+        expect(reportText).toContain("run `astp update --platform kimi-code --target user` to migrate.");
         expect(reportText).toContain("skills/removed — not in the current manifest, left in place.");
         expect(reportText).not.toContain("skills/removed — run `astp update --force` to migrate.");
     });
@@ -493,7 +495,7 @@ describe("legacy migration prompts", () => {
         const report: UpdateReport = { updates: [], upToDate: [], notInManifest: [], legacySkills: [] };
 
         vi.mocked(p.log.info).mockClear();
-        showCheckReport(report, "project", [
+        showCheckReport(report, projectTarget, [
             { path: "skills/foo", modified: true, force: "replace" },
             { path: "rules/x.md", modified: true, force: "delete" },
             { path: "rules/y.md", modified: false, force: null },
@@ -501,9 +503,11 @@ describe("legacy migration prompts", () => {
 
         const text = String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0]);
         expect(text).toContain("Changed locally — `astp update` keeps them:");
-        expect(text).toContain("  • skills/foo — modified; `astp update --force --target project` replaces it");
         expect(text).toContain(
-            "  • rules/x.md — modified, removed upstream; `astp update --force --target project` deletes it",
+            "  • skills/foo — modified; `astp update --force --platform claude-code --target project` replaces it",
+        );
+        expect(text).toContain(
+            "  • rules/x.md — modified, removed upstream; `astp update --force --platform claude-code --target project` deletes it",
         );
         expect(text).toContain("  • rules/y.md — text edited");
         expect(text).not.toContain("replaces the modified ones");
@@ -513,7 +517,7 @@ describe("legacy migration prompts", () => {
         const report: UpdateReport = { updates: [], upToDate: [], notInManifest: [], legacySkills: [] };
 
         vi.mocked(p.log.info).mockClear();
-        showCheckReport(report, "project", []);
+        showCheckReport(report, projectTarget, []);
 
         const text = String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0]);
         expect(text).toContain("Bundle         Installed   Available   Status");
@@ -523,20 +527,22 @@ describe("legacy migration prompts", () => {
     it("shows the force-migration hint when modified legacy units are skipped", () => {
         warnLegacyModified(
             [{ targetPath: "skills/example", kind: "skill", state: "legacy" }],
-            "astp update --force --target user",
+            "astp update --force --platform claude-code --target user",
         );
 
         expect(p.log.warn).toHaveBeenCalledWith(
-            expect.stringContaining("Run `astp update --force --target user` to replace them."),
+            expect.stringContaining("Run `astp update --force --platform claude-code --target user` to replace them."),
         );
     });
 
     it("prints overwrite commands with the run's target for foreign units", () => {
         vi.mocked(p.log.warn).mockClear();
-        warnForeign("core", [{ targetPath: "skills/sample", kind: "skill", state: "modified" }], [], "user");
+        warnForeign("core", [{ targetPath: "skills/sample", kind: "skill", state: "modified" }], [], userTarget);
 
         expect(p.log.warn).toHaveBeenCalledWith(
-            expect.stringContaining("astp install core --skill skills/sample --force --target user"),
+            expect.stringContaining(
+                "astp install core --skill skills/sample --force --platform kimi-code --target user",
+            ),
         );
     });
 
@@ -546,13 +552,13 @@ describe("legacy migration prompts", () => {
             "core",
             [{ targetPath: "skills/sample", kind: "skill", state: "modified" }],
             [],
-            "user",
+            userTarget,
             "./my src",
         );
 
         expect(p.log.warn).toHaveBeenCalledWith(
             expect.stringContaining(
-                'astp install core --skill skills/sample --force --source "./my src" --target user',
+                'astp install core --skill skills/sample --force --source "./my src" --platform kimi-code --target user',
             ),
         );
     });
@@ -577,7 +583,7 @@ describe("legacy migration prompts", () => {
                 { targetPath: "rules/x.md", kind: "file", state: "modified" },
             ],
             [],
-            "project",
+            projectTarget,
         );
 
         const calls = vi.mocked(p.log.warn).mock.calls.map((call) => String(call[0]));
@@ -585,14 +591,14 @@ describe("legacy migration prompts", () => {
         const owned = calls.find((text) => text.includes("(other"))!;
         expect(owned).toContain("rules/r.md (other)");
         expect(owned).toContain("skills/X/sub (other: skills/x)");
-        expect(owned).toContain("astp delete other --skill rules/r.md --target project");
-        expect(owned).toContain("astp delete other --skill skills/x --target project");
+        expect(owned).toContain("astp delete other --skill rules/r.md --platform claude-code --target project");
+        expect(owned).toContain("astp delete other --skill skills/x --platform claude-code --target project");
         expect(owned).not.toContain("astp delete other --skill skills/X/sub");
-        expect(owned).toContain("astp install core --skill skills/X/sub --target project");
+        expect(owned).toContain("astp install core --skill skills/X/sub --platform claude-code --target project");
         expect(owned).not.toContain("--force");
         const plain = calls.find((text) => !text.includes("(other"))!;
         expect(plain).toContain("rules/x.md");
-        expect(plain).toContain("astp install core --skill rules/x.md --force --target project");
+        expect(plain).toContain("astp install core --skill rules/x.md --force --platform claude-code --target project");
     });
 
     it("shows the force-update command when modified units are skipped", () => {
@@ -622,7 +628,7 @@ describe("out-of-sync update prompts", () => {
         };
 
         vi.mocked(p.log.info).mockClear();
-        showCheckReport(report, "project", []);
+        showCheckReport(report, projectTarget, []);
         expect(String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0])).toContain("↻ Out of sync");
 
         vi.mocked(p.log.info).mockClear();

@@ -197,13 +197,13 @@ describe("E2E: manifest sources", () => {
 
         expect(vi.mocked(warnModified)).toHaveBeenCalledWith(
             [expect.objectContaining({ targetPath: "rules/a.md" })],
-            "astp install core --skill rules/a.md --force --source ./a --target project",
+            "astp install core --skill rules/a.md --force --source ./a --platform claude-code --target project",
         );
         expect(vi.mocked(warnForeign)).toHaveBeenCalledWith(
             "core",
             [expect.objectContaining({ targetPath: "rules/b.md" })],
             [],
-            "project",
+            makeProjectTarget(projectDir),
             "./a",
         );
     });
@@ -252,7 +252,7 @@ describe("E2E: manifest sources", () => {
                 },
             ],
             [],
-            "project",
+            makeProjectTarget(projectDir),
             "./b",
         );
         let lock = await readLockFixture(rootDir);
@@ -270,11 +270,52 @@ describe("E2E: manifest sources", () => {
         expect(extra.units.filter((unit) => unit.state === "missing")).toEqual([]);
     });
 
+    it("does not install an excluded override over an active target", async () => {
+        const manifestPath = path.join(projectDir, "a/templates/manifest.json");
+        const manifest: Manifest = {
+            schemaVersion: "3.0",
+            bundles: {
+                core: {
+                    name: "core",
+                    version: "1.0.0",
+                    description: "Platform rules",
+                    default: false,
+                    platforms: ["claude-code", "kimi-code"],
+                    items: [
+                        {
+                            source: "core/rules/claude.md",
+                            target: "rules/claude.md",
+                            category: "rule",
+                            platforms: ["claude-code"],
+                            targets: { "kimi-code": "AGENTS.md" },
+                        },
+                        {
+                            source: "core/AGENTS.md",
+                            target: "AGENTS.md",
+                            category: "rule",
+                            platforms: ["kimi-code"],
+                        },
+                    ],
+                },
+            },
+        };
+        await fs.writeFile(manifestPath, JSON.stringify(manifest));
+        await fs.writeFile(path.join(projectDir, "a/templates/core/rules/claude.md"), "Claude only\n");
+        await fs.writeFile(path.join(projectDir, "a/templates/core/AGENTS.md"), "Kimi instructions\n");
+        const kimiRoot = path.join(projectDir, ".kimi-code");
+        vi.mocked(resolveTarget).mockReturnValue({ platform: "kimi-code", type: "project", rootDir: kimiRoot });
+
+        await executeInstall({ ...opts, platform: "kimi-code", bundle: "core", source: "./a" });
+
+        expect(await fs.readFile(path.join(kimiRoot, "AGENTS.md"), "utf8")).toBe("Kimi instructions\n");
+        await expect(fs.stat(path.join(kimiRoot, "rules/claude.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    });
+
     it("names the bundle and a fix when its lock source is gone", async () => {
         await executeInstall({ ...opts, bundle: "core", source: "./a" });
         await fs.rm(path.join(projectDir, "a"), { recursive: true });
         await expect(executeUpdate(opts)).rejects.toThrow(
-            /Cannot read source '\.\.\/a' of core: .*\nTo switch source: astp install core --source <spec> --target project/s,
+            /Cannot read source '\.\.\/a' of core: .*\nTo switch source: astp install core --source <spec> --platform claude-code --target project/s,
         );
     });
 
@@ -308,9 +349,9 @@ describe("E2E: manifest sources", () => {
         expect(vi.mocked(warnNewerManifest)).toHaveBeenCalledTimes(1);
         write.mockRestore();
 
-        await fs.writeFile(manifestPath, JSON.stringify({ ...raw, schemaVersion: "3.0" }));
+        await fs.writeFile(manifestPath, JSON.stringify({ ...raw, schemaVersion: "4.0" }));
         await expect(executeInstall({ ...opts, bundle: "core", source: "./a" })).rejects.toThrow(
-            "Unsupported manifest schema version 3.0 (supported: 1.0, 2.0–2.1). Update astp CLI: npm install -g @fozy-labs/astp",
+            "Unsupported manifest schema version 4.0 (supported: 1.0, 2.0–2.1, 3.0). Update astp CLI: npm install -g @fozy-labs/astp",
         );
     });
 

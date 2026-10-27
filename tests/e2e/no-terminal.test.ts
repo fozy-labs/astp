@@ -18,7 +18,7 @@ function runCli(args: string[], cwd: string, stdin: "pipe" | "ignore"): Promise<
     return new Promise((resolve) => {
         const child = spawn(
             process.execPath,
-            ["--experimental-transform-types", "--no-warnings", "--import", LOADER, CLI, ...args],
+            ["--no-warnings", "--import", LOADER, CLI, ...args],
             { cwd, env: { ...process.env, HOME: cwd, CLAUDE_CONFIG_DIR: "" }, stdio: [stdin, "pipe", "pipe"] },
         );
         let stderr = "";
@@ -43,13 +43,20 @@ describe("without a terminal", () => {
     });
 
     const cases: Array<[string[], string]> = [
-        [["check"], "--target is required without a terminal (project|user)"],
-        [["update"], "--target is required without a terminal (project|user)"],
-        [["list"], "--target is required without a terminal (project|user)"],
-        [["delete", "core"], "--target is required without a terminal (project|user)"],
-        [["install", "core"], "--target is required without a terminal (project|user)"],
-        [["install", "--target", "project"], "install needs a bundle name without a terminal"],
-        [["delete", "--target", "project"], "delete needs a bundle name without a terminal"],
+        [["check", "--platform", "claude-code"], "--target is required without a terminal (project|user)"],
+        [["update", "--platform", "claude-code"], "--target is required without a terminal (project|user)"],
+        [["list", "--platform", "claude-code"], "--target is required without a terminal (project|user)"],
+        [["delete", "core", "--platform", "claude-code"], "--target is required without a terminal (project|user)"],
+        [["install", "core", "--platform", "claude-code"], "--target is required without a terminal (project|user)"],
+        [["check", "--target", "project"], "--platform is required without a terminal (claude-code|kimi-code)"],
+        [
+            ["install", "--platform", "claude-code", "--target", "project"],
+            "install needs a bundle name without a terminal",
+        ],
+        [
+            ["delete", "--platform", "claude-code", "--target", "project"],
+            "delete needs a bundle name without a terminal",
+        ],
         [[], "astp needs a command without a terminal; run astp --help"],
     ];
 

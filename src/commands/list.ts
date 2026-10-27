@@ -141,7 +141,7 @@ async function list(
     const units = groupTemplateItems(bundle, platform);
     validateUnitTargets(target.rootDir, units);
     if (!options.json) s.start(`Downloading ${bundle.name}...`);
-    const tempDir = await downloadBundle(listing.source, bundle, units);
+    const tempDir = await downloadBundle(listing.source, bundle, units, platform);
     try {
         await assertBundleSources(tempDir, bundle.name, units);
         if (!options.json) s.stop(`Downloaded ${bundle.name}.`);

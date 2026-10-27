@@ -241,11 +241,11 @@ describe("executeUpdate", () => {
 
         expect(mockWarnModified).toHaveBeenCalledWith(
             [{ targetPath: testItem.target, kind: "file", state: "modified" }],
-            "astp update --force --target project",
+            "astp update --force --platform claude-code --target project",
         );
         expect(mockWarnLegacyModified).toHaveBeenCalledWith(
             [{ targetPath: "skills/old", kind: "skill", state: "legacy" }],
-            "astp update --force --target project",
+            "astp update --force --platform claude-code --target project",
         );
         expect(mockShowInfo).toHaveBeenCalledWith("All bundles up to date.");
         expect(mockDownloadBundle).not.toHaveBeenCalled();
@@ -273,6 +273,7 @@ describe("executeUpdate", () => {
             expect.objectContaining({ spec: "gh:fozy-labs/astp" }),
             expect.objectContaining({ name: "pipeline" }),
             expect.any(Array),
+            "claude-code",
         );
         expect(mockSyncBundle).toHaveBeenCalledWith(expect.objectContaining({ bundle: emptyBundle }));
     });
@@ -334,7 +335,7 @@ describe("executeUpdate", () => {
         expect(mockSyncBundle).toHaveBeenCalled();
         expect(mockWarnModified).toHaveBeenCalledWith(
             [{ targetPath: testItem.target, kind: "file", state: "modified" }],
-            "astp update --force --target project",
+            "astp update --force --platform claude-code --target project",
         );
         expect(mockWarnKeptRemoved).toHaveBeenCalledWith([
             { targetPath: keptUnit.relativePath, kind: "file", state: "modified" },
@@ -402,7 +403,7 @@ describe("executeUpdate", () => {
 
         expect(mockWarnModified).toHaveBeenCalledWith(
             [{ targetPath: testItem.target, kind: "file", state: "modified" }],
-            "astp update --force --target project",
+            "astp update --force --platform claude-code --target project",
         );
         expect(mockSyncBundle).toHaveBeenCalledWith(expect.objectContaining({ force: false }));
     });

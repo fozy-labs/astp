@@ -57,7 +57,7 @@ export async function executeCheck(options: CheckOptions): Promise<void> {
                     return { path: unit.relativePath, modified: unit.state === "modified", force };
                 });
         });
-        showCheckReport(mergeReports(reports), target.type, changed);
+        showCheckReport(mergeReports(reports), target, changed);
     } finally {
         await sources.close();
     }

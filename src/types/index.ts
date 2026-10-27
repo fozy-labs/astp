@@ -3,8 +3,9 @@
 /**
  * Coding agent platform a bundle targets.
  * `claude-code` — Anthropic Claude Code CLI (installs under `.claude/` or `$CLAUDE_CONFIG_DIR`, else `~/.claude/`).
+ * `kimi-code` — Kimi Code CLI (installs under `.kimi-code/` or `$KIMI_CODE_HOME`, else `~/.kimi-code/`).
  */
-export type Platform = "claude-code";
+export type Platform = "claude-code" | "kimi-code";
 export type PlatformFilter = Platform | `!${Platform}`;
 
 // ── Remote Manifest Types (§3.1) ──────────────────────────────────────
@@ -57,8 +58,10 @@ export interface BundleRef {
 export interface TemplateItem {
     /** Path relative to templates/ (e.g., "docs/skills/markdown-craft/SKILL.md"). */
     source: string;
-    /** Path relative to install root (e.g., "skills/markdown-craft/SKILL.md"). */
+    /** Default path relative to install root (e.g., "skills/markdown-craft/SKILL.md"). */
     target: string;
+    /** Per-platform target overrides for agent/rule file items. Requires manifest schema 3. */
+    targets?: Partial<Record<Platform, string>>;
     /** Category for display grouping. */
     category: ItemCategory;
     /** Whether the unit is unchecked by default on install and update. */
@@ -172,6 +175,7 @@ export {
     filterBundlesByPlatform,
     getBundlePlatforms,
     itemSupportsPlatform,
+    resolveItemTarget,
     supportsPlatform,
 } from "./platform.js";
 export { describeTarget, resolveTarget } from "./resolve-target.js";

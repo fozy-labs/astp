@@ -30,22 +30,24 @@ describe("getBundlePlatforms", () => {
     });
 
     it("defaults to all platforms when platforms field is missing", () => {
-        expect(getBundlePlatforms(unrestrictedBundle)).toEqual(["claude-code"]);
+        expect(getBundlePlatforms(unrestrictedBundle)).toEqual(["claude-code", "kimi-code"]);
     });
 
     it("defaults to all platforms when platforms is an empty array", () => {
         const bundle: Bundle = { ...claudeBundle, platforms: [] };
-        expect(getBundlePlatforms(bundle)).toEqual(["claude-code"]);
+        expect(getBundlePlatforms(bundle)).toEqual(["claude-code", "kimi-code"]);
     });
 });
 
 describe("bundleSupportsPlatform", () => {
     it("returns true for declared platform", () => {
         expect(bundleSupportsPlatform(claudeBundle, "claude-code")).toBe(true);
+        expect(bundleSupportsPlatform(claudeBundle, "kimi-code")).toBe(false);
     });
 
     it("treats a bundle without platforms as supporting every platform", () => {
         expect(bundleSupportsPlatform(unrestrictedBundle, "claude-code")).toBe(true);
+        expect(bundleSupportsPlatform(unrestrictedBundle, "kimi-code")).toBe(true);
     });
 
     it("applies negations and positive allowlists", () => {
@@ -54,7 +56,7 @@ describe("bundleSupportsPlatform", () => {
         expect(supportsPlatform(["!claude-code"], other)).toBe(true);
         expect(supportsPlatform(["claude-code"], other)).toBe(false);
         expect(supportsPlatform(["claude-code", "!claude-code"], "claude-code")).toBe(false);
-        expect(getBundlePlatforms({ ...claudeBundle, platforms: ["!claude-code"] })).toEqual([]);
+        expect(getBundlePlatforms({ ...claudeBundle, platforms: ["!claude-code"] })).toEqual(["kimi-code"]);
     });
 });
 
@@ -71,5 +73,7 @@ describe("filterBundlesByPlatform", () => {
     it("includes platform-compatible bundles", () => {
         const claude = filterBundlesByPlatform(manifest, "claude-code");
         expect(claude.map((b) => b.name).sort()).toEqual(["docs", "legacy"]);
+        const kimi = filterBundlesByPlatform(manifest, "kimi-code");
+        expect(kimi.map((b) => b.name)).toEqual(["legacy"]);
     });
 });

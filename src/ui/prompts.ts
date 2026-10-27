@@ -61,17 +61,19 @@ export async function selectAction(): Promise<"install" | "update" | "check" | "
 
 const PLATFORM_LABELS: Record<Platform, string> = {
     "claude-code": "Claude Code (.claude/, ~/.claude/)",
+    "kimi-code": "Kimi Code (.kimi-code/, ~/.kimi-code/)",
 };
 
 export async function selectPlatform(): Promise<Platform> {
+    const platforms: readonly Platform[] = ALL_PLATFORMS;
     // With a single supported platform there is nothing to choose — skip the prompt.
-    const [only] = ALL_PLATFORMS;
-    if (ALL_PLATFORMS.length === 1 && only) return only;
-    requireTerminal(`--platform is required without a terminal (${ALL_PLATFORMS.join("|")})`);
+    const [only] = platforms;
+    if (platforms.length === 1 && only) return only;
+    requireTerminal(`--platform is required without a terminal (${platforms.join("|")})`);
 
     const platform = await p.select({
         message: "Which coding agent?",
-        options: ALL_PLATFORMS.map((value) => ({ value, label: PLATFORM_LABELS[value] })),
+        options: platforms.map((value) => ({ value, label: PLATFORM_LABELS[value] })),
     });
 
     if (p.isCancel(platform)) throw new CancelledError();
@@ -577,7 +579,7 @@ export async function confirmDelete(
 
 export function showCheckReport(
     report: UpdateReport,
-    target: InstallTargetType,
+    target: InstallTarget,
     changed: Array<{ path: string; modified: boolean; force: "replace" | "delete" | null }>,
 ): void {
     const lines: string[] = [];
@@ -606,8 +608,8 @@ export function showCheckReport(
             const guidance = !unit.inManifest
                 ? "not in the current manifest, left in place."
                 : unit.clean
-                  ? `run \`astp update --target ${target}\` to migrate.`
-                  : `modified locally — \`astp update --force --target ${target}\` replaces it.`;
+                  ? `run \`astp update --platform ${target.platform} --target ${target.type}\` to migrate.`
+                  : `modified locally — \`astp update --force --platform ${target.platform} --target ${target.type}\` replaces it.`;
             lines.push(`${unit.bundleName}: legacy ${unit.kind} ${unit.targetPath} — ${guidance}`);
         }
     }
@@ -619,9 +621,9 @@ export function showCheckReport(
             const label = unit.modified ? "modified" : "text edited";
             const hint =
                 unit.force === "delete"
-                    ? `, removed upstream; \`astp update --force --target ${target}\` deletes it`
+                    ? `, removed upstream; \`astp update --force --platform ${target.platform} --target ${target.type}\` deletes it`
                     : unit.force === "replace"
-                      ? `; \`astp update --force --target ${target}\` replaces it`
+                      ? `; \`astp update --force --platform ${target.platform} --target ${target.type}\` replaces it`
                       : "";
             lines.push(`  • ${unit.path} — ${label}${hint}`);
         }
@@ -672,7 +674,7 @@ export function warnForeign(
     bundleName: string,
     units: ForeignUnit[],
     blockKeys: string[],
-    target: InstallTargetType,
+    target: InstallTarget,
     source?: string,
 ): void {
     const owned = units.filter(
@@ -702,7 +704,10 @@ export function warnForeign(
             )
             .join("\n");
         const deletes = new Set(
-            owned.map((unit) => `  astp delete ${unit.owner.bundle} --skill ${unit.owner.path} --target ${target}`),
+            owned.map(
+                (unit) =>
+                    `  astp delete ${unit.owner.bundle} --skill ${unit.owner.path} --platform ${target.platform} --target ${target.type}`,
+            ),
         );
         const commands = [
             ...deletes,
@@ -733,9 +738,9 @@ export function warnLegacyModified(files: FileStatus[], command: string): void {
     p.log.warn(`Legacy units modified locally — skipped:\n${paths}\nRun \`${command}\` to replace them.`);
 }
 
-export function warnUnavailable(entries: Array<{ bundle: string; message: string }>, target: InstallTargetType): void {
+export function warnUnavailable(entries: Array<{ bundle: string; message: string }>, target: InstallTarget): void {
     p.log.warn(
-        `Unavailable, not shown:\n${entries.map((entry) => `  • ${entry.bundle}: ${entry.message}`).join("\n")}\nTo read a bundle from another source: astp install <bundle> --source <spec> --target ${target}`,
+        `Unavailable, not shown:\n${entries.map((entry) => `  • ${entry.bundle}: ${entry.message}`).join("\n")}\nTo read a bundle from another source: astp install <bundle> --source <spec> --platform ${target.platform} --target ${target.type}`,
     );
 }
 

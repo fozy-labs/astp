@@ -14,7 +14,7 @@ import type {
     UpdateReport,
 } from "@/types/index.js";
 
-import { blockHash, frontmatterHash, parseInstalledBlocks } from "./blocks.js";
+import { frontmatterHash, installedBlockHash, parseInstalledBlocks } from "./blocks.js";
 import { computeHash, extractAstpMetadata, stripAstpFields } from "./frontmatter.js";
 import type { Lock, LockUnit } from "./lock.js";
 import { readLock } from "./lock.js";
@@ -266,7 +266,7 @@ function inspectBlockFile(
             info.missing = true;
             continue;
         }
-        if (blockHash(region.content) !== lockBlocks[`${fileTarget}#${name}`]) {
+        if (installedBlockHash(region, parsed) !== lockBlocks[`${fileTarget}#${name}`]) {
             info.dirty = true;
             info.edited.push(`${fileTarget}#${name}`);
         }

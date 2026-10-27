@@ -4,7 +4,9 @@ import path from "node:path";
 import { vi } from "vitest";
 
 import { executeCheck } from "@/commands/check.js";
+import { executeDelete } from "@/commands/delete.js";
 import { executeInstall } from "@/commands/install.js";
+import { executeList } from "@/commands/list.js";
 import { executeUpdate } from "@/commands/update.js";
 import { downloadBundle, fetchManifest, groupTemplateItems } from "@/core/index.js";
 import type { Manifest } from "@/types/index.js";
@@ -205,7 +207,7 @@ describe("E2E: install", () => {
         await expect(readLockFixture(rootDir)).rejects.toMatchObject({ code: "ENOENT" });
     });
 
-    // T38: astp install nonexistent --target project
+    // T38: astp install nonexistent --platform claude-code --target project
     it("T38: rejects nonexistent bundle with error", async () => {
         await expect(
             executeInstall({ bundle: "nonexistent", platform: "claude-code", target: "project" }),
@@ -224,7 +226,7 @@ describe("E2E: install", () => {
         expect(await fs.readFile(skillPath, "utf8")).toBe(edited);
         expect(mockWarnModified).toHaveBeenCalledWith(
             expect.arrayContaining([expect.objectContaining({ targetPath: "skills/sample", kind: "skill" })]),
-            "astp install skillpack --skill skills/sample --force --target project",
+            "astp install skillpack --skill skills/sample --force --platform claude-code --target project",
         );
 
         await installBundle("skillpack", true);
@@ -241,7 +243,7 @@ describe("E2E: install", () => {
         expect(await fs.readFile(extraPath, "utf8")).toBe("keep me");
         expect(mockWarnModified).toHaveBeenCalledWith(
             expect.arrayContaining([expect.objectContaining({ targetPath: "skills/sample", kind: "skill" })]),
-            "astp install skillpack --skill skills/sample --force --target project",
+            "astp install skillpack --skill skills/sample --force --platform claude-code --target project",
         );
 
         await installBundle("skillpack", true);
@@ -261,7 +263,7 @@ describe("E2E: install", () => {
             "core",
             expect.arrayContaining([expect.objectContaining({ targetPath: "skills/orchestrate", kind: "skill" })]),
             [],
-            "project",
+            makeProjectTarget(projectDir),
             undefined,
         );
 
@@ -293,7 +295,7 @@ describe("E2E: install", () => {
             expect.arrayContaining([
                 expect.objectContaining({ targetPath: "agents/pipeline-approve.agent.md", kind: "file" }),
             ]),
-            "astp install pipeline --skill agents/pipeline-approve.agent.md --force --target project",
+            "astp install pipeline --skill agents/pipeline-approve.agent.md --force --platform claude-code --target project",
         );
 
         await installBundle("pipeline", true);
@@ -312,7 +314,7 @@ describe("E2E: install", () => {
             "core",
             expect.arrayContaining([expect.objectContaining({ targetPath: "skills/orchestrate", kind: "skill" })]),
             [],
-            "project",
+            makeProjectTarget(projectDir),
             undefined,
         );
 
@@ -413,7 +415,7 @@ describe("E2E: install", () => {
 
         expect(mockWarnUnavailable).toHaveBeenCalledWith(
             [expect.objectContaining({ bundle: "skillpack", message: "fetch failed" })],
-            "project",
+            makeProjectTarget(projectDir),
         );
         const entries = mockSelectBundleItems.mock.calls[0]![0];
         expect(entries.map((entry) => entry.bundle.name)).toEqual(["core", "pipeline"]);
@@ -458,7 +460,7 @@ describe("E2E: install", () => {
                     message: expect.stringContaining("Cannot read source 'gh:other/repo'"),
                 }),
             ],
-            "project",
+            makeProjectTarget(projectDir),
         );
         const entries = mockSelectBundleItems.mock.calls[0]![0];
         expect(entries.map((entry) => entry.bundle.name)).toEqual(["skillpack", "pipeline"]);
@@ -517,7 +519,7 @@ describe("E2E: install", () => {
                     message: expect.stringContaining("Cannot read source 'gh:other/repo'"),
                 }),
             ],
-            "project",
+            makeProjectTarget(projectDir),
         );
         const entries = mockSelectBundleItems.mock.calls[0]![0];
         expect(entries.map((entry) => entry.bundle.name)).toEqual(["pipeline"]);
@@ -609,5 +611,94 @@ describe("E2E: install", () => {
         await installBundle("core");
         const secondDefaults = mockSelectBundleItems.mock.calls[0]![0][0]!.defaults;
         expect(secondDefaults).toEqual(["skills/orchestrate", optTarget]);
+    });
+
+    it("supports the Kimi install, list, check, update and delete flow", async () => {
+        const ruleTarget = "rules/working-agreement.md";
+        const rootDir = path.join(projectDir, ".kimi-code");
+        const agentsPath = path.join(rootDir, "AGENTS.md");
+        const contents = {
+            [ruleTarget]: [
+                '<astp-block name="principles" required>',
+                "# Working agreement",
+                "",
+                "- Root cause.",
+                "</astp-block>",
+                "",
+            ].join("\n"),
+        };
+        manifest.bundles.core.platforms = ["claude-code", "kimi-code"];
+        manifest.bundles.agreement = {
+            name: "agreement",
+            version: "1.0.0",
+            description: "Working agreement",
+            default: false,
+            platforms: ["claude-code", "kimi-code"],
+            items: [
+                {
+                    source: `agreement/${ruleTarget}`,
+                    target: ruleTarget,
+                    targets: { "kimi-code": "AGENTS.md" },
+                    category: "rule",
+                },
+            ],
+        };
+        mockResolveTarget.mockReturnValue({ platform: "kimi-code", type: "project", rootDir });
+        async function mockDownloads(): Promise<void> {
+            const directories: Record<string, string> = {};
+            for (const name of ["core", "agreement"]) {
+                const dir = await setupTemplateDir(manifest, name, contents, "kimi-code");
+                directories[name] = dir;
+                templateDirs.push(dir);
+            }
+            mockDownloadBundle.mockImplementation(async (_source, bundle) => directories[bundle.name]!);
+        }
+        await mockDownloads();
+
+        await executeInstall({ bundle: "core", platform: "kimi-code", target: "project" });
+        await executeInstall({ bundle: "agreement", platform: "kimi-code", target: "project" });
+
+        expect(await fs.readFile(path.join(rootDir, "skills/orchestrate/SKILL.md"), "utf8")).toContain("# SKILL");
+        expect(await fs.readFile(agentsPath, "utf8")).toBe(
+            '<principles>\n# Working agreement\n\n- Root cause.\n</principles>\n',
+        );
+        await expect(fs.stat(path.join(rootDir, ruleTarget))).rejects.toMatchObject({ code: "ENOENT" });
+        let lock = await readLockFixture(rootDir);
+        expect(Object.keys(lock.bundles.agreement.units)).toEqual(["AGENTS.md"]);
+
+        await mockDownloads();
+        const write = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        let listed = "";
+        try {
+            await executeList({ bundle: "agreement", json: true, platform: "kimi-code", target: "project" });
+            listed = write.mock.calls.map(([chunk]) => String(chunk)).join("");
+        } finally {
+            write.mockRestore();
+        }
+        expect(JSON.parse(listed).units[0]).toMatchObject({
+            path: "AGENTS.md",
+            status: "installed",
+            blocks: [{ name: "principles", key: "AGENTS.md#principles", status: "selected" }],
+        });
+
+        await executeCheck({ platform: "kimi-code", target: "project" });
+        expect(vi.mocked(showCheckReport).mock.calls[0]![0].updates).toEqual([]);
+
+        manifest.bundles.agreement.version = "1.1.0";
+        contents[ruleTarget] = contents[ruleTarget].replace("- Root cause.", "- Fix root causes.");
+        await mockDownloads();
+        await fs.appendFile(agentsPath, "\nMy project instructions.\n");
+        await executeUpdate({ platform: "kimi-code", target: "project" });
+        const updated = await fs.readFile(agentsPath, "utf8");
+        expect(updated).toContain("- Fix root causes.");
+        expect(updated).toContain("My project instructions.");
+
+        await executeDelete({ bundle: "agreement", platform: "kimi-code", target: "project" });
+        expect(await fs.readFile(agentsPath, "utf8")).toBe(updated);
+        await executeDelete({ bundle: "agreement", force: true, platform: "kimi-code", target: "project" });
+        await expect(fs.stat(agentsPath)).rejects.toMatchObject({ code: "ENOENT" });
+        lock = await readLockFixture(rootDir);
+        expect(lock.bundles.agreement).toBeUndefined();
+        expect(lock.bundles.core).toBeDefined();
     });
 });

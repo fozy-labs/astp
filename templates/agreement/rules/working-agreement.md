@@ -1,7 +1,3 @@
----
-trigger: always_on
----
-
 <astp-block name="principles" description="Root-cause fixes, quality bar, lean text and stopping on the unexpected" use-when="Any project where the agent writes or edits code and docs" required>
 # Working agreement
 
@@ -57,7 +53,7 @@ Part of a message is context for you:
 - When fixing a bug in a project that has tests, write the failing test first.
 </astp-block>
 
-<astp-block name="claude_md_files" description="User-maintained CLAUDE.md files — report drift instead of editing unasked" use-when="The repository maintains CLAUDE.md files that only the user edits unless asked">
+<astp-block name="claude_md_files" description="User-maintained CLAUDE.md files — report drift instead of editing unasked" use-when="The repository maintains CLAUDE.md files that only the user edits unless asked" platforms="claude-code">
 ## CLAUDE.md files
 
 They live in the repo root and in subdirectories where local context is needed. The user maintains them: do not edit one without an explicit command. When the CLAUDE.md of the directory you work in is out of sync with the code, tell the user.

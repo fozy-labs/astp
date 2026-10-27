@@ -454,7 +454,7 @@ Skill A v1.1 content`,
             "skillpack",
             [expect.objectContaining({ targetPath: "skills/new", kind: "skill" })],
             [],
-            "project",
+            makeProjectTarget(projectDir),
         );
         await expect(fs.access(path.join(path.dirname(userFile), "SKILL.md"))).rejects.toThrow();
         expect((await readLockFixture(path.join(projectDir, ".claude"))).bundles.skillpack.declined).toEqual([
@@ -598,7 +598,7 @@ Skill A v1.1 content`,
         await executeUpdate({ platform: "claude-code", target: "project" });
         expect(mockWarnLegacyModified).toHaveBeenCalledWith(
             expect.any(Array),
-            "astp update --force --target project",
+            "astp update --force --platform claude-code --target project",
         );
         expect((await getInstalledSkillpack())?.units[0]).toMatchObject({ origin: "legacy", version: "1.0.0" });
 

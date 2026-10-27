@@ -10,8 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Bundle `refs` install external skill directories without vendoring them; the first is `modern-web-guidance` from Google Chrome.
+- Nested `<astp-block>` blocks with independent selection, updates and local-edit protection; selecting a child selects its ancestors.
 - Skill, agent and rule descriptions from frontmatter in install and update selection prompts.
 - `platforms` filters on bundle items and `<astp-block>` tags, including `!<name>` exclusions; bundle filters now support exclusions too.
+- [`kimi-code` platform](../README.md#commands): skills install under `.kimi-code/skills/`; `ponytail` supports both platforms, and `agreement` installs its working-agreement blocks into `.kimi-code/AGENTS.md`.
+- [`targets`](../templates/README.md#templateitem-fields) on agent and rule manifest items overrides the install path per platform without duplicating the source. The shipped manifest now uses schema `3.0`; older CLIs must be updated before fetching it.
+- Install can adopt an existing block file, preserving consumer text and declining conflicting regions instead of rejecting the whole file.
 
 ## [0.5.0] - 2026-10-19
 

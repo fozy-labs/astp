@@ -7,7 +7,7 @@
         "rules/working-agreement.md": {
           "hash": "fd269b1b93b718a2ffb4d583db4085007af5219111cf2e2c7a7ef2cc50e42b36",
           "kind": "file",
-          "version": "1.4.1",
+          "version": "1.4.4",
           "blocks": {
             "rules/working-agreement.md#claude_md_files": "592f63df",
             "rules/working-agreement.md#decisions": "fd324b02",
@@ -22,12 +22,12 @@
         "skills/communication": {
           "hash": "dff5a3062e7bca3eaee99549ba7729210a679025c842d0aa6450d0fddc0f7cbb",
           "kind": "skill",
-          "version": "1.4.1"
+          "version": "1.4.4"
         },
         "skills/git": {
           "hash": "18d9bf641e11ede5063264a584b03036df025b3b83dd2eca4e29a9adb74da7bf",
           "kind": "skill",
-          "version": "1.4.1",
+          "version": "1.4.4",
           "blocks": {
             "skills/git/SKILL.md#commands": "e138955d"
           },
@@ -38,18 +38,18 @@
         "skills/retro": {
           "hash": "4894c2ede04cc61215a1ca8de5b68c1c39f89daa5df369941c49f842d7e3b500",
           "kind": "skill",
-          "version": "1.4.1"
+          "version": "1.4.4"
         },
         "skills/tracker": {
           "hash": "836d3f38381c5dcecdb515718cc7b80f996742dbfd722a54ec8effe79dd361b2",
           "kind": "skill",
-          "version": "1.4.1",
+          "version": "1.4.4",
           "blocks": {
             "skills/tracker/SKILL.md#metadata": "037c2376",
             "skills/tracker/SKILL.md#methodology": "4c7cee37",
-            "skills/tracker/SKILL.md#posting": "27ca3027",
-            "skills/tracker/SKILL.md#project": "1ecbaa72",
-            "skills/tracker/SKILL.md#pull_requests": "6984bb2b"
+            "skills/tracker/SKILL.md#posting": "f6a63c09",
+            "skills/tracker/SKILL.md#project": "eda5718a",
+            "skills/tracker/SKILL.md#pull_requests": "19ad0c95"
           },
           "declinedBlocks": []
         }
@@ -64,7 +64,7 @@
         "skills/markdown-craft": {
           "hash": "fc96d72d75c03cf02bc01deae66ed99fc13e7e4669a8b614f5617e58e4305dac",
           "kind": "skill",
-          "version": "1.3.3"
+          "version": "1.3.4"
         }
       }
     }

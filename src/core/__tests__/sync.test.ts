@@ -352,4 +352,93 @@ describe("syncBundle", () => {
         await expect(fs.access(path.join(rootDir, "skills/X/sub"))).rejects.toMatchObject({ code: "ENOENT" });
         await expect(fs.access(path.join(rootDir, "skills/x/sub"))).rejects.toMatchObject({ code: "ENOENT" });
     });
+
+    describe("untracked block file adoption", () => {
+        const TEMPLATE = [
+            '<astp-block name="principles" required>',
+            "# Working agreement",
+            "",
+            "- Root cause.",
+            "</astp-block>",
+            "",
+            '<astp-block name="decisions">',
+            "## Decisions",
+            "",
+            "- Ask when needed.",
+            "</astp-block>",
+            "",
+        ].join("\n");
+        const agentsRule = (): TemplateItem => ({
+            ...rule("rules/working-agreement.md"),
+            targets: { "kimi-code": "AGENTS.md" },
+        });
+        const selectAgents = { selected: new Set(["AGENTS.md"]), declined: new Set<string>() };
+
+        beforeEach(() => {
+            target = { ...target, platform: "kimi-code" };
+        });
+
+        it("adopts consumer text and preserves it on later template updates", async () => {
+            await writeFiles(rootDir, { "AGENTS.md": "# My instructions\n\nKeep this section.\n" });
+            await writeFiles(tempDir, { "AGENTS.md": TEMPLATE });
+
+            const first = await syncCore(await loadInstalled(rootDir), [agentsRule()], selectAgents);
+            expect(first.foreign).toEqual([]);
+            expect(first.installed.map((status) => status.targetPath)).toEqual(["AGENTS.md"]);
+            let content = await fs.readFile(path.join(rootDir, "AGENTS.md"), "utf8");
+            expect(content).toContain("Keep this section.");
+            expect(content).toContain("<principles>\n# Working agreement\n\n- Root cause.\n</principles>");
+            expect(content).toContain("<decisions>");
+
+            await writeFiles(tempDir, { "AGENTS.md": TEMPLATE.replace("- Root cause.", "- Fix root causes.") });
+            await syncCore(await loadInstalled(rootDir), [agentsRule()], selectAgents);
+            content = await fs.readFile(path.join(rootDir, "AGENTS.md"), "utf8");
+            expect(content).toContain("Keep this section.");
+            expect(content).toContain("- Fix root causes.");
+            expect(content).not.toContain("- Root cause.");
+            const lock = await readLock(rootDir);
+            expect(lock.bundles.core!.units["AGENTS.md"]?.blocks).toEqual({
+                "AGENTS.md#principles": expect.any(String),
+                "AGENTS.md#decisions": expect.any(String),
+            });
+        });
+
+        it("keeps a conflicting existing region and inserts selected missing regions", async () => {
+            await writeFiles(rootDir, {
+                "AGENTS.md": "# My instructions\n\n<principles>\nMy own principles.\n</principles>\n",
+            });
+            await writeFiles(tempDir, { "AGENTS.md": TEMPLATE });
+
+            const result = await syncCore(await loadInstalled(rootDir), [agentsRule()], selectAgents);
+            expect(result.foreignBlocks).toEqual(["AGENTS.md#principles"]);
+            const content = await fs.readFile(path.join(rootDir, "AGENTS.md"), "utf8");
+            expect(content).toContain("My own principles.");
+            expect(content).not.toContain("- Root cause.");
+            expect(content).toContain("<decisions>");
+            const lock = await readLock(rootDir);
+            expect(lock.bundles.core!.units["AGENTS.md"]?.declinedBlocks).toContain("AGENTS.md#principles");
+        });
+
+        it.each([
+            ["different frontmatter", "---\ncustom: value\n---\n\nMy rules.\n"],
+            ["malformed regions", "<principles>\nUnclosed region.\n"],
+        ])("declines an unsafe untracked file: %s", async (_label, existing) => {
+            await writeFiles(rootDir, { "AGENTS.md": existing });
+            await writeFiles(tempDir, { "AGENTS.md": TEMPLATE });
+
+            const result = await syncCore(await loadInstalled(rootDir), [agentsRule()], selectAgents);
+            expect(result.foreign.map((status) => status.targetPath)).toEqual(["AGENTS.md"]);
+            expect(await fs.readFile(path.join(rootDir, "AGENTS.md"), "utf8")).toBe(existing);
+        });
+
+        it("keeps whole-file overwrite semantics for --force", async () => {
+            await writeFiles(rootDir, { "AGENTS.md": "# My instructions\n" });
+            await writeFiles(tempDir, { "AGENTS.md": TEMPLATE });
+
+            await syncCore(await loadInstalled(rootDir), [agentsRule()], { ...selectAgents, force: true });
+            const content = await fs.readFile(path.join(rootDir, "AGENTS.md"), "utf8");
+            expect(content).not.toContain("# My instructions");
+            expect(content).toContain("<principles>");
+        });
+    });
 });

@@ -20,7 +20,8 @@ const SOURCE_HELP =
 
 const PLATFORM_HELP = `Coding agent platform: ${ALL_PLATFORMS.join(", ")}`;
 
-const TARGET_HELP = "project (./.claude/) or user ($CLAUDE_CONFIG_DIR or ~/.claude/); required without a terminal";
+const TARGET_HELP =
+    "project (platform directory under cwd) or user (platform config directory); required without a terminal";
 
 function collect(value: string, previous: string[] = []): string[] {
     return [...previous, value];
