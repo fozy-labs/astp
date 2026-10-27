@@ -4,7 +4,8 @@ import path from "node:path";
 
 import { downloadTemplate } from "giget";
 
-import type { Bundle, Manifest } from "@/types/index.js";
+import type { Bundle, Manifest, Platform } from "@/types/index.js";
+import { resolveItemTarget } from "@/types/index.js";
 
 import { validateManifest } from "./manifest.js";
 import { assertSafeRelativePath } from "./path-safety.js";
@@ -45,16 +46,18 @@ export async function fetchManifest(source: ManifestSource): Promise<Manifest> {
     return validateManifest(data);
 }
 
-/** Copies or fetches bundle `<root>/<bundle>/` into a fresh temp dir laid out by item `target`. */
-export async function downloadBundle(source: ManifestSource, bundle: Bundle): Promise<string> {
+/** Copies or fetches bundle `<root>/<bundle>/` into a fresh temp dir laid out by effective item targets. */
+export async function downloadBundle(source: ManifestSource, bundle: Bundle, platform?: Platform): Promise<string> {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), `astp-${bundle.name}-`));
     try {
         if (source.kind === "url") {
             const root = new URL(".", source.manifestUrl);
             for (const item of bundle.items) {
+                const target = platform ? resolveItemTarget(item, platform) : item.target;
                 assertSafeRelativePath(item.target, "item target");
+                assertSafeRelativePath(target, "item target");
                 const url = new URL([bundle.name, ...item.target.split("/")].map(encodeURIComponent).join("/"), root);
-                const filePath = path.join(tempDir, item.target);
+                const filePath = path.join(tempDir, target);
                 const relative = path.relative(tempDir, filePath);
                 if (
                     !url.href.startsWith(root.href) ||
@@ -62,7 +65,7 @@ export async function downloadBundle(source: ManifestSource, bundle: Bundle): Pr
                     relative.startsWith(`..${path.sep}`) ||
                     path.isAbsolute(relative)
                 ) {
-                    throw new Error(`item '${item.target}' resolves outside the manifest directory`);
+                    throw new Error(`item '${target}' resolves outside the manifest directory`);
                 }
                 const response = await request(url);
                 // A missing file is reported by assertBundleSources.
@@ -84,6 +87,7 @@ export async function downloadBundle(source: ManifestSource, bundle: Bundle): Pr
                 throw new Error("bundle directory resolves outside the downloaded source");
             }
             await fs.cp(bundleDir, tempDir, { recursive: true, filter: isPlainEntry });
+            await copyTargetOverrides(tempDir, bundle, platform);
         } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
             throw new Error(`bundle directory not found: ${source.kind === "local" ? bundleDir : bundle.name}`);
@@ -93,6 +97,25 @@ export async function downloadBundle(source: ManifestSource, bundle: Bundle): Pr
         await fs.rm(tempDir, { recursive: true, force: true });
         const message = error instanceof Error ? error.message : String(error);
         throw new Error(`Failed to download bundle '${bundle.name}' from '${source.spec}': ${message}`);
+    }
+}
+
+async function copyTargetOverrides(tempDir: string, bundle: Bundle, platform?: Platform): Promise<void> {
+    if (!platform) return;
+    for (const item of bundle.items) {
+        const target = resolveItemTarget(item, platform);
+        if (target === item.target) continue;
+        assertSafeRelativePath(item.target, "item target");
+        assertSafeRelativePath(target, "item target");
+        const sourceFile = path.join(tempDir, item.target);
+        const targetFile = path.join(tempDir, target);
+        try {
+            if (!(await fs.lstat(sourceFile)).isFile()) continue;
+            await fs.mkdir(path.dirname(targetFile), { recursive: true });
+            await fs.copyFile(sourceFile, targetFile);
+        } catch (error) {
+            if (!["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error;
+        }
     }
 }
 

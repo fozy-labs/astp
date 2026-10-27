@@ -142,7 +142,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             try {
                 const units = groupTemplateItems(bundle.items, platform);
                 validateUnitTargets(target.rootDir, units);
-                const tempDir = await downloadBundle(source.source, bundle);
+                const tempDir = await downloadBundle(source.source, bundle, platform);
                 tempDirs.push(tempDir);
                 await assertBundleSources(tempDir, bundle.name, units);
                 await assertBundleBlocks(tempDir, bundle.name, units);

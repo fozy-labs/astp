@@ -137,7 +137,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             const units = groupTemplateItems(bundle.items, platform);
             validateUnitTargets(target.rootDir, units);
             s.start(`Downloading ${bundleName}...`);
-            const tempDir = await downloadBundle(source, bundle);
+            const tempDir = await downloadBundle(source, bundle, platform);
             tempDirs.push(tempDir);
             s.stop(`Downloaded ${bundleName}.`);
             await assertBundleSources(tempDir, bundleName, units);

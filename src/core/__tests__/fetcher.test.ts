@@ -56,6 +56,21 @@ describe("fetcher", () => {
         await expect(fs.stat(path.join(work, "tests/docs/rules/a.md"))).resolves.toBeTruthy();
     });
 
+    it("copies a local item to its platform target without changing the source", async () => {
+        await writeRoot(work);
+        const source = await resolveSource("./manifest.json", work);
+        const overridden: Bundle = {
+            ...bundle,
+            items: [{ ...bundle.items[0]!, targets: { "kimi-code": "AGENTS.md" } }],
+        };
+        const dir = await downloadBundle(source, overridden, "kimi-code");
+        tempDirs.push(dir);
+
+        expect(await fs.readFile(path.join(dir, "AGENTS.md"), "utf8")).toBe("# a\n");
+        expect(await fs.readFile(path.join(work, "docs/rules/a.md"), "utf8")).toBe("# a\n");
+        await expect(fs.stat(path.join(work, "docs/AGENTS.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    });
+
     describe("links in a local source", () => {
         let root: string;
         let outside: string;
@@ -186,6 +201,21 @@ describe("fetcher", () => {
         const dir = await downloadBundle(source, bundle);
         tempDirs.push(dir);
         expect(await fs.readFile(path.join(dir, "rules/a.md"), "utf8")).toBe("file /m/docs/rules/a.md");
+    });
+
+    it("fetches the canonical URL source and writes its platform target", async () => {
+        const fetchMock = vi.fn(async (url: URL) => new Response(`file ${url.pathname}`));
+        vi.stubGlobal("fetch", fetchMock);
+        const source = await resolveSource("https://host/m/manifest.json", work);
+        const overridden: Bundle = {
+            ...bundle,
+            items: [{ ...bundle.items[0]!, targets: { "kimi-code": "AGENTS.md" } }],
+        };
+        const dir = await downloadBundle(source, overridden, "kimi-code");
+        tempDirs.push(dir);
+
+        expect(await fs.readFile(path.join(dir, "AGENTS.md"), "utf8")).toBe("file /m/docs/rules/a.md");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it("fetches a URL item whose name has URL syntax characters", async () => {

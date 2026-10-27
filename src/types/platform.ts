@@ -19,8 +19,12 @@ export function itemSupportsPlatform(item: TemplateItem, platform: Platform): bo
     return supportsPlatform(item.platforms, platform);
 }
 
+export function resolveItemTarget(item: TemplateItem, platform: Platform): string {
+    return item.targets?.[platform] ?? item.target;
+}
+
 export function filterBundlesByPlatform(manifest: Manifest, platform: Platform): Bundle[] {
     return Object.values(manifest.bundles).filter((bundle) => bundleSupportsPlatform(bundle, platform));
 }
 
-export const ALL_PLATFORMS = ["claude-code"] as const satisfies readonly Platform[];
+export const ALL_PLATFORMS = ["claude-code", "kimi-code"] as const satisfies readonly Platform[];

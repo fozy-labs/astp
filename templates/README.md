@@ -27,13 +27,13 @@ templates/
 │       ├── design-derivation/
 │       ├── software-architecture/
 │       └── testing/
-├── ponytail/              ← bundle: ponytail (claude-code)
+├── ponytail/              ← bundle: ponytail (claude-code, kimi-code)
 │   └── skills/
 │       ├── ponytail/
 │       ├── ponytail-review/
 │       ├── ponytail-audit/
 │       └── ponytail-debt/
-└── agreement/             ← bundle: agreement (claude-code)
+└── agreement/             ← bundle: agreement (claude-code; rule also kimi-code)
     ├── rules/
     │   └── working-agreement.md
     └── skills/
@@ -43,7 +43,7 @@ templates/
         └── tracker/
 ```
 
-Each bundle directory's internal structure mirrors the install target structure. For example, `fozy-labs/skills/fozy-labs-di/SKILL.md` installs to `<install-root>/skills/fozy-labs-di/SKILL.md`.
+Each bundle directory's internal structure mirrors the default install target structure. For example, `fozy-labs/skills/fozy-labs-di/SKILL.md` installs to `<install-root>/skills/fozy-labs-di/SKILL.md`. Agent and rule items can override the install path per platform with `targets`.
 
 ## Manifest Schema
 
@@ -66,7 +66,7 @@ The `manifest.json` file defines all available bundles and their contents. It is
 | `description` | `string` | Human-readable description for display in prompts. |
 | `use-when` | `string` *(optional)* | Non-empty guidance on when to install or use the bundle; shown in `astp list`, omitted from interactive prompts. |
 | `default` | `boolean` | Whether this bundle is pre-selected by default in the interactive wizard. |
-| `platforms` | `PlatformFilter[]` *(optional)* | Coding agents this bundle supports — `"claude-code"` is the only value today. Defaults to all platforms when omitted. |
+| `platforms` | `PlatformFilter[]` *(optional)* | Coding agents this bundle supports: `"claude-code"` or `"kimi-code"`. Defaults to all platforms when omitted. |
 | `items` | `TemplateItem[]` | Files included in this bundle. |
 
 ### Platform values
@@ -74,17 +74,19 @@ The `manifest.json` file defines all available bundles and their contents. It is
 | Value | Project root | User root |
 |-------|--------------|-----------|
 | `claude-code` | `./.claude/` | `$CLAUDE_CONFIG_DIR`, else `~/.claude/` |
+| `kimi-code` | `./.kimi-code/` | `$KIMI_CODE_HOME`, else `~/.kimi-code/` |
 
-The same `target` path lands under the platform's own root, so write bundle items as if they live directly under `skills/<name>/SKILL.md`, `agents/...`, etc.
+The same `target` path lands under the platform's own root, so write bundle items as if they live directly under `skills/<name>/SKILL.md`, `agents/...`, etc. Agent and rule items can override that path for a platform with `targets`.
 
-A platform filter is `"claude-code"` or its negation `"!claude-code"`. Positive entries form an allowlist; negated entries exclude a platform. With negations only, every platform except the excluded ones is supported. The same rules apply to bundles, units and blocks.
+A platform filter is a platform value or its negation, such as `"claude-code"` or `"!claude-code"`. Positive entries form an allowlist; negated entries exclude a platform. With negations only, every platform except the excluded ones is supported. The same rules apply to bundles, units and blocks.
 
 ### TemplateItem fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `source` | `string` | Path relative to `templates/` (e.g., `fozy-labs/skills/fozy-labs-di/SKILL.md`). |
-| `target` | `string` | Path relative to install root (e.g., `skills/fozy-labs-di/SKILL.md`). |
+| `target` | `string` | Default path relative to install root (e.g., `skills/fozy-labs-di/SKILL.md`). |
+| `targets` | `Partial<Record<Platform, string>>` *(optional)* | Per-platform overrides of `target` for agent/rule file items. Requires manifest schema 3; for example, `{ "kimi-code": "AGENTS.md" }`. |
 | `category` | `string` | Category: `agent`, `skill`, or `rule`. |
 | `optional` | `boolean` *(optional)* | Unchecked by default on `install` and `update`. For a skill, set on its `SKILL.md` item only. |
 | `labels` | `string[]` *(optional)* | Distinct `[a-z][a-z0-9_-]*` tags (e.g. `["experimental"]`, `["deprecated"]`) shown in prompts and `astp list`. For a skill, set on its `SKILL.md` item only. |
@@ -93,8 +95,8 @@ A platform filter is `"claude-code"` or its negation `"!claude-code"`. Positive 
 ### Path conventions
 
 - `source` paths follow the pattern `<bundleName>/<category>/<filename>`.
-- `target` paths equal `source` with the bundle name prefix stripped.
-- Bundle names and every `/`-separated `target` segment must be valid file names on Windows, macOS and Linux: at most 255 UTF-8 bytes, no `\ : * ? " < > |`, control or bidi characters, no trailing dot or space, no reserved device names (`con`, `nul`, `com1`…) or short names like `NAME~1`. No two bundle names, and no two targets or folders in a bundle, may differ only in letter case or Unicode normalization. A `target` may not end in an OS clutter file name (`.DS_Store`, `Thumbs.db`, `desktop.ini`); astp ignores such files inside skills.
+- The default `target` equals `source` with the bundle name prefix stripped. `targets` changes only the install path, not the canonical source.
+- Bundle names and every `/`-separated target segment must be valid file names on Windows, macOS and Linux: at most 255 UTF-8 bytes, no `\ : * ? " < > |`, control or bidi characters, no trailing dot or space, no reserved device names (`con`, `nul`, `com1`…) or short names like `NAME~1`. No two bundle names, and no two effective targets or folders in a bundle for one platform, may differ only in letter case or Unicode normalization. A target may not end in an OS clutter file name (`.DS_Store`, `Thumbs.db`, `desktop.ini`); astp ignores such files inside skills.
 
 ## How to Add a New Bundle
 
@@ -156,6 +158,8 @@ Lock state: a unit with blocks stores `blocks` (`<file>#<name>` → block hash) 
 | `install` | selected blocks render; deselected go to `declinedBlocks` (kept if locally changed, unless `--force`) |
 | `update` | unchanged blocks get the new template; blocks changed on both sides get a `<FILL_INSTRUCTION>` wrapper with the new version; blocks removed upstream are removed unless locally changed; `--force` restores locally changed blocks, except filled `<FILL_INSTRUCTION>` blocks |
 | `delete` | keeps a file with locally changed blocks or consumer text outside blocks, unless `--force` |
+
+An untracked regular file with template-matching frontmatter and parseable regions is adopted during install: consumer text stays outside managed blocks, identical regions are tracked, and conflicting regions are declined. Malformed regions, other file types and frontmatter changes remain foreign; `--force` replaces the whole file. Plain files and skill directories keep the exact-match adoption rule.
 
 ## Install State
 

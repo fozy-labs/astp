@@ -272,6 +272,7 @@ describe("executeUpdate", () => {
         expect(mockDownloadBundle).toHaveBeenCalledWith(
             expect.objectContaining({ spec: "gh:fozy-labs/astp" }),
             expect.objectContaining({ name: "pipeline" }),
+            "claude-code",
         );
         expect(mockSyncBundle).toHaveBeenCalledWith(expect.objectContaining({ bundle: emptyBundle }));
     });

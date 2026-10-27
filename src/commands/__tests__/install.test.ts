@@ -165,6 +165,7 @@ describe("executeInstall", () => {
         expect(mockDownloadBundle).toHaveBeenCalledWith(
             expect.objectContaining({ spec: "gh:fozy-labs/astp" }),
             expect.objectContaining({ name: "core" }),
+            "claude-code",
         );
         expect(mockSyncBundle).toHaveBeenCalledTimes(1);
         expect(mockSyncBundle).toHaveBeenCalledWith(

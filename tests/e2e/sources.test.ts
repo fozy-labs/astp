@@ -308,9 +308,9 @@ describe("E2E: manifest sources", () => {
         expect(vi.mocked(warnNewerManifest)).toHaveBeenCalledTimes(1);
         write.mockRestore();
 
-        await fs.writeFile(manifestPath, JSON.stringify({ ...raw, schemaVersion: "3.0" }));
+        await fs.writeFile(manifestPath, JSON.stringify({ ...raw, schemaVersion: "4.0" }));
         await expect(executeInstall({ ...opts, bundle: "core", source: "./a" })).rejects.toThrow(
-            "Unsupported manifest schema version 3.0 (supported: 1.0, 2.0). Update astp CLI: npm install -g @fozy-labs/astp",
+            "Unsupported manifest schema version 4.0 (supported: 1.0, 2.0, 3.0). Update astp CLI: npm install -g @fozy-labs/astp",
         );
     });
 });

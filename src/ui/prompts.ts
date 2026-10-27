@@ -61,17 +61,19 @@ export async function selectAction(): Promise<"install" | "update" | "check" | "
 
 const PLATFORM_LABELS: Record<Platform, string> = {
     "claude-code": "Claude Code (.claude/, ~/.claude/)",
+    "kimi-code": "Kimi Code (.kimi-code/, ~/.kimi-code/)",
 };
 
 export async function selectPlatform(): Promise<Platform> {
+    const platforms: readonly Platform[] = ALL_PLATFORMS;
     // With a single supported platform there is nothing to choose — skip the prompt.
-    const [only] = ALL_PLATFORMS;
-    if (ALL_PLATFORMS.length === 1 && only) return only;
-    requireTerminal(`--platform is required without a terminal (${ALL_PLATFORMS.join("|")})`);
+    const [only] = platforms;
+    if (platforms.length === 1 && only) return only;
+    requireTerminal(`--platform is required without a terminal (${platforms.join("|")})`);
 
     const platform = await p.select({
         message: "Which coding agent?",
-        options: ALL_PLATFORMS.map((value) => ({ value, label: PLATFORM_LABELS[value] })),
+        options: platforms.map((value) => ({ value, label: PLATFORM_LABELS[value] })),
     });
 
     if (p.isCancel(platform)) throw new CancelledError();

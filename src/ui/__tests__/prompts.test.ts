@@ -418,10 +418,10 @@ describe("BundleTreePrompt blocks", () => {
 });
 
 describe("selectPlatform", () => {
-    it("skips the prompt when only one platform is supported", async () => {
-        expect(ALL_PLATFORMS).toHaveLength(1);
+    it("requires an explicit platform without a terminal when several are supported", async () => {
+        expect(ALL_PLATFORMS).toEqual(["claude-code", "kimi-code"]);
 
-        await expect(selectPlatform()).resolves.toBe(ALL_PLATFORMS[0]);
+        await expect(selectPlatform()).rejects.toThrow("--platform is required without a terminal");
 
         expect(mockSelect).not.toHaveBeenCalled();
     });

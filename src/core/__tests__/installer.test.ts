@@ -70,6 +70,20 @@ describe("resolveTarget", () => {
         expect(resolveTarget("claude-code", "project").rootDir).toBe(path.join(process.cwd(), ".claude"));
     });
 
+    it("resolves kimi-code project and user roots, including KIMI_CODE_HOME", () => {
+        vi.stubEnv("KIMI_CODE_HOME", undefined);
+        expect(resolveTarget("kimi-code", "project")).toEqual({
+            platform: "kimi-code",
+            type: "project",
+            rootDir: path.join(process.cwd(), ".kimi-code"),
+        });
+        expect(resolveTarget("kimi-code", "user").rootDir).toBe(path.join(os.homedir(), ".kimi-code"));
+
+        const configDir = path.join(os.tmpdir(), "kimi-alt");
+        vi.stubEnv("KIMI_CODE_HOME", configDir);
+        expect(resolveTarget("kimi-code", "user").rootDir).toBe(configDir);
+    });
+
     afterEach(() => {
         vi.unstubAllEnvs();
     });
