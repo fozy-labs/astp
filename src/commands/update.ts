@@ -113,9 +113,15 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                     }
                 }
                 if (modifiedLockUnits.length > 0)
-                    warnModified(modifiedLockUnits, `astp update --force --target ${target.type}`);
+                    warnModified(
+                        modifiedLockUnits,
+                        `astp update --force --platform ${target.platform} --target ${target.type}`,
+                    );
                 if (modifiedLegacyUnits.length > 0)
-                    warnLegacyModified(modifiedLegacyUnits, `astp update --force --target ${target.type}`);
+                    warnLegacyModified(
+                        modifiedLegacyUnits,
+                        `astp update --force --platform ${target.platform} --target ${target.type}`,
+                    );
             }
             return;
         }
@@ -138,7 +144,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             const units = groupTemplateItems(bundle.items, platform);
             validateUnitTargets(target.rootDir, units);
             s.start(`Downloading ${bundleName}...`);
-            const tempDir = await downloadBundle(source, bundle);
+            const tempDir = await downloadBundle(source, bundle, platform);
             tempDirs.push(tempDir);
             s.stop(`Downloaded ${bundleName}.`);
             await assertBundleSources(tempDir, bundleName, units);
@@ -208,15 +214,17 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             totals.kept.push(...result.kept, ...result.released);
             const legacy = result.skipped.filter((status) => status.state === "legacy");
             const modified = result.skipped.filter((status) => status.state !== "legacy");
-            if (modified.length > 0) warnModified(modified, `astp update --force --target ${target.type}`);
-            if (legacy.length > 0) warnLegacyModified(legacy, `astp update --force --target ${target.type}`);
+            if (modified.length > 0)
+                warnModified(modified, `astp update --force --platform ${target.platform} --target ${target.type}`);
+            if (legacy.length > 0)
+                warnLegacyModified(legacy, `astp update --force --platform ${target.platform} --target ${target.type}`);
             if (result.kept.length > 0) warnKeptRemoved(result.kept);
             if (result.keptBlocks.length > 0) warnKeptBlocks(result.keptBlocks);
             if (result.released.length > 0 || result.releasedBlocks.length > 0) {
                 warnReleased(result.released, result.releasedBlocks);
             }
             if (result.foreign.length > 0 || result.foreignBlocks.length > 0) {
-                warnForeign(plan.bundleName, result.foreign, result.foreignBlocks, target.type);
+                warnForeign(plan.bundleName, result.foreign, result.foreignBlocks, target);
             }
             if (result.conflictBlocks.length > 0) warnBlockConflicts(result.conflictBlocks);
             s.stop(`Updated ${plan.bundleName}.`);

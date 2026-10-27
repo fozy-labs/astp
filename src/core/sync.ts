@@ -142,6 +142,15 @@ export async function syncBundle(args: {
             const blockFiles = await readUnitBlockFiles(args.tempDir, unit, args.target.platform);
             const templateHasBlocks = blockFiles.size > 0;
             const lockHasBlocks = Boolean(lockUnit?.blocks || lockUnit?.declinedBlocks);
+            let adopted: InstalledBlocks | "foreign" | null | undefined;
+            const blockFile = unit.kind === "file" ? blockFiles.get(unit.item.target) : undefined;
+            if (untracked && !lockUnit && blockFile?.blocks.length && !unitForced(args.force, unit.relativePath)) {
+                adopted = await readAdoptableBlockFile(rootDir, blockFile);
+            }
+            if (adopted === "foreign") {
+                declineForeign(unit);
+                continue;
+            }
 
             if (current?.state === "modified" && !unitForced(args.force, unit.relativePath)) {
                 result.skipped.push(status(current));
@@ -206,7 +215,7 @@ export async function syncBundle(args: {
                     continue;
                 }
             }
-            const merged = await mergeUnitBlockFiles(args, rootDir, unit, blockFiles, lockUnit, result);
+            const merged = await mergeUnitBlockFiles(args, rootDir, unit, blockFiles, lockUnit, result, adopted);
             const blockTargets = new Set(blockFiles.keys());
             const hash = await computeTemplateUnitHash(args.tempDir, unit, {
                 blockFiles:
@@ -215,7 +224,7 @@ export async function syncBundle(args: {
                         : blockTargets,
             });
 
-            if (untracked) {
+            if (untracked && !adopted) {
                 const diskState = await compareUntrackedBlocks(rootDir, args.tempDir, unit, merged.contents);
                 if (diskState === "equal") {
                     lockBundle.units[unit.relativePath] = {
@@ -290,6 +299,7 @@ async function mergeUnitBlockFiles(
     blockFiles: Map<string, UnitBlockFile>,
     lockUnit: LockUnit | undefined,
     result: SyncResult,
+    adopted: InstalledBlocks | null | undefined,
 ): Promise<MergedUnit> {
     const contents = new Map<string, string>();
     const blocks = nullPrototype<string>();
@@ -311,9 +321,9 @@ async function mergeUnitBlockFiles(
         const declined = selection?.declined ?? declinedNames;
 
         const lockHasBlocks = Boolean(lockUnit?.blocks || lockUnit?.declinedBlocks);
-        let installed: InstalledBlocks | null = null;
+        let installed: InstalledBlocks | null = adopted ?? null;
         let occupied: Set<string> | undefined;
-        if (lockHasBlocks) {
+        if (adopted === undefined && lockHasBlocks) {
             let installedContent: string | null = null;
             try {
                 installedContent = await fs.readFile(path.join(rootDir, target), "utf8");
@@ -440,7 +450,28 @@ async function compareUntracked(
     return diskHash === (await computeTemplateUnitHash(tempDir, unit)) ? "equal" : "modified";
 }
 
-/** An untracked path on disk is adoptable when it equals the fresh render for the current selection. */
+/** Only intact markers and template-matching frontmatter make an untracked block file safe to merge. */
+async function readAdoptableBlockFile(
+    rootDir: string,
+    file: UnitBlockFile,
+): Promise<InstalledBlocks | "foreign" | null> {
+    const filePath = path.join(rootDir, file.target);
+    let content: string;
+    try {
+        if (!(await fs.lstat(filePath)).isFile()) return "foreign";
+        content = await fs.readFile(filePath, "utf8");
+    } catch (error) {
+        if (["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) return null;
+        throw error;
+    }
+    const installed = parseInstalledBlocks(
+        content,
+        file.blocks.map((block) => block.name),
+    );
+    return installed && installed.frontmatter === file.frontmatter ? installed : "foreign";
+}
+
+/** Checks an untracked path against the fresh render for the current selection. */
 async function compareUntrackedBlocks(
     rootDir: string,
     tempDir: string,

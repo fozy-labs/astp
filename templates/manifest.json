@@ -1,5 +1,5 @@
 {
-    "schemaVersion": "2.0",
+    "schemaVersion": "3.0",
     "repository": "fozy-labs/astp",
     "bundles": {
         "astp": {
@@ -444,12 +444,13 @@
         },
         "ponytail": {
             "name": "ponytail",
-            "version": "1.0.1",
+            "version": "1.1.0",
             "description": "Ponytail skills — smallest complete changes, change reviews, repository audits and a shortcut debt ledger",
             "use-when": "The user wants minimal-diff coding, pre-commit change reviews, whole-repo quality audits or tracking deliberate shortcuts",
             "default": false,
             "platforms": [
-                "claude-code"
+                "claude-code",
+                "kimi-code"
             ],
             "items": [
                 {
@@ -496,38 +497,54 @@
         },
         "agreement": {
             "name": "agreement",
-            "version": "1.4.4",
+            "version": "1.5.0",
             "description": "Working agreement rule, communication and tracker skills and /retro and /git commands — how the agent decides, asks, scopes changes, writes for the user, works with the issue tracker and git, and reviews finished work",
             "use-when": "Any project or user setup that wants structured agent collaboration, git and issue-tracker workflows, and session retrospectives",
             "default": false,
             "platforms": [
-                "claude-code"
+                "claude-code",
+                "kimi-code"
             ],
             "items": [
                 {
                     "source": "agreement/rules/working-agreement.md",
                     "target": "rules/working-agreement.md",
+                    "targets": {
+                        "kimi-code": "AGENTS.md"
+                    },
                     "category": "rule"
                 },
                 {
                     "source": "agreement/skills/communication/SKILL.md",
                     "target": "skills/communication/SKILL.md",
-                    "category": "skill"
+                    "category": "skill",
+                    "platforms": [
+                        "claude-code"
+                    ]
                 },
                 {
                     "source": "agreement/skills/tracker/SKILL.md",
                     "target": "skills/tracker/SKILL.md",
-                    "category": "skill"
+                    "category": "skill",
+                    "platforms": [
+                        "claude-code"
+                    ]
                 },
                 {
                     "source": "agreement/skills/retro/SKILL.md",
                     "target": "skills/retro/SKILL.md",
-                    "category": "skill"
+                    "category": "skill",
+                    "platforms": [
+                        "claude-code"
+                    ]
                 },
                 {
                     "source": "agreement/skills/git/SKILL.md",
                     "target": "skills/git/SKILL.md",
-                    "category": "skill"
+                    "category": "skill",
+                    "platforms": [
+                        "claude-code"
+                    ]
                 },
                 {
                     "source": "agreement/skills/git/references/guard.md",

@@ -165,10 +165,11 @@ describe("parseTemplateBlocks", () => {
     });
 
     it("parses positive and negated platforms on blocks", () => {
-        const content = '<astp-block name="a" platforms="claude-code, !claude-code">\nx\n</astp-block>\n';
+        const content =
+            '<astp-block name="a" platforms="claude-code, !claude-code, kimi-code, !kimi-code">\nx\n</astp-block>\n';
         const { blocks, errors } = parseTemplateBlocks(content);
         expect(errors).toEqual([]);
-        expect(blocks[0]!.platforms).toEqual(["claude-code", "!claude-code"]);
+        expect(blocks[0]!.platforms).toEqual(["claude-code", "!claude-code", "kimi-code", "!kimi-code"]);
     });
 
     it.each([

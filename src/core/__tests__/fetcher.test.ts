@@ -56,6 +56,55 @@ describe("fetcher", () => {
         await expect(fs.stat(path.join(work, "tests/docs/rules/a.md"))).resolves.toBeTruthy();
     });
 
+    it("copies a local item to its platform target without changing the source", async () => {
+        await writeRoot(work);
+        const source = await resolveSource("./manifest.json", work);
+        const overridden: Bundle = {
+            ...bundle,
+            items: [{ ...bundle.items[0]!, targets: { "kimi-code": "AGENTS.md" } }],
+        };
+        const dir = await downloadBundle(source, overridden, "kimi-code");
+        tempDirs.push(dir);
+
+        expect(await fs.readFile(path.join(dir, "AGENTS.md"), "utf8")).toBe("# a\n");
+        expect(await fs.readFile(path.join(work, "docs/rules/a.md"), "utf8")).toBe("# a\n");
+        await expect(fs.stat(path.join(work, "docs/AGENTS.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    });
+
+    it("preserves canonical content through chained overrides for local and archive sources", async () => {
+        const chained: Bundle = {
+            ...bundle,
+            items: [
+                { ...bundle.items[0]!, targets: { "kimi-code": "rules/b.md" } },
+                {
+                    source: "docs/rules/b.md",
+                    target: "rules/b.md",
+                    category: "rule",
+                    targets: { "kimi-code": "rules/c.md" },
+                },
+            ],
+        };
+        await writeRoot(work);
+        await fs.writeFile(path.join(work, "docs/rules/b.md"), "# b\n");
+        const local = await resolveSource("./manifest.json", work);
+        const localDir = await downloadBundle(local, chained, "kimi-code");
+        tempDirs.push(localDir);
+        expect(await fs.readFile(path.join(localDir, "rules/b.md"), "utf8")).toBe("# a\n");
+        expect(await fs.readFile(path.join(localDir, "rules/c.md"), "utf8")).toBe("# b\n");
+
+        mockedDownloadTemplate.mockImplementation(async (_input, options) => {
+            await writeRoot(options!.dir!);
+            await fs.writeFile(path.join(options!.dir!, "docs/rules/b.md"), "# b\n");
+            return { dir: options!.dir! } as never;
+        });
+        const archive = await resolveSource("gh:o/r", work);
+        const archiveDir = await downloadBundle(archive, chained, "kimi-code");
+        tempDirs.push(archiveDir);
+        await closeSource(archive);
+        expect(await fs.readFile(path.join(archiveDir, "rules/b.md"), "utf8")).toBe("# a\n");
+        expect(await fs.readFile(path.join(archiveDir, "rules/c.md"), "utf8")).toBe("# b\n");
+    });
+
     describe("links in a local source", () => {
         let root: string;
         let outside: string;
@@ -186,6 +235,48 @@ describe("fetcher", () => {
         const dir = await downloadBundle(source, bundle);
         tempDirs.push(dir);
         expect(await fs.readFile(path.join(dir, "rules/a.md"), "utf8")).toBe("file /m/docs/rules/a.md");
+    });
+
+    it("fetches the canonical URL source and writes its platform target", async () => {
+        const fetchMock = vi.fn(async (url: URL) => new Response(`file ${url.pathname}`));
+        vi.stubGlobal("fetch", fetchMock);
+        const source = await resolveSource("https://host/m/manifest.json", work);
+        const overridden: Bundle = {
+            ...bundle,
+            items: [{ ...bundle.items[0]!, targets: { "kimi-code": "AGENTS.md" } }],
+        };
+        const dir = await downloadBundle(source, overridden, "kimi-code");
+        tempDirs.push(dir);
+
+        expect(await fs.readFile(path.join(dir, "AGENTS.md"), "utf8")).toBe("file /m/docs/rules/a.md");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not fetch or write an excluded override over an active URL target", async () => {
+        const fetchMock = vi.fn(async (url: URL) => new Response(`file ${url.pathname}`));
+        vi.stubGlobal("fetch", fetchMock);
+        const source = await resolveSource("https://host/m/manifest.json", work);
+        const filtered: Bundle = {
+            ...bundle,
+            items: [
+                {
+                    source: "docs/AGENTS.md",
+                    target: "AGENTS.md",
+                    category: "rule",
+                    platforms: ["kimi-code"],
+                },
+                {
+                    ...bundle.items[0]!,
+                    platforms: ["claude-code"],
+                    targets: { "kimi-code": "AGENTS.md" },
+                },
+            ],
+        };
+        const dir = await downloadBundle(source, filtered, "kimi-code");
+        tempDirs.push(dir);
+
+        expect(await fs.readFile(path.join(dir, "AGENTS.md"), "utf8")).toBe("file /m/docs/AGENTS.md");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it("fetches a URL item whose name has URL syntax characters", async () => {

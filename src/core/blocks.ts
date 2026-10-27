@@ -15,7 +15,7 @@ const FM_REGEX = /^(---[ \t]*\r?\n)([\s\S]*?)(---[ \t]*(?:\r?\n|$))/;
 
 const NAME_REGEX = /^[a-z][a-z0-9_]*$/;
 const LABEL_REGEX = /^[a-z][a-z0-9_-]*$/;
-const VALID_PLATFORMS = new Set(["claude-code"]);
+const VALID_PLATFORMS = new Set(["claude-code", "kimi-code"]);
 const BLOCK_OPEN = /^<astp-block(?=[\s>])((?:[^>"]|"[^"]*")*)>\s*$/;
 const BLOCK_OPEN_PREFIX = /^<astp-block(?=[\s>])/;
 const BLOCK_CLOSE = /^<\/astp-block>\s*$/;

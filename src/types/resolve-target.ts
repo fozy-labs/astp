@@ -16,6 +16,7 @@ interface PlatformRoots {
  */
 const PLATFORM_ROOTS: Record<Platform, PlatformRoots> = {
     "claude-code": { project: ".claude", user: ".claude", userEnv: "CLAUDE_CONFIG_DIR" },
+    "kimi-code": { project: ".kimi-code", user: ".kimi-code", userEnv: "KIMI_CODE_HOME" },
 };
 
 export function resolveTarget(platform: Platform, type: InstallTargetType): InstallTarget {
