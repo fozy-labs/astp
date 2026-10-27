@@ -4,6 +4,7 @@ export {
     frontmatterHash,
     hasBlocks,
     hasFillInstruction,
+    installedBlockHash,
     mergeBlockFile,
     parseInstalledBlocks,
     parseTemplateBlocks,

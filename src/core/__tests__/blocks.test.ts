@@ -85,6 +85,19 @@ function block(content: string, name = "a"): TemplateBlock {
     return { name, description: null, optional: false, required: false, content };
 }
 
+const NESTED = `<astp-block name="parent">
+Before.
+<astp-block name="child" optional>
+Child.
+<astp-block name="grandchild" optional>
+Grandchild.
+</astp-block>
+After child.
+</astp-block>
+After.
+</astp-block>
+`;
+
 describe("parseTemplateBlocks", () => {
     it("parses frontmatter and blocks with attributes", () => {
         const { frontmatter, blocks, errors } = parseTemplateBlocks(TEMPLATE);
@@ -217,7 +230,6 @@ describe("parseTemplateBlocks", () => {
             '<astp-block name="a">\nx\n</astp-block>\n\n<astp-block name="a">\ny\n</astp-block>\n',
             /duplicate block name 'a'/i,
         ],
-        ["nested block", '<astp-block name="a">\n<astp-block name="b">\nx\n</astp-block>\n</astp-block>\n', /nested/i],
         ["unclosed block", '<astp-block name="a">\nx\n', /unclosed/i],
         ["stray closing tag", "<//ignored>\n</astp-block>\n", /stray/i],
         [
@@ -290,6 +302,18 @@ describe("parseTemplateBlocks", () => {
         ]);
     });
 
+    it("parses nested blocks in preorder with their parents", () => {
+        const { blocks, errors } = parseTemplateBlocks(NESTED);
+        expect(errors).toEqual([]);
+        expect(blocks.map((block) => [block.name, block.parent])).toEqual([
+            ["parent", undefined],
+            ["child", "parent"],
+            ["grandchild", "child"],
+        ]);
+        expect(blocks[0]!.content).toContain('<astp-block name="child"');
+        expect(blocks[1]!.content).toContain("After child.");
+    });
+
     it("normalizes CRLF before parsing", () => {
         const { frontmatter, blocks, errors } = parseTemplateBlocks(TEMPLATE.replace(/\n/g, "\r\n"));
         expect(errors).toEqual([]);
@@ -343,10 +367,18 @@ describe("parseInstalledBlocks", () => {
         expect(parsed.outsideText).not.toContain("Project Map");
     });
 
+    it("parses recorded blocks nested inside other recorded blocks", () => {
+        const parsed = parseInstalledBlocks("<a>\nA\n<b>\nB\n<c>\nC\n</c>\n</b>\n</a>\n", ["a", "b", "c"]);
+        expect(parsed).not.toBeNull();
+        expect(parsed!.blocks.get("a")!.parent).toBeUndefined();
+        expect(parsed!.blocks.get("b")!.parent).toBe("a");
+        expect(parsed!.blocks.get("c")!.parent).toBe("b");
+        expect(parsed!.blocks.get("a")!.content).toContain("<b>");
+    });
+
     it.each([
         ["recorded name opens twice", `${installed}<project_map>\nx\n</project_map>\n`, ["project_map"]],
         ["unclosed recorded block", "<a>\nx\n", ["a"]],
-        ["recorded block inside another", "<a>\n<b>\nx\n</b>\n</a>\n", ["a", "b"]],
         ["recorded block inside SETUP_REQUIRED", "<SETUP_REQUIRED>\n<a>\nx\n</a>\n</SETUP_REQUIRED>\n", ["a"]],
         ["stray recorded closing", "</a>\n", ["a"]],
         ["stray SETUP_REQUIRED closing", "</SETUP_REQUIRED>\n", []],
@@ -839,5 +871,128 @@ C
         expect(result.conflicts).toEqual([]);
         expect(result.content).not.toContain("FILL_INSTRUCTION");
         expect(result.content).toContain("New ready-made text.");
+    });
+
+    it("renders nested selected blocks without template tags", () => {
+        const result = merge({ templateContent: NESTED, selected: ["parent", "child", "grandchild"] });
+        expect(result.content).toBe(`<parent>
+Before.
+<child>
+Child.
+<grandchild>
+Grandchild.
+</grandchild>
+After child.
+</child>
+After.
+</parent>
+`);
+        expect(Object.keys(result.blocks)).toEqual(["parent", "child", "grandchild"]);
+    });
+
+    it("renders a parent without declined descendants", () => {
+        const result = merge({ templateContent: NESTED, selected: ["parent"] });
+        expect(result.content).toContain("<parent>\nBefore.\nAfter.\n</parent>");
+        expect(result.content).not.toContain("<child>");
+        expect(result.declinedBlocks).toEqual(["child", "grandchild"]);
+    });
+
+    it("updates a nested child without changing its parent's hash", () => {
+        const installed = merge({ templateContent: NESTED, selected: ["parent", "child", "grandchild"] });
+        const updated = merge({
+            templateContent: NESTED.replace("Grandchild.", "New grandchild."),
+            installed: installed.content,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent", "child", "grandchild"],
+        });
+        expect(updated.content).toContain("New grandchild.");
+        expect(updated.blocks.parent).toBe(installed.blocks.parent);
+        expect(updated.blocks.child).toBe(installed.blocks.child);
+        expect(updated.blocks.grandchild).not.toBe(installed.blocks.grandchild);
+        expect(updated.conflicts).toEqual([]);
+    });
+
+    it("inserts and removes nested blocks inside their parent", () => {
+        const installed = merge({ templateContent: NESTED, selected: ["parent"] });
+        const inserted = merge({
+            templateContent: NESTED,
+            installed: installed.content,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent", "child"],
+        });
+        expect(inserted.content).toContain("Before.\n<child>\nChild.\nAfter child.\n</child>\nAfter.");
+        expect(inserted.content).not.toContain("<grandchild>");
+
+        const removed = merge({
+            templateContent: NESTED,
+            installed: inserted.content,
+            lockHashes: inserted.blocks,
+            declined: inserted.declinedBlocks,
+            selected: ["parent"],
+        });
+        expect(removed.content).toBe(installed.content);
+        expect(removed.declinedBlocks).toEqual(["child", "grandchild"]);
+    });
+
+    it("merges parent and child conflicts independently", () => {
+        const installed = merge({ templateContent: NESTED, selected: ["parent", "child"] });
+        const edited = installed.content.replace("Before.", "Our before.").replace("Child.", "Our child.");
+        const updated = merge({
+            templateContent: NESTED.replace("Before.", "New before.").replace("Child.", "New child."),
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent", "child"],
+        });
+        expect(updated.conflicts).toEqual(["child", "parent"]);
+        expect(updated.content.match(/Our before\./g)).toHaveLength(1);
+        expect(updated.content.match(/Our child\./g)).toHaveLength(1);
+        expect(updated.content).toContain("New before.");
+        expect(updated.content).toContain("New child.");
+        expect(updated.content.match(/<child>/g)).toHaveLength(1);
+        expect(parseInstalledBlocks(updated.content, ["parent", "child"])).not.toBeNull();
+    });
+
+    it("keeps an edited nested subtree when its parent is deselected unless forced", () => {
+        const installed = merge({ templateContent: NESTED, selected: ["parent", "child"] });
+        const edited = installed.content.replace("Child.", "Our child.");
+        const kept = merge({
+            templateContent: NESTED,
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: [],
+        });
+        expect(kept.content).toBe(edited);
+        expect(kept.kept).toEqual(["child", "parent"]);
+        expect(kept.blocks).toEqual(installed.blocks);
+
+        const forced = merge({
+            templateContent: NESTED,
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: [],
+            force: true,
+        });
+        expect(forced.content).toBe("");
+        expect(forced.blocks).toEqual({});
+    });
+
+    it("keeps the parent of an edited child when the subtree leaves the template", () => {
+        const installed = merge({ templateContent: NESTED, selected: ["parent", "child"] });
+        const edited = installed.content.replace("Child.", "Our child.");
+        const result = merge({
+            templateContent: "",
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: [],
+        });
+        expect(result.content).toBe(edited);
+        expect(result.released).toEqual(["child", "parent"]);
+        expect(result.blocks).toEqual({});
     });
 });

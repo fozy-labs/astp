@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Nested `<astp-block>` blocks with independent selection, updates and local-edit protection; selecting a child selects its ancestors.
 - Skill, agent and rule descriptions from frontmatter in install and update selection prompts.
 - `platforms` filters on bundle items and `<astp-block>` tags, including `!<name>` exclusions; bundle filters now support exclusions too.
 

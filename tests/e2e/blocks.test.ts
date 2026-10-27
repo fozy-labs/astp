@@ -255,6 +255,32 @@ describe("E2E: blocks", () => {
         expect(unit.declinedBlocks).toEqual([`${RULES_FILE}#code_style`]);
     });
 
+    it("installs and updates a requested nested child with its parent", async () => {
+        contents[RULES_FILE] = `<astp-block name="parent">
+Parent.
+<astp-block name="child" optional>
+Child.
+</astp-block>
+</astp-block>
+`;
+        await executeInstall({
+            bundle: "blocks",
+            blocks: ["child"],
+            platform: "claude-code",
+            target: "project",
+        });
+        expect(await fs.readFile(filePath(), "utf8")).toBe("<parent>\nParent.\n<child>\nChild.\n</child>\n</parent>\n");
+        const before = await readLockFixture(rootDir());
+        const parentHash = before.bundles.blocks.units[RULES_FILE]!.blocks![`${RULES_FILE}#parent`];
+
+        manifest = createBlocksManifest("1.1.0");
+        contents[RULES_FILE] = contents[RULES_FILE]!.replace("Child.", "New child.");
+        await update();
+        expect(await fs.readFile(filePath(), "utf8")).toContain("New child.");
+        const after = await readLockFixture(rootDir());
+        expect(after.bundles.blocks.units[RULES_FILE]!.blocks![`${RULES_FILE}#parent`]).toBe(parentHash);
+    });
+
     it("rejects an invalid block template", async () => {
         contents[RULES_FILE] = `${FM}\n<astp-block name="a">\nunclosed\n`;
         await expect(install()).rejects.toThrow(/invalid blocks/);

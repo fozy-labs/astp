@@ -32,13 +32,22 @@ export async function readUnitBlockFiles(
         if (parsed.errors.length > 0) {
             throw new Error(`Template file '${item.target}' has invalid blocks: ${parsed.errors.join("; ")}`);
         }
+        const blocks = [];
+        const supported = new Set<string>();
+        for (const block of parsed.blocks) {
+            if (
+                (!platform || supportsPlatform(block.platforms, platform)) &&
+                (!block.parent || supported.has(block.parent))
+            ) {
+                blocks.push(block);
+                supported.add(block.name);
+            }
+        }
         result.set(item.target, {
             target: item.target,
             content,
             frontmatter: parsed.frontmatter,
-            blocks: platform
-                ? parsed.blocks.filter((block) => supportsPlatform(block.platforms, platform))
-                : parsed.blocks,
+            blocks,
         });
     }
     return result;
