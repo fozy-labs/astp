@@ -8,6 +8,7 @@ import {
     groupTemplateItems,
     hasFillInstruction,
     loadInstalled,
+    ownTemplateContent,
     readUnitBlockFiles,
     readUnitDescription,
     syncBundle,
@@ -254,7 +255,7 @@ async function hasRestorableEdit(
         const block = blockFiles
             .get(key.slice(0, hashIndex))
             ?.blocks.find((candidate) => candidate.name === key.slice(hashIndex + 1));
-        if (!block || !hasFillInstruction(block.content)) return true;
+        if (!block || !hasFillInstruction(ownTemplateContent(block))) return true;
     }
     return false;
 }
