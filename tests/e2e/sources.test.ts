@@ -197,13 +197,13 @@ describe("E2E: manifest sources", () => {
 
         expect(vi.mocked(warnModified)).toHaveBeenCalledWith(
             [expect.objectContaining({ targetPath: "rules/a.md" })],
-            "astp install core --skill rules/a.md --force --source ./a --target project",
+            "astp install core --skill rules/a.md --force --source ./a --platform claude-code --target project",
         );
         expect(vi.mocked(warnForeign)).toHaveBeenCalledWith(
             "core",
             [expect.objectContaining({ targetPath: "rules/b.md" })],
             [],
-            "project",
+            makeProjectTarget(projectDir),
             "./a",
         );
     });
@@ -252,7 +252,7 @@ describe("E2E: manifest sources", () => {
                 },
             ],
             [],
-            "project",
+            makeProjectTarget(projectDir),
             "./b",
         );
         let lock = await readLockFixture(rootDir);
@@ -274,7 +274,7 @@ describe("E2E: manifest sources", () => {
         await executeInstall({ ...opts, bundle: "core", source: "./a" });
         await fs.rm(path.join(projectDir, "a"), { recursive: true });
         await expect(executeUpdate(opts)).rejects.toThrow(
-            /Cannot read source '\.\.\/a' of core: .*\nTo switch source: astp install core --source <spec> --target project/s,
+            /Cannot read source '\.\.\/a' of core: .*\nTo switch source: astp install core --source <spec> --platform claude-code --target project/s,
         );
     });
 

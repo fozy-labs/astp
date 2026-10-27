@@ -102,20 +102,23 @@ export async function downloadBundle(source: ManifestSource, bundle: Bundle, pla
 
 async function copyTargetOverrides(tempDir: string, bundle: Bundle, platform?: Platform): Promise<void> {
     if (!platform) return;
+    const overrides: Array<{ targetFile: string; content: Buffer }> = [];
     for (const item of bundle.items) {
         const target = resolveItemTarget(item, platform);
         if (target === item.target) continue;
         assertSafeRelativePath(item.target, "item target");
         assertSafeRelativePath(target, "item target");
         const sourceFile = path.join(tempDir, item.target);
-        const targetFile = path.join(tempDir, target);
         try {
             if (!(await fs.lstat(sourceFile)).isFile()) continue;
-            await fs.mkdir(path.dirname(targetFile), { recursive: true });
-            await fs.copyFile(sourceFile, targetFile);
+            overrides.push({ targetFile: path.join(tempDir, target), content: await fs.readFile(sourceFile) });
         } catch (error) {
             if (!["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error;
         }
+    }
+    for (const { targetFile, content } of overrides) {
+        await fs.mkdir(path.dirname(targetFile), { recursive: true });
+        await fs.writeFile(targetFile, content);
     }
 }
 

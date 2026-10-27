@@ -71,6 +71,40 @@ describe("fetcher", () => {
         await expect(fs.stat(path.join(work, "docs/AGENTS.md"))).rejects.toMatchObject({ code: "ENOENT" });
     });
 
+    it("preserves canonical content through chained overrides for local and archive sources", async () => {
+        const chained: Bundle = {
+            ...bundle,
+            items: [
+                { ...bundle.items[0]!, targets: { "kimi-code": "rules/b.md" } },
+                {
+                    source: "docs/rules/b.md",
+                    target: "rules/b.md",
+                    category: "rule",
+                    targets: { "kimi-code": "rules/c.md" },
+                },
+            ],
+        };
+        await writeRoot(work);
+        await fs.writeFile(path.join(work, "docs/rules/b.md"), "# b\n");
+        const local = await resolveSource("./manifest.json", work);
+        const localDir = await downloadBundle(local, chained, "kimi-code");
+        tempDirs.push(localDir);
+        expect(await fs.readFile(path.join(localDir, "rules/b.md"), "utf8")).toBe("# a\n");
+        expect(await fs.readFile(path.join(localDir, "rules/c.md"), "utf8")).toBe("# b\n");
+
+        mockedDownloadTemplate.mockImplementation(async (_input, options) => {
+            await writeRoot(options!.dir!);
+            await fs.writeFile(path.join(options!.dir!, "docs/rules/b.md"), "# b\n");
+            return { dir: options!.dir! } as never;
+        });
+        const archive = await resolveSource("gh:o/r", work);
+        const archiveDir = await downloadBundle(archive, chained, "kimi-code");
+        tempDirs.push(archiveDir);
+        await closeSource(archive);
+        expect(await fs.readFile(path.join(archiveDir, "rules/b.md"), "utf8")).toBe("# a\n");
+        expect(await fs.readFile(path.join(archiveDir, "rules/c.md"), "utf8")).toBe("# b\n");
+    });
+
     describe("links in a local source", () => {
         let root: string;
         let outside: string;

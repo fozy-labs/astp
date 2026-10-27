@@ -1,8 +1,9 @@
 import type { Bundle, ItemCategory, Manifest, Platform } from "@/types/index.js";
-import { ALL_PLATFORMS, resolveItemTarget } from "@/types/index.js";
+import { ALL_PLATFORMS } from "@/types/index.js";
 
 import { assertSafeName, assertSafeRelativePath, foldPath, nullPrototype } from "./path-safety.js";
 import { isOsClutterName } from "./skill-tree.js";
+import { groupTemplateItems } from "./units.js";
 
 /** Supported manifest schema versions: major version → max supported minor version. */
 export const SUPPORTED_SCHEMA_VERSIONS: Readonly<Record<number, number>> = {
@@ -177,10 +178,10 @@ function validateBundle(key: string, data: unknown, schemaMajor: number): void {
 
     const items = bundle.items as Bundle["items"];
     for (const platform of ALL_PLATFORMS) {
-        assertNoCollisions(
-            items.map((item) => resolveItemTarget(item, platform)),
-            `Invalid bundle '${key}': items for platform '${platform}'`,
+        const effectiveTargets = groupTemplateItems(items, platform).flatMap((unit) =>
+            unit.kind === "skill" ? unit.items.map((item) => item.target) : [unit.item.target],
         );
+        assertNoCollisions(effectiveTargets, `Invalid bundle '${key}': items for platform '${platform}'`);
     }
 
     validatePlatforms(bundle.platforms, `Invalid bundle '${key}'`);

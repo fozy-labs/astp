@@ -167,7 +167,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                         .join("\n")}`,
                 );
             }
-            warnUnavailable(unavailable, target.type);
+            warnUnavailable(unavailable, target);
         }
 
         let chosen: Map<string, BundleChoice> | undefined;
@@ -304,7 +304,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 installRetry(
                     plan.bundle.name,
                     [...skipped.map((status) => `--skill ${status.targetPath}`), "--force"],
-                    target.type,
+                    target,
                     options.source,
                 );
             if (modified.length > 0) warnModified(modified, retry(modified));
@@ -315,7 +315,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 warnReleased(result.released, result.releasedBlocks);
             }
             if (result.foreign.length > 0 || result.foreignBlocks.length > 0) {
-                warnForeign(plan.bundle.name, result.foreign, result.foreignBlocks, target.type, options.source);
+                warnForeign(plan.bundle.name, result.foreign, result.foreignBlocks, target, options.source);
             }
             if (result.conflictBlocks.length > 0) warnBlockConflicts(result.conflictBlocks);
             s.stop(`Installed ${plan.bundle.name}.`);

@@ -207,7 +207,7 @@ describe("E2E: install", () => {
         await expect(readLockFixture(rootDir)).rejects.toMatchObject({ code: "ENOENT" });
     });
 
-    // T38: astp install nonexistent --target project
+    // T38: astp install nonexistent --platform claude-code --target project
     it("T38: rejects nonexistent bundle with error", async () => {
         await expect(
             executeInstall({ bundle: "nonexistent", platform: "claude-code", target: "project" }),
@@ -226,7 +226,7 @@ describe("E2E: install", () => {
         expect(await fs.readFile(skillPath, "utf8")).toBe(edited);
         expect(mockWarnModified).toHaveBeenCalledWith(
             expect.arrayContaining([expect.objectContaining({ targetPath: "skills/sample", kind: "skill" })]),
-            "astp install skillpack --skill skills/sample --force --target project",
+            "astp install skillpack --skill skills/sample --force --platform claude-code --target project",
         );
 
         await installBundle("skillpack", true);
@@ -243,7 +243,7 @@ describe("E2E: install", () => {
         expect(await fs.readFile(extraPath, "utf8")).toBe("keep me");
         expect(mockWarnModified).toHaveBeenCalledWith(
             expect.arrayContaining([expect.objectContaining({ targetPath: "skills/sample", kind: "skill" })]),
-            "astp install skillpack --skill skills/sample --force --target project",
+            "astp install skillpack --skill skills/sample --force --platform claude-code --target project",
         );
 
         await installBundle("skillpack", true);
@@ -263,7 +263,7 @@ describe("E2E: install", () => {
             "core",
             expect.arrayContaining([expect.objectContaining({ targetPath: "skills/orchestrate", kind: "skill" })]),
             [],
-            "project",
+            makeProjectTarget(projectDir),
             undefined,
         );
 
@@ -295,7 +295,7 @@ describe("E2E: install", () => {
             expect.arrayContaining([
                 expect.objectContaining({ targetPath: "agents/pipeline-approve.agent.md", kind: "file" }),
             ]),
-            "astp install pipeline --skill agents/pipeline-approve.agent.md --force --target project",
+            "astp install pipeline --skill agents/pipeline-approve.agent.md --force --platform claude-code --target project",
         );
 
         await installBundle("pipeline", true);
@@ -314,7 +314,7 @@ describe("E2E: install", () => {
             "core",
             expect.arrayContaining([expect.objectContaining({ targetPath: "skills/orchestrate", kind: "skill" })]),
             [],
-            "project",
+            makeProjectTarget(projectDir),
             undefined,
         );
 
@@ -415,7 +415,7 @@ describe("E2E: install", () => {
 
         expect(mockWarnUnavailable).toHaveBeenCalledWith(
             [expect.objectContaining({ bundle: "skillpack", message: "fetch failed" })],
-            "project",
+            makeProjectTarget(projectDir),
         );
         const entries = mockSelectBundleItems.mock.calls[0]![0];
         expect(entries.map((entry) => entry.bundle.name)).toEqual(["core", "pipeline"]);
@@ -460,7 +460,7 @@ describe("E2E: install", () => {
                     message: expect.stringContaining("Cannot read source 'gh:other/repo'"),
                 }),
             ],
-            "project",
+            makeProjectTarget(projectDir),
         );
         const entries = mockSelectBundleItems.mock.calls[0]![0];
         expect(entries.map((entry) => entry.bundle.name)).toEqual(["skillpack", "pipeline"]);
@@ -519,7 +519,7 @@ describe("E2E: install", () => {
                     message: expect.stringContaining("Cannot read source 'gh:other/repo'"),
                 }),
             ],
-            "project",
+            makeProjectTarget(projectDir),
         );
         const entries = mockSelectBundleItems.mock.calls[0]![0];
         expect(entries.map((entry) => entry.bundle.name)).toEqual(["pipeline"]);

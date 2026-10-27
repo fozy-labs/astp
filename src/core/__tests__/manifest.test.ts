@@ -261,6 +261,43 @@ describe("validateManifest", () => {
         );
     });
 
+    it("ignores filtered-out file items when checking platform target collisions", () => {
+        const items = [
+            {
+                ...rule("core", "rules/claude.md"),
+                platforms: ["claude-code"],
+                targets: { "kimi-code": "AGENTS.md" },
+            },
+            {
+                ...rule("core", "rules/kimi.md"),
+                platforms: ["kimi-code"],
+                targets: { "kimi-code": "AGENTS.md" },
+            },
+        ];
+        expect(() => validateManifest({ ...withBundle("core", items), schemaVersion: "3.0" })).not.toThrow();
+    });
+
+    it("applies the root skill filter when checking platform target collisions", () => {
+        const items = [
+            {
+                source: "core/skills/a/SKILL.md",
+                target: "skills/a/SKILL.md",
+                category: "skill",
+                platforms: ["claude-code"],
+            },
+            {
+                source: "core/skills/a/references/guide.md",
+                target: "skills/a/references/guide.md",
+                category: "skill",
+            },
+            {
+                ...rule("core", "rules/kimi.md"),
+                targets: { "kimi-code": "skills/a/references/guide.md" },
+            },
+        ];
+        expect(() => validateManifest({ ...withBundle("core", items), schemaVersion: "3.0" })).not.toThrow();
+    });
+
     it.each([
         [
             "non-boolean optional",

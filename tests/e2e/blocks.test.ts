@@ -697,7 +697,12 @@ describe("E2E: blocks", () => {
             const unit = await lockUnit();
             expect(unit!.blocks).not.toHaveProperty(`${RULES_FILE}#extra`);
             expect(unit!.declinedBlocks).toContain(`${RULES_FILE}#extra`);
-            expect(vi.mocked(warnForeign)).toHaveBeenCalledWith("blocks", [], [`${RULES_FILE}#extra`], "project");
+            expect(vi.mocked(warnForeign)).toHaveBeenCalledWith(
+                "blocks",
+                [],
+                [`${RULES_FILE}#extra`],
+                makeProjectTarget(projectDir),
+            );
             expect(await checkUpdates()).toEqual([]);
 
             clearWarnings();
@@ -812,7 +817,7 @@ describe("E2E: blocks", () => {
             expect(await fs.readFile(path.join(rootDir(), PLAIN_FILE), "utf8")).toContain("local edit");
             expect(vi.mocked(warnModified)).toHaveBeenCalledWith(
                 [expect.objectContaining({ targetPath: PLAIN_FILE })],
-                `astp install blocks --skill ${PLAIN_FILE} --force --target project`,
+                `astp install blocks --skill ${PLAIN_FILE} --force --platform claude-code --target project`,
             );
         });
 
