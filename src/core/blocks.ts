@@ -741,7 +741,10 @@ export function mergeBlockFile(args: MergeBlockFileArgs): MergeBlockFileResult {
         for (const region of regions) {
             if (actions.get(region.name)?.type !== "remove") continue;
             const retainedChild = regions.some(
-                (candidate) => candidate.parent === region.name && actions.get(candidate.name)?.type !== "remove",
+                (candidate) =>
+                    candidate.parent === region.name &&
+                    actions.get(candidate.name)?.type !== "remove" &&
+                    (!byName.has(candidate.name) || byName.get(candidate.name)!.parent === region.name),
             );
             if (!retainedChild) continue;
             actions.set(region.name, { type: "keep" });
@@ -875,12 +878,51 @@ function renderConflictRegion(region: InstalledBlockRegion, block: TemplateBlock
     }
     output += lines.slice(index).join("");
     output = withFillWrapper(output, ownTemplateContent(block));
-    for (const [marker, rendered] of markers) output = output.replace(marker, rendered);
+    for (const [marker, rendered] of markers) output = output.replace(marker, () => rendered);
     for (const child of context.insertions.filter((entry) => entry.parent === region.name)) {
         const rendered = renderInsertedBlock(child, context);
         output = insertAtTemplateText(output, child, rendered, context) ?? output + rendered;
     }
+    for (const child of childrenOf(context.args.template.blocks, region.name)) {
+        const installedChild = context.installed.blocks.get(child.name);
+        if (!installedChild || installedChild.parent === region.name) continue;
+        const rendered = renderExistingRegion(installedChild, context);
+        output = insertAtTemplateText(output, child, rendered, context) ?? output + rendered;
+    }
     return output;
+}
+
+function findUnfencedText(content: string, needle: string): number {
+    const lines = splitLines(content);
+    let fence: Fence | null = null;
+    let chunk = "";
+    let chunkStart = 0;
+    let offset = 0;
+    const findInChunk = (): number => {
+        const index = chunk.indexOf(needle);
+        return index < 0 ? -1 : chunkStart + index;
+    };
+    for (const line of lines) {
+        const text = lineText(line);
+        if (fence) {
+            if (fenceCloses(text, fence)) fence = null;
+            offset += line.length;
+            continue;
+        }
+        const opened = fenceOpen(text);
+        if (opened) {
+            const found = findInChunk();
+            if (found >= 0) return found;
+            chunk = "";
+            fence = opened;
+            offset += line.length;
+            continue;
+        }
+        if (chunk === "") chunkStart = offset;
+        chunk += line;
+        offset += line.length;
+    }
+    return findInChunk();
 }
 
 function insertAtTemplateText(
@@ -900,11 +942,11 @@ function insertAtTemplateText(
     const before = lines.slice(position > 0 ? ranges[position - 1]!.end + 1 : 0, range.start).join("");
     const after = lines.slice(range.end + 1, ranges[position + 1]?.start).join("");
     if (after.trim()) {
-        const anchor = content.indexOf(after);
+        const anchor = findUnfencedText(content, after);
         if (anchor >= 0) return content.slice(0, anchor) + rendered + content.slice(anchor);
     }
     if (before.trim()) {
-        const anchor = content.indexOf(before);
+        const anchor = findUnfencedText(content, before);
         if (anchor >= 0)
             return content.slice(0, anchor + before.length) + rendered + content.slice(anchor + before.length);
     }
