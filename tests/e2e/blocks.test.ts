@@ -281,6 +281,25 @@ Child.
         expect(after.bundles.blocks.units[RULES_FILE]!.blocks![`${RULES_FILE}#parent`]).toBe(parentHash);
     });
 
+    it("force-restores an edited parent whose child has a FILL_INSTRUCTION", async () => {
+        contents[RULES_FILE] = `<astp-block name="parent">
+Parent.
+<astp-block name="child">
+<FILL_INSTRUCTION>
+Fill the child.
+</FILL_INSTRUCTION>
+</astp-block>
+</astp-block>
+`;
+        await install();
+        await fs.writeFile(filePath(), (await fs.readFile(filePath(), "utf8")).replace("Parent.", "My parent."));
+        await update(true);
+        const content = await fs.readFile(filePath(), "utf8");
+        expect(content).toContain("Parent.");
+        expect(content).not.toContain("My parent.");
+        expect(content).toContain("Fill the child.");
+    });
+
     it("rejects an invalid block template", async () => {
         contents[RULES_FILE] = `${FM}\n<astp-block name="a">\nunclosed\n`;
         await expect(install()).rejects.toThrow(/invalid blocks/);

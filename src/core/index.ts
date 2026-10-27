@@ -6,6 +6,7 @@ export {
     hasFillInstruction,
     installedBlockHash,
     mergeBlockFile,
+    ownTemplateContent,
     parseInstalledBlocks,
     parseTemplateBlocks,
 } from "./blocks.js";

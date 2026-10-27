@@ -530,7 +530,7 @@ function childrenOf(blocks: TemplateBlock[], parent?: string): TemplateBlock[] {
     return blocks.filter((block) => block.parent === parent);
 }
 
-function ownTemplateContent(block: TemplateBlock): string {
+export function ownTemplateContent(block: TemplateBlock): string {
     const lines = splitLines(block.content);
     const ranges = templateChildRanges(block.content);
     return lines.filter((_, index) => !ranges.some((range) => index >= range.start && index <= range.end)).join("");
@@ -696,6 +696,29 @@ export function mergeBlockFile(args: MergeBlockFileArgs): MergeBlockFileResult {
         }
     }
 
+    const foreignNames = new Set(foreign);
+    for (const block of templateBlocks) {
+        let parent = block.parent;
+        let blocked = false;
+        while (parent) {
+            if (foreignNames.has(parent)) {
+                blocked = true;
+                break;
+            }
+            parent = byName.get(parent)?.parent;
+        }
+        if (!blocked) continue;
+        actions.delete(block.name);
+        const insertion = insertions.indexOf(block);
+        if (insertion >= 0) insertions.splice(insertion, 1);
+        delete newHashes[block.name];
+        declined.add(block.name);
+        for (const list of [kept, conflicts]) {
+            const index = list.indexOf(block.name);
+            if (index >= 0) list.splice(index, 1);
+        }
+    }
+
     // Recorded names that left the template.
     for (const name of Object.keys(args.lockHashes)) {
         if (inTemplate.has(name)) continue;
@@ -753,7 +776,8 @@ interface MergeContext {
     installed: InstalledBlocks;
     actions: Map<string, BlockAction>;
     insertions: TemplateBlock[];
-    freshSelected: Set<string>;
+    byName: Map<string, TemplateBlock>;
+    emitted: Set<string>;
 }
 
 function mergeInstalled(
@@ -767,7 +791,8 @@ function mergeInstalled(
         installed,
         actions,
         insertions,
-        freshSelected: new Set(insertions.map((block) => block.name)),
+        byName: new Map(args.template.blocks.map((block) => [block.name, block])),
+        emitted: new Set(),
     };
     const output = splitLines(args.template.frontmatter);
     output.push(...mergeRange(installed.bodyStart, installed.lines.length, undefined, context, true));
@@ -788,6 +813,8 @@ function mergeInstalled(
 }
 
 function renderExistingRegion(region: InstalledBlockRegion, context: MergeContext): string {
+    if (context.emitted.has(region.name)) return "";
+    context.emitted.add(region.name);
     const action = context.actions.get(region.name) ?? { type: "keep" as const };
     if (action.type === "remove") return "";
     let content: string;
@@ -801,25 +828,34 @@ function renderExistingRegion(region: InstalledBlockRegion, context: MergeContex
     return `${context.installed.lines[region.open]!}${content}${context.installed.lines[region.close]!}`;
 }
 
+function renderInsertedBlock(block: TemplateBlock, context: MergeContext): string {
+    return `<${block.name}>\n${renderTemplateRegion(block, context)}</${block.name}>\n`;
+}
+
 function renderTemplateRegion(block: TemplateBlock, context: MergeContext): string {
     const lines = splitLines(block.content);
     const ranges = templateChildRanges(block.content);
-    const byName = new Map(context.args.template.blocks.map((entry) => [entry.name, entry]));
     let output = "";
     let index = 0;
     for (const range of ranges) {
         output += lines.slice(index, range.start).join("");
-        const child = byName.get(range.name);
+        const child = context.byName.get(range.name);
         if (child) {
             const region = context.installed.blocks.get(child.name);
             if (region) output += renderExistingRegion(region, context);
             else if (context.insertions.includes(child)) {
-                output += renderFreshBlock(child, context.args.template.blocks, context.freshSelected);
+                output += renderInsertedBlock(child, context);
             }
         }
         index = range.end + 1;
     }
-    return output + lines.slice(index).join("");
+    output += lines.slice(index).join("");
+    for (const region of context.installed.blocks.values()) {
+        if (region.parent === block.name && !context.byName.has(region.name)) {
+            output += renderExistingRegion(region, context);
+        }
+    }
+    return output;
 }
 
 function renderConflictRegion(region: InstalledBlockRegion, block: TemplateBlock, context: MergeContext): string {
@@ -833,16 +869,46 @@ function renderConflictRegion(region: InstalledBlockRegion, block: TemplateBlock
         const end = child.close - region.open - 1;
         const marker = `@@ASTP_NESTED_${child.name}@@\n`;
         output += lines.slice(index, start).join("") + marker;
-        markers.set(marker, renderExistingRegion(child, context));
+        const moved = context.byName.has(child.name) && context.byName.get(child.name)!.parent !== region.name;
+        markers.set(marker, moved ? "" : renderExistingRegion(child, context));
         index = end + 1;
     }
     output += lines.slice(index).join("");
     output = withFillWrapper(output, ownTemplateContent(block));
     for (const [marker, rendered] of markers) output = output.replace(marker, rendered);
     for (const child of context.insertions.filter((entry) => entry.parent === region.name)) {
-        output += renderFreshBlock(child, context.args.template.blocks, context.freshSelected);
+        const rendered = renderInsertedBlock(child, context);
+        output = insertAtTemplateText(output, child, rendered, context) ?? output + rendered;
     }
     return output;
+}
+
+function insertAtTemplateText(
+    content: string,
+    block: TemplateBlock,
+    rendered: string,
+    context: MergeContext,
+): string | null {
+    if (!block.parent) return null;
+    const parent = context.byName.get(block.parent);
+    if (!parent) return null;
+    const lines = splitLines(parent.content);
+    const ranges = templateChildRanges(parent.content);
+    const position = ranges.findIndex((range) => range.name === block.name);
+    if (position < 0) return null;
+    const range = ranges[position]!;
+    const before = lines.slice(position > 0 ? ranges[position - 1]!.end + 1 : 0, range.start).join("");
+    const after = lines.slice(range.end + 1, ranges[position + 1]?.start).join("");
+    if (after.trim()) {
+        const anchor = content.indexOf(after);
+        if (anchor >= 0) return content.slice(0, anchor) + rendered + content.slice(anchor);
+    }
+    if (before.trim()) {
+        const anchor = content.indexOf(before);
+        if (anchor >= 0)
+            return content.slice(0, anchor + before.length) + rendered + content.slice(anchor + before.length);
+    }
+    return null;
 }
 
 function mergeRange(
@@ -856,46 +922,53 @@ function mergeRange(
     const { lines } = installed;
     const output: string[] = [];
     const siblings = childrenOf(args.template.blocks, parent);
-    const insertions = context.insertions.filter((block) => block.parent === parent);
     const blockAtOpen = new Map<number, InstalledBlockRegion>();
     for (const region of installed.blocks.values()) {
         if (region.parent === parent) blockAtOpen.set(region.open, region);
     }
 
-    // Anchor each insertion at the nearest template-ordered sibling present in the file.
+    const arrivals = siblings.flatMap((block) => {
+        if (context.insertions.includes(block)) {
+            return [{ block, rendered: renderInsertedBlock(block, context) }];
+        }
+        const region = installed.blocks.get(block.name);
+        return region && region.parent !== parent ? [{ block, rendered: renderExistingRegion(region, context) }] : [];
+    });
+
+    // Anchor arrivals at the nearest template-ordered sibling still present at this level.
     const insertAfter = new Map<number, string[]>();
     const insertBefore = new Map<number, string[]>();
-    const atEnd: string[] = [];
-    for (const block of insertions) {
-        const rendered = renderFreshBlock(block, args.template.blocks, context.freshSelected);
-        const position = siblings.indexOf(block);
+    const atEnd: Array<{ block: TemplateBlock; rendered: string }> = [];
+    for (const arrival of arrivals) {
+        const position = siblings.indexOf(arrival.block);
         let anchor: InstalledBlockRegion | undefined;
         for (let index = position - 1; index >= 0; index--) {
-            const candidate = installed.blocks.get(siblings[index]!.name);
-            if (candidate && actions.get(candidate.name)?.type !== "remove") {
+            const sibling = siblings[index]!;
+            const candidate = installed.blocks.get(sibling.name);
+            if (candidate && candidate.parent === parent && actions.get(candidate.name)?.type !== "remove") {
                 anchor = candidate;
                 break;
             }
         }
         if (anchor) {
             const list = insertAfter.get(anchor.close) ?? [];
-            list.push(rendered);
+            list.push(arrival.rendered);
             insertAfter.set(anchor.close, list);
             continue;
         }
         for (let index = position + 1; index < siblings.length; index++) {
             const candidate = installed.blocks.get(siblings[index]!.name);
-            if (candidate && actions.get(candidate.name)?.type !== "remove") {
+            if (candidate && candidate.parent === parent && actions.get(candidate.name)?.type !== "remove") {
                 anchor = candidate;
                 break;
             }
         }
         if (anchor) {
             const list = insertBefore.get(anchor.open) ?? [];
-            list.push(rendered);
+            list.push(arrival.rendered);
             insertBefore.set(anchor.open, list);
         } else {
-            atEnd.push(rendered);
+            atEnd.push(arrival);
         }
     }
 
@@ -925,7 +998,8 @@ function mergeRange(
             separateBefore(rendered);
             output.push("\n");
         }
-        if (actions.get(region.name)?.type === "remove") {
+        const relocated = context.byName.has(region.name) && context.byName.get(region.name)!.parent !== parent;
+        if (relocated || actions.get(region.name)?.type === "remove") {
             index = region.close + 1;
             if (index < end && lines[index]!.trim() === "") index++;
             else if (output[output.length - 1]?.trim() === "") output.pop();
@@ -939,6 +1013,14 @@ function mergeRange(
             if (index < end && lines[index]!.trim() !== "") output.push("\n");
         }
     }
-    for (const rendered of atEnd) separateBefore(rendered);
+    for (const arrival of atEnd) {
+        const positioned = insertAtTemplateText(output.join(""), arrival.block, arrival.rendered, context);
+        if (positioned !== null) {
+            output.length = 0;
+            output.push(positioned);
+        } else {
+            separateBefore(arrival.rendered);
+        }
+    }
     return output;
 }
