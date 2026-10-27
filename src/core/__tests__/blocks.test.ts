@@ -1149,4 +1149,66 @@ After.
         expect(result.conflicts).toEqual(["parent"]);
         expect(result.content).toContain(`<child>\n${childText}After child.\n</child>`);
     });
+
+    it("does not anchor a moved child to matching text inside a sibling", () => {
+        const flat = `<astp-block name="parent">
+Before.
+<astp-block name="sibling">
+After.
+</astp-block>
+After.
+</astp-block>
+<astp-block name="child">
+Child.
+</astp-block>
+`;
+        const nested = `<astp-block name="parent">
+New before.
+<astp-block name="sibling">
+After.
+</astp-block>
+<astp-block name="child">
+Child.
+</astp-block>
+After.
+</astp-block>
+`;
+        const installed = merge({ templateContent: flat, selected: ["parent", "sibling", "child"] });
+        const edited = installed.content.replace("Before.", "Our before.").replace("Child.", "Our child.");
+        const result = merge({
+            templateContent: nested,
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent", "sibling", "child"],
+        });
+        const parsed = parseInstalledBlocks(result.content, ["parent", "sibling", "child"]);
+        expect(parsed!.blocks.get("child")!.parent).toBe("parent");
+        expect(parsed!.blocks.get("child")!.content).toBe("Our child.\n");
+    });
+
+    it("uses an anchor that starts outside and contains a code fence", () => {
+        const flat = `<astp-block name="parent">\nBefore.\nAfter.\n</astp-block>\n`;
+        const nested = `<astp-block name="parent">
+Before.
+<astp-block name="child">
+Child.
+</astp-block>
+\`\`\`sh
+npm i
+\`\`\`
+</astp-block>
+`;
+        const installed = merge({ templateContent: flat, selected: ["parent"] });
+        const edited = installed.content.replace("Before.", "Our before.").replace("After.\n", "```sh\nnpm i\n```\n");
+        const result = merge({
+            templateContent: nested,
+            installed: edited,
+            lockHashes: installed.blocks,
+            declined: installed.declinedBlocks,
+            selected: ["parent", "child"],
+        });
+        expect(result.content).toContain("<child>\nChild.\n</child>\n```sh\nnpm i\n```");
+        expect(parseInstalledBlocks(result.content, ["parent", "child"])!.blocks.get("child")!.parent).toBe("parent");
+    });
 });

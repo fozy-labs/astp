@@ -892,37 +892,39 @@ function renderConflictRegion(region: InstalledBlockRegion, block: TemplateBlock
     return output;
 }
 
-function findUnfencedText(content: string, needle: string): number {
-    const lines = splitLines(content);
+function findTemplateText(content: string, needle: string, regionNames: ReadonlySet<string>): number {
     let fence: Fence | null = null;
-    let chunk = "";
-    let chunkStart = 0;
+    const open: string[] = [];
     let offset = 0;
-    const findInChunk = (): number => {
-        const index = chunk.indexOf(needle);
-        return index < 0 ? -1 : chunkStart + index;
-    };
-    for (const line of lines) {
+    for (const line of splitLines(content)) {
         const text = lineText(line);
         if (fence) {
             if (fenceCloses(text, fence)) fence = null;
             offset += line.length;
             continue;
         }
+        if (open.length === 0 && content.startsWith(needle, offset)) return offset;
         const opened = fenceOpen(text);
         if (opened) {
-            const found = findInChunk();
-            if (found >= 0) return found;
-            chunk = "";
             fence = opened;
             offset += line.length;
             continue;
         }
-        if (chunk === "") chunkStart = offset;
-        chunk += line;
+        const nameOpen = text.match(NAME_OPEN);
+        if (nameOpen && regionNames.has(nameOpen[1]!)) {
+            open.push(nameOpen[1]!);
+            offset += line.length;
+            continue;
+        }
+        const nameClose = text.match(NAME_CLOSE);
+        if (nameClose && regionNames.has(nameClose[1]!)) {
+            if (open[open.length - 1] === nameClose[1]) open.pop();
+            offset += line.length;
+            continue;
+        }
         offset += line.length;
     }
-    return findInChunk();
+    return -1;
 }
 
 function insertAtTemplateText(
@@ -941,12 +943,13 @@ function insertAtTemplateText(
     const range = ranges[position]!;
     const before = lines.slice(position > 0 ? ranges[position - 1]!.end + 1 : 0, range.start).join("");
     const after = lines.slice(range.end + 1, ranges[position + 1]?.start).join("");
+    const regionNames = new Set([...context.byName.keys(), ...context.installed.blocks.keys()]);
     if (after.trim()) {
-        const anchor = findUnfencedText(content, after);
+        const anchor = findTemplateText(content, after, regionNames);
         if (anchor >= 0) return content.slice(0, anchor) + rendered + content.slice(anchor);
     }
     if (before.trim()) {
-        const anchor = findUnfencedText(content, before);
+        const anchor = findTemplateText(content, before, regionNames);
         if (anchor >= 0)
             return content.slice(0, anchor + before.length) + rendered + content.slice(anchor + before.length);
     }
