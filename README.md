@@ -56,6 +56,8 @@ By default bundles come from `gh:fozy-labs/astp` (`templates/manifest.json` on `
 
 Plain `http://` is accepted only for `localhost`. `GIGET_AUTH` is sent only to GitHub.
 
+A manifest can also declare bundle `refs`: giget sources of external skill directories installed without copying them into the manifest repository. Local manifests can reference local directories relative to the manifest. Each ref targets `skills/<name>` and is managed as a regular skill unit. See the [template author guide](templates/README.md#bundleref-fields).
+
 ### install
 
 ```bash
@@ -106,6 +108,7 @@ List bundles and installed unit state. Add a bundle name for per-unit status, op
 | `thinking` | 4 skills | Reasoning skills — design decision derivation, plus optional experimental analysis, software architecture, and testing | No |
 | `ponytail` | 4 skills | Ponytail skills — smallest complete changes, change reviews, repository audits and a shortcut debt ledger | No |
 | `agreement` | 1 rule, 4 skills | Working agreement rule, communication and tracker skills and /retro and /git commands — how the agent decides, asks, scopes changes, writes for the user, works with the issue tracker and git, and reviews finished work | No |
+| `modern-web-guidance` | 1 external skill | Modern web platform guidance — browser APIs, CSS, performance, accessibility and responsible fallbacks | No |
 
 - **astp** ships the `astp` skill (`/astp`): how an agent runs the CLI without prompts, answers questions and recommends bundles, units and blocks for a project (`/astp ask`), fills `<SETUP_REQUIRED>` and `<FILL_INSTRUCTION>` blocks (`/astp fill`), and asks before `--force`.
 - **fozy-labs** ships four skills covering the `@fozy-labs` stack — `simplest-di`, Feature-Sliced Design v2.1, `rx-toolkit` server state, and `rx-toolkit` signals. All four use progressive disclosure: a short `SKILL.md` plus `references/*.md` loaded only when the situation calls for them. It installs under `.claude/skills/`.
@@ -113,6 +116,7 @@ List bundles and installed unit state. Add a bundle name for per-unit status, op
 - **docs** ships two skills. `markdown-craft` carries stack-agnostic rules for the Markdown an agent writes: one home per fact, one reader per document, diagram-first flows, and link hygiene, with references loaded on demand for Mermaid diagrams and for writing or reviewing a specification. `statechart-craft` covers the other kind of Mermaid an agent writes — a `.mmd` statechart schema: the `stateDiagram-v2` subset, the `%% @…` directives, the `statechart-convert` CLI and the typed file it emits, with references for the live visualizer and for the `toMermaid()` round trip.
 - **ponytail** ships four [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) skills with their MIT license and pinned-source attribution to DietrichGebert: the smallest-complete-change mode, change review, whole-repository audit and a ledger for deliberate shortcuts.
 - **agreement** ships the `working-agreement` rule, always loaded from `.claude/rules/`: how the agent fixes, ranks decisions, reads the user's messages and writes for the user; every section after the principles is a block you can deselect. Its `communication` skill, which the agent loads whenever it talks to the user, covers working out a request, asking questions, making offers and resolving dilemmas. The `tracker` skill covers posting to a Git host (GitHub, GitLab and others) — issues, PRs/MRs, labels, types and fields; its project settings, methodology and PR rules are blocks the consumer's agent fills in on install. The `/retro` command, run only by the user, reviews finished work and proposes changes to the agent's environment: `CLAUDE.md`, rules, skills, docs, checks and tools. The `/git` command, also user-only, commits, pushes, switches to an up-to-date branch, runs a task in a separate worktree, and installs approval prompts for destructive git commands; project overrides are an optional block.
+- **modern-web-guidance** installs [Google Chrome's Modern Web Guidance](https://github.com/GoogleChrome/modern-web-guidance) directly from its upstream skill directory.
 
 The `design` bundle was renamed to `thinking`. astp does not move a renamed bundle on its own: if you installed `design`, run `astp delete design`, then `astp install thinking` — on the same `--target` you installed to.
 
@@ -126,7 +130,7 @@ npx skills add fozy-labs/astp --list                   # preview what is availab
 npx skills add fozy-labs/astp --skill markdown-craft   # install one skill
 ```
 
-Discovery is driven by `.claude-plugin/marketplace.json`, generated from `templates/manifest.json`. Only bundles that support `claude-code` **and** ship skills are published, and only their skills: `npx skills` installs the `communication` and `retro` skills of `agreement` without the `working-agreement` rule — the `tracker` and `git` skills carry astp blocks, so they are astp-only.
+Discovery is driven by `.claude-plugin/marketplace.json`, generated from `templates/manifest.json`. Only bundles that support `claude-code` **and** ship committed skills are published, and only their local skills; external `refs` such as `modern-web-guidance` are astp-only. `npx skills` installs the `communication` and `retro` skills of `agreement` without the `working-agreement` rule — the `tracker` and `git` skills carry astp blocks, so they are astp-only too.
 
 > **Pick one installer per project.** `npx skills` symlinks skills from its own cache and tracks them in `skills-lock.json`; `astp` writes real files and tracks them in `astp.lock`. Neither sees the other's installs: `astp check`, `astp update` and `astp delete` ignore skills added by `npx skills`, and installing the same skill both ways leaves a file and a symlink fighting over one path.
 

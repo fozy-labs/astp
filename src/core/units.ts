@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import type { Platform, PlatformFilter, TemplateItem } from "@/types/index.js";
+import type { Bundle, BundleRef, Platform, PlatformFilter, TemplateItem } from "@/types/index.js";
 import { supportsPlatform } from "@/types/index.js";
 
 interface TemplateUnitMetadata {
@@ -20,11 +20,13 @@ export interface SkillTemplateUnit extends TemplateUnitMetadata {
     kind: "skill";
     relativePath: string;
     items: TemplateItem[];
+    ref?: BundleRef;
 }
 
 export type TemplateUnit = FileTemplateUnit | SkillTemplateUnit;
 
-export function groupTemplateItems(items: TemplateItem[], platform?: Platform): TemplateUnit[] {
+export function groupTemplateItems(input: TemplateItem[] | Bundle, platform?: Platform): TemplateUnit[] {
+    const items = Array.isArray(input) ? input : input.items;
     const skillRoots = items
         .filter((item) => item.category === "skill" && item.target.endsWith("/SKILL.md"))
         .map((item) => path.posix.dirname(item.target));
@@ -72,6 +74,20 @@ export function groupTemplateItems(items: TemplateItem[], platform?: Platform): 
             if (item.platforms !== undefined) skillUnit.platforms = item.platforms;
         }
         skillUnit.items.push(item);
+    }
+
+    if (!Array.isArray(input)) {
+        for (const ref of input.refs ?? []) {
+            units.push({
+                kind: "skill",
+                relativePath: ref.target,
+                items: [],
+                ref,
+                ...(ref.optional !== undefined ? { optional: ref.optional } : {}),
+                ...(ref.labels !== undefined ? { labels: ref.labels } : {}),
+                ...(ref.platforms !== undefined ? { platforms: ref.platforms } : {}),
+            });
+        }
     }
 
     return platform ? units.filter((unit) => supportsPlatform(unit.platforms, platform)) : units;

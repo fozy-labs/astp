@@ -96,6 +96,20 @@ describe("selectBundles", () => {
         manifest.bundles.docs.platforms = ["!claude-code"];
         expect(selectBundles(manifest).map((bundle) => bundle.name)).toEqual(["legacy"]);
     });
+
+    it("does not publish refs-only bundles as local skill directories", () => {
+        const manifest = createManifest();
+        manifest.bundles.external = {
+            name: "external",
+            version: "1.0.0",
+            description: "External skill",
+            default: false,
+            items: [],
+            refs: [{ source: "gh:owner/repo/skills/external", target: "skills/external" }],
+        };
+        expect(selectBundles(manifest).map((bundle) => bundle.name)).toEqual(["docs", "legacy"]);
+        expect(collectSkillLocations(manifest).some((location) => location.pluginName === "external")).toBe(false);
+    });
 });
 
 describe("collectSkillNames", () => {

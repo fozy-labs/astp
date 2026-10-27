@@ -61,6 +61,7 @@ interface BundlePlan {
     selected: Set<string>;
     declined: Set<string>;
     tempDir: string;
+    units: TemplateUnit[];
     blockSelections: BlockSelections;
     force: ForceScope;
 }
@@ -140,9 +141,9 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
         const downloaded: DownloadedBundle[] = [];
         for (const { bundle, source } of candidates) {
             try {
-                const units = groupTemplateItems(bundle.items, platform);
+                const units = groupTemplateItems(bundle, platform);
                 validateUnitTargets(target.rootDir, units);
-                const tempDir = await downloadBundle(source.source, bundle);
+                const tempDir = await downloadBundle(source.source, bundle, units);
                 tempDirs.push(tempDir);
                 await assertBundleSources(tempDir, bundle.name, units);
                 await assertBundleBlocks(tempDir, bundle.name, units);
@@ -260,11 +261,11 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 });
                 for (const [file, selection] of selections) blockSelections.set(file, selection);
             }
-            plans.push({ bundle, source, selected, declined, tempDir, blockSelections, force });
+            plans.push({ bundle, source, selected, declined, tempDir, units, blockSelections, force });
         }
 
         const selectedUnits = plans.flatMap((plan) =>
-            groupTemplateItems(plan.bundle.items, platform).filter((unit) => plan.selected.has(unit.relativePath)),
+            plan.units.filter((unit) => plan.selected.has(unit.relativePath)),
         );
         if (
             isInteractive() &&
@@ -290,6 +291,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 installed: installedState.bundles.find((entry) => entry.bundleName === plan.bundle.name),
                 lock: installedState.lock,
                 tempDir: plan.tempDir,
+                units: plan.units,
                 selected: plan.selected,
                 declined: plan.declined,
                 blockSelections: plan.blockSelections,

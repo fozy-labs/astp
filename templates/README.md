@@ -67,7 +67,18 @@ The `manifest.json` file defines all available bundles and their contents. It is
 | `use-when` | `string` *(optional)* | Non-empty guidance on when to install or use the bundle; shown in `astp list`, omitted from interactive prompts. |
 | `default` | `boolean` | Whether this bundle is pre-selected by default in the interactive wizard. |
 | `platforms` | `PlatformFilter[]` *(optional)* | Coding agents this bundle supports — `"claude-code"` is the only value today. Defaults to all platforms when omitted. |
-| `items` | `TemplateItem[]` | Files included in this bundle. |
+| `items` | `TemplateItem[]` | Files included in this bundle. Use `[]` for a refs-only bundle. |
+| `refs` | `BundleRef[]` *(optional)* | External skill directories downloaded without vendoring their files. |
+
+### BundleRef fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `source` | `string` | Giget source of the external skill directory, e.g. `gh:owner/repo/skills/name#ref`. For a local manifest, a local path resolved from the manifest directory also works. |
+| `target` | `string` | Install directory in the form `skills/<name>`. |
+| `optional`, `labels`, `platforms` | Same as `TemplateItem` *(optional)* | Unit selection and platform metadata for the whole referenced skill. |
+
+A referenced directory must contain `SKILL.md`. Astp installs every regular file in it as one skill unit; refs cannot overlap regular items or other refs. Referenced skills are not published in `.claude-plugin/marketplace.json`, which points only to committed files.
 
 ### Platform values
 

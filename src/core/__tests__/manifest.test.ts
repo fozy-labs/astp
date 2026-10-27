@@ -45,7 +45,17 @@ const validManifestData = {
     },
 };
 
-function withBundle(name: string, items: unknown[] = [rule(name, "rules/a.md")], key = name) {
+function withBundle(
+    name: string,
+    items: unknown[] = [rule(name, "rules/a.md")],
+    key = name,
+): {
+    schemaVersion: number;
+    bundles: Record<
+        string,
+        { name: string; version: string; description: string; default: boolean; items: unknown[]; refs?: unknown }
+    >;
+} {
     return {
         schemaVersion: 1,
         bundles: { [key]: { name, version: "1.0.0", description: "x", default: false, items } },
@@ -214,6 +224,47 @@ describe("validateManifest", () => {
         }
     });
 
+    it("accepts external skill refs with unit metadata", () => {
+        const ref = {
+            source: "gh:owner/repo/skills/external#main",
+            target: "skills/external",
+            optional: true,
+            labels: ["experimental"],
+            platforms: ["claude-code"],
+        };
+        const data = withBundle("core", []);
+        data.bundles.core = { ...data.bundles.core, refs: [ref] };
+        expect(validateManifest(data).bundles.core.refs).toEqual([ref]);
+    });
+
+    it.each([
+        ["non-array refs", {}, "refs must be an array"],
+        ["non-object ref", [null], "refs[0] must be an object"],
+        ["empty source", [{ source: " ", target: "skills/x" }], "refs[0].source must be a non-empty string"],
+        ["non-skill target", [{ source: "gh:o/r/x", target: "rules/x" }], "refs[0].target must look like"],
+        ["file target", [{ source: "gh:o/r/x", target: "skills/x/SKILL.md" }], "refs[0].target must look like"],
+        [
+            "invalid metadata",
+            [{ source: "gh:o/r/x", target: "skills/x", optional: "yes" }],
+            "refs[0].optional must be a boolean",
+        ],
+    ])("rejects %s", (_label, refs, message) => {
+        const data = withBundle("core", []);
+        data.bundles.core = { ...data.bundles.core, refs };
+        expect(() => validateManifest(data)).toThrow(`Invalid bundle 'core': ${message}`);
+    });
+
+    it("rejects a ref that collides with a regular skill", () => {
+        const data = withBundle("core", [
+            { source: "core/skills/x/SKILL.md", target: "skills/x/SKILL.md", category: "skill" },
+        ]);
+        data.bundles.core = {
+            ...data.bundles.core,
+            refs: [{ source: "gh:o/r/x", target: "skills/x" }],
+        };
+        expect(() => validateManifest(data)).toThrow("Invalid bundle 'core': items and refs");
+    });
+
     it("accepts optional, labels and platform filters on items", () => {
         const item = {
             ...rule("core", "rules/a.md"),
@@ -273,28 +324,28 @@ describe("validateManifest", () => {
     // T14: Unsupported schema version
     it("T14: throws on unsupported schema version", () => {
         expect(() => validateManifest({ ...validManifestData, schemaVersion: 99 })).toThrow(
-            `Unsupported manifest schema version 99 (supported: 1.0, 2.0). Update astp CLI: ${UPDATE_CLI_COMMAND}`,
+            `Unsupported manifest schema version 99 (supported: 1.0, 2.0–2.1). Update astp CLI: ${UPDATE_CLI_COMMAND}`,
         );
     });
 
     it("accepts 'major.minor' string schemaVersion and reports when minor is newer than supported", () => {
-        const current = validateManifest({ ...validManifestData, schemaVersion: "2.0" });
-        expect(current.schemaVersion).toBe("2.0");
+        const current = validateManifest({ ...validManifestData, schemaVersion: "2.1" });
+        expect(current.schemaVersion).toBe("2.1");
         expect(checkManifestVersion(current)).toBeNull();
         expect(checkManifestVersion(validateManifest(validManifestData))).toBeNull();
 
-        const newerMinor = validateManifest({ ...validManifestData, schemaVersion: "2.1" });
-        expect(newerMinor.schemaVersion).toBe("2.1");
+        const newerMinor = validateManifest({ ...validManifestData, schemaVersion: "2.2" });
+        expect(newerMinor.schemaVersion).toBe("2.2");
         expect(checkManifestVersion(newerMinor)).toEqual({
-            manifestVersion: "2.1",
-            supportedVersion: "2.0",
+            manifestVersion: "2.2",
+            supportedVersion: "2.1",
             updateCommand: UPDATE_CLI_COMMAND,
         });
     });
 
     it("rejects unsupported major version in 'major.minor' string and older major versions", () => {
         expect(() => validateManifest({ ...validManifestData, schemaVersion: "3.0" })).toThrow(
-            `Unsupported manifest schema version 3.0 (supported: 1.0, 2.0). Update astp CLI: ${UPDATE_CLI_COMMAND}`,
+            `Unsupported manifest schema version 3.0 (supported: 1.0, 2.0–2.1). Update astp CLI: ${UPDATE_CLI_COMMAND}`,
         );
         expect(() => validateManifest({ ...validManifestData, schemaVersion: 1 }, { 2: 1 })).toThrow(
             "Unsupported manifest schema version 1 (supported: 2.0–2.1).",

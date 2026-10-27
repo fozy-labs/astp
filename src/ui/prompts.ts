@@ -111,7 +111,7 @@ export interface BlockOption {
 export interface BundleEntry {
     /** Resolved bundle (items from its lock source). */
     bundle: Bundle;
-    /** `groupTemplateItems(bundle.items)`. */
+    /** `groupTemplateItems(bundle)`, with refs materialized by `downloadBundle`. */
     units: TemplateUnit[];
     /** Unit paths Space selects on an empty bundle: all minus the lock's declines. */
     defaults: string[];
@@ -480,7 +480,7 @@ export async function confirmInstall(
     target: InstallTarget,
     selectedUnits?: TemplateUnit[],
 ): Promise<boolean> {
-    const units = selectedUnits ?? bundles.flatMap((bundle) => groupTemplateItems(bundle.items, target.platform));
+    const units = selectedUnits ?? bundles.flatMap((bundle) => groupTemplateItems(bundle, target.platform));
     const targetLabel = describeTarget(target);
 
     const confirmed = await p.confirm({

@@ -14,6 +14,7 @@ import { assertInsideRoot, foldPath, nullPrototype } from "./path-safety.js";
 import { computeSkillTreeHash, computeTemplateUnitHash, listSkillTree } from "./skill-tree.js";
 import type { UnitBlockFile } from "./unit-blocks.js";
 import { readUnitBlockFiles } from "./unit-blocks.js";
+import type { TemplateUnit } from "./units.js";
 import { groupTemplateItems } from "./units.js";
 
 export interface SyncResult {
@@ -50,6 +51,8 @@ export async function syncBundle(args: {
     installed?: InstalledBundle;
     lock: Lock;
     tempDir: string;
+    /** Units materialized by downloadBundle; defaults to regular manifest items for direct callers. */
+    units?: TemplateUnit[];
     selected: Set<string>;
     declined: Set<string>;
     blockSelections?: BlockSelections;
@@ -68,7 +71,7 @@ export async function syncBundle(args: {
         conflictBlocks: [],
     };
     const rootDir = args.target.rootDir;
-    const units = groupTemplateItems(args.bundle.items, args.target.platform);
+    const units = args.units ?? groupTemplateItems(args.bundle, args.target.platform);
     const manifestPaths = new Set(units.map((unit) => `${unit.kind}\0${unit.relativePath}`));
     const manifestUnitPaths = new Set(units.map((unit) => unit.relativePath));
     const currentByPath = new Map(args.installed?.units.map((unit) => [unit.relativePath, unit]) ?? []);

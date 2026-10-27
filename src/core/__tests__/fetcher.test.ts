@@ -56,6 +56,45 @@ describe("fetcher", () => {
         await expect(fs.stat(path.join(work, "tests/docs/rules/a.md"))).resolves.toBeTruthy();
     });
 
+    it("downloads an external skill ref without requiring a local bundle directory", async () => {
+        const referenced: Bundle = {
+            ...bundle,
+            items: [],
+            refs: [{ source: "gh:owner/repo/skills/external#main", target: "skills/external" }],
+        };
+        mockedDownloadTemplate.mockImplementation(async (input, options) => {
+            expect(input).toBe("gh:owner/repo/skills/external#main");
+            await fs.mkdir(path.join(options!.dir!, "references"), { recursive: true });
+            await fs.writeFile(path.join(options!.dir!, "SKILL.md"), "---\ndescription: External\n---\n# External\n");
+            await fs.writeFile(path.join(options!.dir!, "references/guide.md"), "Guide\n");
+            return { dir: options!.dir! } as never;
+        });
+        const source = await resolveSource("./manifest.json", work);
+
+        const dir = await downloadBundle(source, referenced);
+        tempDirs.push(dir);
+
+        expect(await fs.readFile(path.join(dir, "skills/external/SKILL.md"), "utf8")).toContain("# External");
+        expect(await fs.readFile(path.join(dir, "skills/external/references/guide.md"), "utf8")).toBe("Guide\n");
+    });
+
+    it("rejects an external ref without SKILL.md", async () => {
+        const referenced: Bundle = {
+            ...bundle,
+            items: [],
+            refs: [{ source: "gh:owner/repo/skills/external", target: "skills/external" }],
+        };
+        mockedDownloadTemplate.mockImplementation(async (_input, options) => {
+            await fs.mkdir(options!.dir!, { recursive: true });
+            return { dir: options!.dir! } as never;
+        });
+        const source = await resolveSource("./manifest.json", work);
+
+        await expect(downloadBundle(source, referenced)).rejects.toThrow(
+            "Referenced skill 'gh:owner/repo/skills/external' has no SKILL.md",
+        );
+    });
+
     describe("links in a local source", () => {
         let root: string;
         let outside: string;

@@ -147,6 +147,42 @@ describe("groupTemplateItems", () => {
             ).toThrow("Skill item 'skills/alpha/references/guide.md' cannot set 'optional', 'labels' or 'platforms'");
         }
     });
+
+    it("groups external refs as skill units and applies their metadata and platform filters", () => {
+        const bundle = {
+            name: "external",
+            version: "1.0.0",
+            description: "External skills",
+            default: false,
+            items: [],
+            refs: [
+                {
+                    source: "gh:owner/repo/skills/alpha",
+                    target: "skills/alpha",
+                    optional: true,
+                    labels: ["experimental"],
+                    platforms: ["claude-code" as const],
+                },
+                {
+                    source: "gh:owner/repo/skills/beta",
+                    target: "skills/beta",
+                    platforms: ["!claude-code" as const],
+                },
+            ],
+        };
+
+        expect(groupTemplateItems(bundle, "claude-code")).toEqual([
+            {
+                kind: "skill",
+                relativePath: "skills/alpha",
+                items: [],
+                ref: bundle.refs[0],
+                optional: true,
+                labels: ["experimental"],
+                platforms: ["claude-code"],
+            },
+        ]);
+    });
 });
 
 describe("resolveUnitPaths", () => {

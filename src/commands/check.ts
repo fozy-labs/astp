@@ -40,7 +40,7 @@ export async function executeCheck(options: CheckOptions): Promise<void> {
         );
         const changed = installed.bundles.flatMap((bundle) => {
             const manifestBundle = opened.get(bundle.bundleName)!.manifest.bundles[bundle.bundleName];
-            const manifestUnits = manifestBundle ? groupTemplateItems(manifestBundle.items, platform) : [];
+            const manifestUnits = manifestBundle ? groupTemplateItems(manifestBundle, platform) : [];
             return bundle.units
                 .filter((unit) => unit.origin === "lock" && (unit.state === "modified" || unit.blocks?.dirty))
                 .map((unit) => {
