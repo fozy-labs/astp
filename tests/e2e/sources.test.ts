@@ -270,6 +270,47 @@ describe("E2E: manifest sources", () => {
         expect(extra.units.filter((unit) => unit.state === "missing")).toEqual([]);
     });
 
+    it("does not install an excluded override over an active target", async () => {
+        const manifestPath = path.join(projectDir, "a/templates/manifest.json");
+        const manifest: Manifest = {
+            schemaVersion: "3.0",
+            bundles: {
+                core: {
+                    name: "core",
+                    version: "1.0.0",
+                    description: "Platform rules",
+                    default: false,
+                    platforms: ["claude-code", "kimi-code"],
+                    items: [
+                        {
+                            source: "core/rules/claude.md",
+                            target: "rules/claude.md",
+                            category: "rule",
+                            platforms: ["claude-code"],
+                            targets: { "kimi-code": "AGENTS.md" },
+                        },
+                        {
+                            source: "core/AGENTS.md",
+                            target: "AGENTS.md",
+                            category: "rule",
+                            platforms: ["kimi-code"],
+                        },
+                    ],
+                },
+            },
+        };
+        await fs.writeFile(manifestPath, JSON.stringify(manifest));
+        await fs.writeFile(path.join(projectDir, "a/templates/core/rules/claude.md"), "Claude only\n");
+        await fs.writeFile(path.join(projectDir, "a/templates/core/AGENTS.md"), "Kimi instructions\n");
+        const kimiRoot = path.join(projectDir, ".kimi-code");
+        vi.mocked(resolveTarget).mockReturnValue({ platform: "kimi-code", type: "project", rootDir: kimiRoot });
+
+        await executeInstall({ ...opts, platform: "kimi-code", bundle: "core", source: "./a" });
+
+        expect(await fs.readFile(path.join(kimiRoot, "AGENTS.md"), "utf8")).toBe("Kimi instructions\n");
+        await expect(fs.stat(path.join(kimiRoot, "rules/claude.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    });
+
     it("names the bundle and a fix when its lock source is gone", async () => {
         await executeInstall({ ...opts, bundle: "core", source: "./a" });
         await fs.rm(path.join(projectDir, "a"), { recursive: true });

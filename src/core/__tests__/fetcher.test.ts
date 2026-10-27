@@ -252,6 +252,33 @@ describe("fetcher", () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
+    it("does not fetch or write an excluded override over an active URL target", async () => {
+        const fetchMock = vi.fn(async (url: URL) => new Response(`file ${url.pathname}`));
+        vi.stubGlobal("fetch", fetchMock);
+        const source = await resolveSource("https://host/m/manifest.json", work);
+        const filtered: Bundle = {
+            ...bundle,
+            items: [
+                {
+                    source: "docs/AGENTS.md",
+                    target: "AGENTS.md",
+                    category: "rule",
+                    platforms: ["kimi-code"],
+                },
+                {
+                    ...bundle.items[0]!,
+                    platforms: ["claude-code"],
+                    targets: { "kimi-code": "AGENTS.md" },
+                },
+            ],
+        };
+        const dir = await downloadBundle(source, filtered, "kimi-code");
+        tempDirs.push(dir);
+
+        expect(await fs.readFile(path.join(dir, "AGENTS.md"), "utf8")).toBe("file /m/docs/AGENTS.md");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it("fetches a URL item whose name has URL syntax characters", async () => {
         vi.stubGlobal(
             "fetch",

@@ -5,7 +5,7 @@ import path from "node:path";
 import { downloadTemplate } from "giget";
 
 import type { Bundle, Manifest, Platform } from "@/types/index.js";
-import { resolveItemTarget } from "@/types/index.js";
+import { itemSupportsPlatform, resolveItemTarget } from "@/types/index.js";
 
 import { validateManifest } from "./manifest.js";
 import { assertSafeRelativePath } from "./path-safety.js";
@@ -53,6 +53,7 @@ export async function downloadBundle(source: ManifestSource, bundle: Bundle, pla
         if (source.kind === "url") {
             const root = new URL(".", source.manifestUrl);
             for (const item of bundle.items) {
+                if (platform && !itemSupportsPlatform(item, platform)) continue;
                 const target = platform ? resolveItemTarget(item, platform) : item.target;
                 assertSafeRelativePath(item.target, "item target");
                 assertSafeRelativePath(target, "item target");
@@ -104,6 +105,7 @@ async function copyTargetOverrides(tempDir: string, bundle: Bundle, platform?: P
     if (!platform) return;
     const overrides: Array<{ targetFile: string; content: Buffer }> = [];
     for (const item of bundle.items) {
+        if (!itemSupportsPlatform(item, platform)) continue;
         const target = resolveItemTarget(item, platform);
         if (target === item.target) continue;
         assertSafeRelativePath(item.target, "item target");
