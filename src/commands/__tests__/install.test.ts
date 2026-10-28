@@ -167,6 +167,7 @@ describe("executeInstall", () => {
             expect.objectContaining({ name: "core" }),
             expect.any(Array),
             "claude-code",
+            undefined,
         );
         expect(mockSyncBundle).toHaveBeenCalledTimes(1);
         expect(mockSyncBundle).toHaveBeenCalledWith(

@@ -50,6 +50,7 @@ interface UpdatePlan {
     bundleName: string;
     bundle: Bundle;
     spec: string;
+    resolvedCommit?: string;
     installed: InstalledBundle | undefined;
     tempDir: string;
     units: TemplateUnit[];
@@ -187,7 +188,18 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                 const selections = await selectUpdateBlocks(unit.relativePath, blockFiles, lockUnit);
                 for (const [fileTarget, selection] of selections) blockSelections.set(fileTarget, selection);
             }
-            plans.push({ bundleName, bundle, spec, installed, tempDir, units, selected, declined, blockSelections });
+            plans.push({
+                bundleName,
+                bundle,
+                spec,
+                resolvedCommit: opened.get(bundleName)!.resolvedCommit,
+                installed,
+                tempDir,
+                units,
+                selected,
+                declined,
+                blockSelections,
+            });
         }
 
         const totals = {
@@ -201,6 +213,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             const result = await syncBundle({
                 target,
                 source: plan.spec,
+                resolvedCommit: plan.resolvedCommit,
                 bundle: plan.bundle,
                 installed: plan.installed,
                 lock: installedState.lock,

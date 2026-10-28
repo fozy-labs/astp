@@ -16,9 +16,9 @@ describe("lock file", () => {
     });
 
     it("returns an empty lock when missing and round-trips valid state", async () => {
-        await expect(readLock(rootDir)).resolves.toEqual({ schemaVersion: 1, bundles: {} });
+        await expect(readLock(rootDir)).resolves.toEqual({ schemaVersion: 2, bundles: {} });
         const lock = {
-            schemaVersion: 1 as const,
+            schemaVersion: 2 as const,
             bundles: {
                 core: {
                     source: "fozy-labs/astp",
@@ -29,7 +29,7 @@ describe("lock file", () => {
         };
         await writeLock(rootDir, lock);
         await expect(readLock(rootDir)).resolves.toEqual({
-            schemaVersion: 1,
+            schemaVersion: 2,
             bundles: {
                 core: {
                     source: "fozy-labs/astp",
@@ -38,6 +38,64 @@ describe("lock file", () => {
                 },
             },
         });
+    });
+
+    it("migrates schema 1 and round-trips primary and external ref commits in schema 2", async () => {
+        const lockPath = path.join(rootDir, "astp.lock");
+        await fs.writeFile(
+            lockPath,
+            JSON.stringify({
+                schemaVersion: 1,
+                bundles: {
+                    core: {
+                        source: "gh:o/r#main",
+                        declined: [],
+                        units: { "rules/a.md": { kind: "file", version: "1.0.0", hash: "h" } },
+                    },
+                },
+            }),
+        );
+        expect((await readLock(rootDir)).schemaVersion).toBe(2);
+
+        const lock = await readLock(rootDir);
+        lock.bundles.core!.resolvedCommit = "0123456789abcdef0123456789abcdef01234567";
+        lock.bundles.core!.units["skills/external"] = {
+            kind: "skill",
+            version: "1.0.0",
+            hash: "h",
+            ref: {
+                source: "gh:o/external#main",
+                resolvedCommit: "fedcba9876543210fedcba9876543210fedcba98",
+            },
+        };
+        await writeLock(rootDir, lock);
+
+        const written = JSON.parse(await fs.readFile(lockPath, "utf8"));
+        expect(written.schemaVersion).toBe(2);
+        expect(written.bundles.core.resolvedCommit).toBe("0123456789abcdef0123456789abcdef01234567");
+        expect(written.bundles.core.units["skills/external"].ref).toEqual({
+            source: "gh:o/external#main",
+            resolvedCommit: "fedcba9876543210fedcba9876543210fedcba98",
+        });
+        await expect(readLock(rootDir)).resolves.toEqual(lock);
+    });
+
+    it.each(["not-a-sha", 5, null])("rejects an invalid resolvedCommit %j", async (resolvedCommit) => {
+        await fs.writeFile(
+            path.join(rootDir, "astp.lock"),
+            JSON.stringify({
+                schemaVersion: 2,
+                bundles: {
+                    core: {
+                        source: "gh:o/r#main",
+                        resolvedCommit,
+                        declined: [],
+                        units: {},
+                    },
+                },
+            }),
+        );
+        await expect(readLock(rootDir)).rejects.toThrow("bundle 'core'.resolvedCommit must be a full commit SHA");
     });
 
     it("rejects malformed JSON and invalid field types with the absolute path", async () => {
@@ -74,7 +132,7 @@ describe("lock file", () => {
         const lockPath = path.join(rootDir, "astp.lock");
         const unit = { kind: "file", version: "1.0.0", hash: "h", blocks: { "constructor#constructor": "b" } };
         const json = JSON.stringify({
-            schemaVersion: 1,
+            schemaVersion: 2,
             bundles: {
                 ["__proto__"]: {
                     source: "repo",
@@ -99,9 +157,9 @@ describe("lock file", () => {
 
     it("rejects unknown schema versions", async () => {
         const lockPath = path.join(rootDir, "astp.lock");
-        await fs.writeFile(lockPath, JSON.stringify({ schemaVersion: 2, bundles: {} }));
+        await fs.writeFile(lockPath, JSON.stringify({ schemaVersion: 3, bundles: {} }));
         await expect(readLock(rootDir)).rejects.toThrow(
-            `Unsupported lock schema version 2 in ${lockPath}. Update astp CLI.`,
+            `Unsupported lock schema version 3 in ${lockPath}. Update astp CLI.`,
         );
     });
 

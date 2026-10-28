@@ -21,6 +21,7 @@ export interface SkillTemplateUnit extends TemplateUnitMetadata {
     relativePath: string;
     items: TemplateItem[];
     ref?: BundleRef;
+    resolvedCommit?: string;
 }
 
 export type TemplateUnit = FileTemplateUnit | SkillTemplateUnit;

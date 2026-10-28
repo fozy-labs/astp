@@ -3,12 +3,15 @@ import path from "node:path";
 
 import type { InstallTarget } from "@/types/index.js";
 
+import type { GitCoordinates, GitProvider } from "./git.js";
+import { resolveGitCommit } from "./git.js";
+
 export const DEFAULT_SOURCE = "gh:fozy-labs/astp";
 
 const DEFAULT_MANIFEST = "templates/manifest.json";
 const GIT_PROVIDERS = new Set(["gh", "github", "gitlab", "bitbucket", "sourcehut"]);
 // giget's parseGitURI grammar: the repository is always two segments.
-const GIT_RE = /^(?<repo>[\w.-]+\/[\w.-]+)(?<path>\/[^#]*)?(?:#(?<ref>[\w./@-]+))?$/;
+const GIT_RE = /^(?<repo>[~\w.-]+\/[\w.-]+)(?<path>\/[^#]*)?(?:#(?<ref>[\w./@-]+))?$/;
 const NPM_RE = /^(?<name>(?:@[\w.-]+\/)?[\w.-]+)(?:@(?<version>[\w.+-]+))?$/;
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const LOCAL_RE = /^(?:\.{1,2}(?:[\\/]|$)|[\\/]|[A-Za-z]:[\\/])/;
@@ -37,6 +40,9 @@ export type ManifestSource =
           /** Manifest path inside the download. */
           manifestFile: string;
           auth: boolean;
+          /** Git coordinates used to pin the archive to a commit. */
+          git?: GitCoordinates & { dir: string };
+          resolvedCommit?: string;
           downloadDir?: string;
       }
     | { kind: "url"; spec: string; manifestUrl: URL };
@@ -110,15 +116,16 @@ function gitSource(provider: string, rest: string, spec: string): ManifestSource
     if (!match?.groups) throw invalidSource(spec);
     const { repo, ref } = match.groups as { repo: string; ref?: string };
     const subPath = (match.groups.path ?? "").replace(/\/+$/, "");
-    const refSuffix = `#${ref ?? "HEAD"}`;
+    const revision = ref ?? "HEAD";
     const json = isJson(subPath);
     const dir = json ? path.posix.dirname(subPath) : `${subPath}/templates`;
     return {
         kind: "archive",
         spec: `${provider}:${repo}${subPath}${ref ? `#${ref}` : ""}`,
-        address: `${provider}:${repo}${dir === "/" ? "" : dir}${refSuffix}`,
+        address: `${provider}:${repo}${dir === "/" ? "" : dir}#${revision}`,
         manifestFile: json ? path.posix.basename(subPath) : "manifest.json",
         auth: provider === "gh",
+        git: { provider: provider as GitProvider, repo, ref: revision, dir },
     };
 }
 
@@ -178,6 +185,62 @@ async function pathExists(target: string, spec: string): Promise<boolean> {
         if (code === "ENOENT" || code === "ENOTDIR") return false;
         throw new Error(`Cannot check whether source '${spec}' names a local path: ${(error as Error).message}`);
     }
+}
+
+export interface RevisionOptions {
+    lockedCommit?: string;
+    requireLocked?: boolean;
+}
+
+export async function resolveSourceRevision(
+    source: ManifestSource,
+    options: RevisionOptions = {},
+): Promise<{ source: ManifestSource; resolvedCommit?: string }> {
+    if (source.kind !== "archive" || !source.git) return { source };
+    if (options.requireLocked && !options.lockedCommit) {
+        throw new Error(`Source '${source.spec}' has no resolvedCommit; run astp update before sync`);
+    }
+    const resolvedCommit = options.lockedCommit ?? (await resolveGitCommit(source.git));
+    const { provider, repo, dir } = source.git;
+    return {
+        source: {
+            ...source,
+            address: `${provider}:${repo}${dir === "/" ? "" : dir}#${resolvedCommit}`,
+            resolvedCommit,
+        },
+        resolvedCommit,
+    };
+}
+
+export interface ResolvedRef {
+    address: string;
+    auth: boolean;
+    resolvedCommit?: string;
+}
+
+export async function resolveRefRevision(refSource: string, options: RevisionOptions = {}): Promise<ResolvedRef> {
+    const providerMatch = /^([\w-]+):(?!\/\/)(.*)$/.exec(refSource);
+    const rawProvider = providerMatch?.[1];
+    const provider = rawProvider === "github" ? "gh" : rawProvider;
+    if ((provider && !GIT_PROVIDERS.has(provider)) || /^https?:\/\//i.test(refSource)) {
+        return { address: refSource, auth: /^(?:gh|github):/.test(refSource) };
+    }
+    const rest = provider ? providerMatch![2]! : refSource;
+    const match = GIT_RE.exec(rest);
+    if (!match?.groups) return { address: refSource, auth: false };
+    const normalized = (provider ?? "gh") as GitProvider;
+    const { repo, ref } = match.groups as { repo: string; ref?: string };
+    const subPath = (match.groups.path ?? "").replace(/\/+$/, "");
+    if (options.requireLocked && !options.lockedCommit) {
+        throw new Error(`External ref '${refSource}' has no resolvedCommit; run astp update before sync`);
+    }
+    const resolvedCommit =
+        options.lockedCommit ?? (await resolveGitCommit({ provider: normalized, repo, ref: ref ?? "HEAD" }));
+    return {
+        address: `${normalized}:${repo}${subPath}#${resolvedCommit}`,
+        auth: normalized === "gh",
+        resolvedCommit,
+    };
 }
 
 function invalidSource(spec: string): Error {

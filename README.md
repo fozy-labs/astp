@@ -31,6 +31,7 @@ astp install fozy-labs --target project
 | `astp` | Launch interactive wizard |
 | `astp install [bundle] [--source <spec>] [--skill <name>] [--block <name>] [--force]` | Install a bundle or selected units to the selected target |
 | `astp update [--force]` | Update installed files to latest versions |
+| `astp sync [--force]` | Restore files from the commits and selections in `astp.lock` without changing it |
 | `astp check` | Check for updates and bundles out of sync with the manifest |
 | `astp delete [bundle] [--skill <name>] [--force]` | Remove an installed bundle or selected units |
 | `astp list [bundle] [--source <spec>] [--json]` | List available and installed bundles or bundle units |
@@ -46,7 +47,7 @@ All commands accept `--platform <claude-code|kimi-code>` and `--target <project|
 
 ### Sources
 
-By default bundles come from `gh:fozy-labs/astp` (`templates/manifest.json` on `main`). `--source <spec>` reads another manifest; `astp.lock` records each bundle's source, and `update` and `check` use it. A bundle switches source only when `--source` is passed again.
+By default bundles come from `gh:fozy-labs/astp` (`templates/manifest.json` on `main`). `--source <spec>` reads another manifest; `astp.lock` records each bundle's source, and `update` and `check` use it. A bundle switches source only when `--source` is passed again. In schema 2, the lock also records the exact Git commit of the bundle and each external ref: reinstall and `sync` reuse those commits, while `update` advances them. Run `astp update` once to migrate older locks before using `sync` with Git sources.
 
 | `--source` | Reads |
 |------------|-------|
@@ -76,6 +77,14 @@ astp update [--force] [--platform <claude-code|kimi-code>] [--target <project|us
 ```
 
 Update installed units to the latest version from each bundle's source in `astp.lock`. A non-interactive update also installs new non-optional units and keeps declined ones. Units and blocks dropped upstream are removed; modified ones are left in place and no longer tracked in `astp.lock`, unless `--force` is passed. Modified legacy units are kept unless `--force` is passed. In a terminal, it first asks which new units and blocks to install.
+
+### sync
+
+```bash
+astp sync [--force] [--platform <claude-code|kimi-code>] [--target <project|user>]
+```
+
+Restore the locked units and block selections without resolving new versions or writing `astp.lock`. Git bundles and external refs are downloaded at their locked commits. Locally modified files are skipped unless `--force` is passed. Local directories and other unlocked sources must still match the locked unit versions and hashes; if they have moved, run `astp update` first.
 
 ### check
 
@@ -145,6 +154,9 @@ Without a terminal astp never prompts: a missing `--target`, or a missing bundle
 ```bash
 # Install Fozy Labs skills
 astp install fozy-labs --platform claude-code --target project
+
+# Restore the committed lock state on another runner
+astp sync --platform claude-code --target project
 
 # Check for updates
 astp check --platform claude-code --target project

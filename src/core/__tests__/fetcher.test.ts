@@ -10,10 +10,12 @@ import type { Bundle } from "@/types/index.js";
 import { canSymlinkFiles } from "../../__tests__/links.js";
 import { closeSource, downloadBundle, fetchManifest } from "../fetcher.js";
 import { resolveSource } from "../source.js";
+import { groupTemplateItems } from "../units.js";
 
 vi.mock("giget", () => ({ downloadTemplate: vi.fn() }));
 
 const mockedDownloadTemplate = vi.mocked(downloadTemplate);
+const REF_SHA = "0123456789abcdef0123456789abcdef01234567";
 
 const bundle: Bundle = {
     name: "docs",
@@ -36,6 +38,10 @@ describe("fetcher", () => {
 
     beforeEach(async () => {
         vi.clearAllMocks();
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => new Response(JSON.stringify({ sha: REF_SHA }))),
+        );
         work = await fs.mkdtemp(path.join(os.tmpdir(), "astp-fetcher-"));
     });
 
@@ -63,7 +69,7 @@ describe("fetcher", () => {
             refs: [{ source: "gh:owner/repo/skills/external#main", target: "skills/external" }],
         };
         mockedDownloadTemplate.mockImplementation(async (input, options) => {
-            expect(input).toBe("gh:owner/repo/skills/external#main");
+            expect(input).toBe(`gh:owner/repo/skills/external#${REF_SHA}`);
             await fs.mkdir(path.join(options!.dir!, "references"), { recursive: true });
             await fs.writeFile(path.join(options!.dir!, "SKILL.md"), "---\ndescription: External\n---\n# External\n");
             await fs.writeFile(path.join(options!.dir!, "references/guide.md"), "Guide\n");
@@ -76,6 +82,37 @@ describe("fetcher", () => {
 
         expect(await fs.readFile(path.join(dir, "skills/external/SKILL.md"), "utf8")).toContain("# External");
         expect(await fs.readFile(path.join(dir, "skills/external/references/guide.md"), "utf8")).toBe("Guide\n");
+    });
+
+    it("downloads an external ref at its locked SHA without resolving the branch again", async () => {
+        const locked = "fedcba9876543210fedcba9876543210fedcba98";
+        const referenced: Bundle = {
+            ...bundle,
+            items: [],
+            refs: [{ source: "gh:owner/repo/skills/external#main", target: "skills/external" }],
+        };
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+        mockedDownloadTemplate.mockImplementation(async (input, options) => {
+            expect(input).toBe(`gh:owner/repo/skills/external#${locked}`);
+            await fs.mkdir(options!.dir!, { recursive: true });
+            await fs.writeFile(path.join(options!.dir!, "SKILL.md"), "---\ndescription: External\n---\n# External\n");
+            return { dir: options!.dir! } as never;
+        });
+        const source = await resolveSource("./manifest.json", work);
+        const units = groupTemplateItems(referenced);
+
+        const dir = await downloadBundle(
+            source,
+            referenced,
+            units,
+            undefined,
+            new Map([["skills/external", { lockedCommit: locked, requireLocked: true }]]),
+        );
+        tempDirs.push(dir);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(units[0]).toMatchObject({ resolvedCommit: locked });
     });
 
     it("rejects an external ref without SKILL.md", async () => {

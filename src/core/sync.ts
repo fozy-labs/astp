@@ -47,6 +47,9 @@ export async function syncBundle(args: {
     target: InstallTarget;
     /** Source string recorded in the lock. */
     source: string;
+    resolvedCommit?: string;
+    /** Set to false for read-only lock restoration via the sync command. */
+    writeLock?: boolean;
     bundle: Bundle;
     installed?: InstalledBundle;
     lock: Lock;
@@ -79,10 +82,16 @@ export async function syncBundle(args: {
     const lockBundle: LockBundle = existingLock
         ? {
               source: args.source,
+              ...(args.resolvedCommit ? { resolvedCommit: args.resolvedCommit } : {}),
               declined: [...existingLock.declined],
               units: nullPrototype(existingLock.units),
           }
-        : { source: args.source, declined: [], units: nullPrototype() };
+        : {
+              source: args.source,
+              ...(args.resolvedCommit ? { resolvedCommit: args.resolvedCommit } : {}),
+              declined: [],
+              units: nullPrototype(),
+          };
     const removedLegacy = new Set<string>();
     const keptPaths = new Set<string>();
 
@@ -255,6 +264,14 @@ export async function syncBundle(args: {
                 kind: unit.kind,
                 version: args.bundle.version,
                 hash,
+                ...(unit.kind === "skill" && unit.ref
+                    ? {
+                          ref: {
+                              source: unit.ref.source,
+                              ...(unit.resolvedCommit ? { resolvedCommit: unit.resolvedCommit } : {}),
+                          },
+                      }
+                    : {}),
                 blocks: merged.blocks,
                 declinedBlocks: merged.declinedBlocks,
             };
@@ -277,7 +294,7 @@ export async function syncBundle(args: {
         } else {
             args.lock.bundles[args.bundle.name] = lockBundle;
         }
-        await writeLock(rootDir, args.lock);
+        if (args.writeLock !== false) await writeLock(rootDir, args.lock);
     }
     return result;
 }

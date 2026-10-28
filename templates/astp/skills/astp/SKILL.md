@@ -36,11 +36,12 @@ Without a terminal the CLI cannot prompt, so always pass `--target project` (`./
 | Install a whole bundle | `astp install <bundle> --target project` |
 | Add units or blocks | `astp install <bundle> --skill <name> --block <name> --target project` |
 | Check, then update | `astp check --target project`, then `astp update --target project` |
+| Restore the locked state without changing `astp.lock` | `astp sync --target project` |
 | Remove | `astp delete <bundle> [--skill <name>] --target project` |
 
 - To add to an installed bundle, pass `--skill` or `--block`: a plain `install <bundle>` also brings back what the user declined.
-- Commit `astp.lock` with the installed files; never edit it by hand.
-- When `install` or `update` leaves `<SETUP_REQUIRED>` or `<FILL_INSTRUCTION>` blocks, run [Fill](#fill).
+- Commit `astp.lock` with the installed files; never edit it by hand. Use `sync` to restore it and `update` to advance it.
+- When `install`, `sync` or `update` leaves `<SETUP_REQUIRED>` or `<FILL_INSTRUCTION>` blocks, run [Fill](#fill).
 
 ## Ask before `--force`
 

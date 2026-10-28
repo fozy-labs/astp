@@ -23,8 +23,15 @@ export {
 } from "./manifest.js";
 export type { NewerManifestNotice, SchemaVersion } from "./manifest.js";
 export { closeSource, downloadBundle, fetchManifest } from "./fetcher.js";
-export { ACCEPTED_SOURCES, DEFAULT_SOURCE, formatSource, resolveSource } from "./source.js";
-export type { ManifestSource } from "./source.js";
+export {
+    ACCEPTED_SOURCES,
+    DEFAULT_SOURCE,
+    formatSource,
+    resolveRefRevision,
+    resolveSource,
+    resolveSourceRevision,
+} from "./source.js";
+export type { ManifestSource, RevisionOptions } from "./source.js";
 export { computeSkillTreeHash, computeTemplateUnitHash } from "./skill-tree.js";
 export { readLock, writeLock } from "./lock.js";
 export type { Lock, LockBundle, LockUnit } from "./lock.js";
