@@ -131,8 +131,12 @@ export async function downloadBundle(
 
 const LOCAL_REF_RE = /^(?:\.{1,2}(?:[\\/]|$)|[\\/]|[A-Za-z]:[\\/])/;
 
+export function isLocalRefSource(refSource: string): boolean {
+    return LOCAL_REF_RE.test(refSource);
+}
+
 async function downloadRef(source: ManifestSource, refSource: string, outputDir: string): Promise<void> {
-    if (LOCAL_REF_RE.test(refSource)) {
+    if (isLocalRefSource(refSource)) {
         if (source.kind !== "local") {
             throw new Error(`Local ref '${refSource}' requires a local manifest`);
         }

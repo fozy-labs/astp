@@ -5,6 +5,7 @@ import type { PromptOptions } from "@clack/core";
 import * as p from "@clack/prompts";
 
 import { groupTemplateItems } from "@/core/index.js";
+import type { ProxyComparison } from "@/core/proxy.js";
 import type { TemplateUnit } from "@/core/units.js";
 import type {
     Bundle,
@@ -754,6 +755,49 @@ export function warnNewerManifest(
     p.log.warn(
         `Manifest${from} uses schema version ${manifestVersion}, which is newer than supported by this astp CLI (${supportedVersion}).\nRun \`${updateCommand}\` to update astp.`,
     );
+}
+
+export async function confirmProxyAction(message: string): Promise<boolean> {
+    const confirmed = await p.confirm({ message });
+    if (p.isCancel(confirmed)) throw new CancelledError();
+    return confirmed;
+}
+
+export async function selectProxyBundles(names: string[]): Promise<string[]> {
+    const selected = await p.multiselect({
+        message: "Select bundles to delete:\n(Space = toggle, Enter = confirm)",
+        options: names.map((name) => ({ value: name, label: name })),
+        required: true,
+    });
+    if (p.isCancel(selected)) throw new CancelledError();
+    return selected as string[];
+}
+
+export function showProxyCheckReport(reports: ProxyComparison[]): void {
+    const lines: string[] = [];
+    for (const report of reports) {
+        const available = report.availableVersion ?? "—";
+        const status =
+            report.availableVersion === null
+                ? "not in upstream"
+                : report.outOfSync
+                  ? report.installedVersion === report.availableVersion
+                      ? "out of sync"
+                      : "update available"
+                  : "up to date";
+        lines.push(`${report.bundleName}: ${report.installedVersion || "—"} → ${available} (${status})`);
+        if (report.newUnits.length > 0) lines.push(`  new: ${report.newUnits.join(", ")}`);
+        if (report.removedUnits.length > 0) lines.push(`  removed: ${report.removedUnits.join(", ")}`);
+        if (report.modifiedUnits.length > 0) lines.push(`  changed locally: ${report.modifiedUnits.join(", ")}`);
+        if (report.missingUnits.length > 0) lines.push(`  missing: ${report.missingUnits.join(", ")}`);
+        if (report.driftUnits.length > 0) lines.push(`  manifest drift: ${report.driftUnits.join(", ")}`);
+    }
+    p.log.info(lines.join("\n"));
+}
+
+export function warnProxyForeign(units: ForeignUnit[], command: string): void {
+    const paths = units.map((unit) => `  • ${unit.targetPath}`).join("\n");
+    p.log.warn(`Already present with other content — left untouched:\n${paths}\nRun \`${command}\` to overwrite.`);
 }
 
 export function showSuccess(message: string): void {
