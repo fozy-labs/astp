@@ -15,6 +15,7 @@ import {
     validateUnitTargets,
 } from "@/core/index.js";
 import type { BlockSelections, UnitBlockFile } from "@/core/index.js";
+import type { TemplateUnit } from "@/core/units.js";
 import type { Bundle, FileStatus, InstalledBundle, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { describeUnitCounts } from "@/ui/format.js";
@@ -51,6 +52,7 @@ interface UpdatePlan {
     spec: string;
     installed: InstalledBundle | undefined;
     tempDir: string;
+    units: TemplateUnit[];
     selected: Set<string>;
     declined: Set<string>;
     blockSelections: BlockSelections;
@@ -141,10 +143,10 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             const bundle = manifest.bundles[bundleName];
             if (!bundle) continue;
             const installed = installedState.bundles.find((entry) => entry.bundleName === bundleName);
-            const units = groupTemplateItems(bundle.items, platform);
+            const units = groupTemplateItems(bundle, platform);
             validateUnitTargets(target.rootDir, units);
             s.start(`Downloading ${bundleName}...`);
-            const tempDir = await downloadBundle(source, bundle, platform);
+            const tempDir = await downloadBundle(source, bundle, units, platform);
             tempDirs.push(tempDir);
             s.stop(`Downloaded ${bundleName}.`);
             await assertBundleSources(tempDir, bundleName, units);
@@ -185,7 +187,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                 const selections = await selectUpdateBlocks(unit.relativePath, blockFiles, lockUnit);
                 for (const [fileTarget, selection] of selections) blockSelections.set(fileTarget, selection);
             }
-            plans.push({ bundleName, bundle, spec, installed, tempDir, selected, declined, blockSelections });
+            plans.push({ bundleName, bundle, spec, installed, tempDir, units, selected, declined, blockSelections });
         }
 
         const totals = {
@@ -203,6 +205,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                 installed: plan.installed,
                 lock: installedState.lock,
                 tempDir: plan.tempDir,
+                units: plan.units,
                 selected: plan.selected,
                 declined: plan.declined,
                 blockSelections: plan.blockSelections,

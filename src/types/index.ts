@@ -36,6 +36,22 @@ export interface Bundle {
     platforms?: PlatformFilter[];
     /** Files included in this bundle. */
     items: TemplateItem[];
+    /** External skill directories downloaded instead of vendored template files. */
+    refs?: BundleRef[];
+}
+
+/** An external skill directory within a bundle. */
+export interface BundleRef {
+    /** Giget source, or a local directory when the manifest itself is local. */
+    source: string;
+    /** Skill directory relative to install root (e.g. "skills/modern-web-guidance"). */
+    target: string;
+    /** Whether the unit is unchecked by default on install and update. */
+    optional?: boolean;
+    /** Informational tags shown in prompts and `astp list`. */
+    labels?: string[];
+    /** Platforms this skill supports, with `!platform` exclusions. */
+    platforms?: PlatformFilter[];
 }
 
 /** A single template file within a bundle. */

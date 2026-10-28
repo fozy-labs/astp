@@ -8,8 +8,8 @@ import { groupTemplateItems } from "./units.js";
 /** Supported manifest schema versions: major version → max supported minor version. */
 export const SUPPORTED_SCHEMA_VERSIONS: Readonly<Record<number, number>> = {
     1: 0,
-    2: 0,
-    3: 0,
+    2: 1,
+    3: 1,
 };
 
 export const UPDATE_CLI_COMMAND = "npm install -g @fozy-labs/astp";
@@ -151,40 +151,67 @@ function validateBundle(key: string, data: unknown, schemaMajor: number): void {
         if (!VALID_CATEGORIES.has(category as ItemCategory)) {
             throw new Error(`${at}.category must be one of: ${[...VALID_CATEGORIES].join(", ")}`);
         }
-        const { optional, labels, platforms, targets: platformTargets } = item as Record<string, unknown>;
-        validatePlatforms(platforms, at);
-        validateTargetOverrides(platformTargets, category as ItemCategory, at, schemaMajor);
-        if (optional !== undefined && typeof optional !== "boolean") {
-            throw new Error(`${at}.optional must be a boolean`);
-        }
-        if (labels !== undefined) {
-            if (!Array.isArray(labels)) {
-                throw new Error(`${at}.labels must be an array of strings`);
-            }
-            const seenLabels = new Set<string>();
-            for (const label of labels) {
-                if (typeof label !== "string" || !LABEL_REGEX.test(label)) {
-                    throw new Error(`${at}.labels has invalid label '${String(label)}' (expected [a-z][a-z0-9_-]*)`);
-                }
-                if (seenLabels.has(label)) {
-                    throw new Error(`${at}.labels has duplicate label '${label}'`);
-                }
-                seenLabels.add(label);
-            }
-        }
-        return target;
+        validateUnitMetadata(item as Record<string, unknown>, at);
+        validateTargetOverrides((item as Record<string, unknown>).targets, category as ItemCategory, at, schemaMajor);
+        return target as string;
     });
-    assertNoCollisions(targets, `Invalid bundle '${key}': items`);
 
-    const items = bundle.items as Bundle["items"];
+    if (bundle.refs !== undefined && !Array.isArray(bundle.refs)) {
+        throw new Error(`Invalid bundle '${key}': refs must be an array`);
+    }
+    for (const [index, ref] of (bundle.refs ?? []).entries()) {
+        const at = `Invalid bundle '${key}': refs[${index}]`;
+        if (typeof ref !== "object" || ref === null) throw new Error(`${at} must be an object`);
+        const { source, target } = ref as Record<string, unknown>;
+        if (typeof source !== "string" || source.trim() === "") {
+            throw new Error(`${at}.source must be a non-empty string`);
+        }
+        assertSafeRelativePath(target, `${at}.target`);
+        const segments = target.split("/");
+        if (segments.length !== 2 || segments[0] !== "skills") {
+            throw new Error(`${at}.target must look like 'skills/<name>'`);
+        }
+        validateUnitMetadata(ref as Record<string, unknown>, at);
+        targets.push(target);
+    }
+    const what = (bundle.refs?.length ?? 0) > 0 ? "items and refs" : "items";
+    assertNoCollisions(targets, `Invalid bundle '${key}': ${what}`);
+
     for (const platform of ALL_PLATFORMS) {
-        const effectiveTargets = groupTemplateItems(items, platform).flatMap((unit) =>
-            unit.kind === "skill" ? unit.items.map((item) => item.target) : [unit.item.target],
+        const effectiveTargets = groupTemplateItems(bundle as unknown as Bundle, platform).flatMap((unit) =>
+            unit.kind === "file"
+                ? [unit.item.target]
+                : unit.ref
+                  ? [unit.relativePath]
+                  : unit.items.map((item) => item.target),
         );
-        assertNoCollisions(effectiveTargets, `Invalid bundle '${key}': items for platform '${platform}'`);
+        assertNoCollisions(effectiveTargets, `Invalid bundle '${key}': ${what} for platform '${platform}'`);
     }
 
     validatePlatforms(bundle.platforms, `Invalid bundle '${key}'`);
+}
+
+function validateUnitMetadata(unit: Record<string, unknown>, at: string): void {
+    const { optional, labels, platforms } = unit;
+    validatePlatforms(platforms, at);
+    if (optional !== undefined && typeof optional !== "boolean") {
+        throw new Error(`${at}.optional must be a boolean`);
+    }
+    if (labels !== undefined) {
+        if (!Array.isArray(labels)) {
+            throw new Error(`${at}.labels must be an array of strings`);
+        }
+        const seenLabels = new Set<string>();
+        for (const label of labels) {
+            if (typeof label !== "string" || !LABEL_REGEX.test(label)) {
+                throw new Error(`${at}.labels has invalid label '${String(label)}' (expected [a-z][a-z0-9_-]*)`);
+            }
+            if (seenLabels.has(label)) {
+                throw new Error(`${at}.labels has duplicate label '${label}'`);
+            }
+            seenLabels.add(label);
+        }
+    }
 }
 
 function validateTargetOverrides(value: unknown, category: ItemCategory, at: string, schemaMajor: number): void {

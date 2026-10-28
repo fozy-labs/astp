@@ -81,7 +81,7 @@ export function compareVersions(installed: InstalledBundle[], manifest: Manifest
 
     for (const bundle of installed) {
         const manifestBundle = manifest.bundles[bundle.bundleName];
-        const manifestUnits = manifestBundle ? groupTemplateItems(manifestBundle.items, platform) : [];
+        const manifestUnits = manifestBundle ? groupTemplateItems(manifestBundle, platform) : [];
         const manifestPaths = new Map(manifestUnits.map((unit) => [unit.relativePath, unit.kind]));
 
         for (const unit of bundle.units.filter((candidate) => candidate.origin === "legacy")) {
@@ -128,7 +128,7 @@ export function compareVersions(installed: InstalledBundle[], manifest: Manifest
 function classifyUnits(installed: InstalledBundle, manifestBundle: Bundle, platform?: Platform): FileStatus[] {
     const statuses: FileStatus[] = [];
     const installedByPath = new Map(installed.units.map((unit) => [`${unit.kind}\0${unit.relativePath}`, unit]));
-    const manifestUnits = groupTemplateItems(manifestBundle.items, platform);
+    const manifestUnits = groupTemplateItems(manifestBundle, platform);
     const manifestPaths = new Map(manifestUnits.map((unit) => [unit.relativePath, unit.kind]));
     const declined = new Set(installed.declined);
 

@@ -351,7 +351,63 @@ describe("E2E: manifest sources", () => {
 
         await fs.writeFile(manifestPath, JSON.stringify({ ...raw, schemaVersion: "4.0" }));
         await expect(executeInstall({ ...opts, bundle: "core", source: "./a" })).rejects.toThrow(
-            "Unsupported manifest schema version 4.0 (supported: 1.0, 2.0, 3.0). Update astp CLI: npm install -g @fozy-labs/astp",
+            "Unsupported manifest schema version 4.0 (supported: 1.0, 2.0–2.1, 3.0–3.1). Update astp CLI: npm install -g @fozy-labs/astp",
         );
+    });
+
+    it("installs and updates a refs-only bundle from an external skill directory", async () => {
+        const external = path.join(projectDir, "refs/templates/external-skill");
+        const manifestPath = path.join(projectDir, "refs/templates/manifest.json");
+        const writeManifest = async (version: string) => {
+            const manifest: Manifest = {
+                schemaVersion: "2.1",
+                bundles: {
+                    external: {
+                        name: "external",
+                        version,
+                        description: "External skill",
+                        default: false,
+                        items: [],
+                        refs: [
+                            {
+                                source: "./external-skill",
+                                target: "skills/external",
+                            },
+                        ],
+                    },
+                },
+            };
+            await fs.mkdir(path.dirname(manifestPath), { recursive: true });
+            await fs.writeFile(manifestPath, JSON.stringify(manifest));
+        };
+        await fs.mkdir(path.join(external, "references"), { recursive: true });
+        await fs.writeFile(
+            path.join(external, "SKILL.md"),
+            "---\nname: external\ndescription: External skill\n---\n# External v1\n",
+        );
+        await fs.writeFile(path.join(external, "references/guide.md"), "Guide v1\n");
+        await writeManifest("1.0.0");
+
+        await executeInstall({ ...opts, bundle: "external", source: "./refs" });
+
+        const skillRoot = path.join(rootDir, "skills/external");
+        expect(await fs.readFile(path.join(skillRoot, "SKILL.md"), "utf8")).toContain("# External v1");
+        expect(await fs.readFile(path.join(skillRoot, "references/guide.md"), "utf8")).toBe("Guide v1\n");
+        expect((await readLockFixture(rootDir)).bundles.external!.units["skills/external"]).toMatchObject({
+            kind: "skill",
+            version: "1.0.0",
+        });
+
+        await fs.writeFile(
+            path.join(external, "SKILL.md"),
+            "---\nname: external\ndescription: External skill\n---\n# External v2\n",
+        );
+        await fs.writeFile(path.join(external, "references/new.md"), "New v2\n");
+        await writeManifest("1.1.0");
+        await executeUpdate(opts);
+
+        expect(await fs.readFile(path.join(skillRoot, "SKILL.md"), "utf8")).toContain("# External v2");
+        expect(await fs.readFile(path.join(skillRoot, "references/new.md"), "utf8")).toBe("New v2\n");
+        expect((await readLockFixture(rootDir)).bundles.external!.units["skills/external"]!.version).toBe("1.1.0");
     });
 });

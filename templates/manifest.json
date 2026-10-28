@@ -1,5 +1,5 @@
 {
-    "schemaVersion": "3.0",
+    "schemaVersion": "3.1",
     "repository": "fozy-labs/astp",
     "bundles": {
         "astp": {
@@ -555,6 +555,23 @@
                     "source": "agreement/skills/git/references/isolation.md",
                     "target": "skills/git/references/isolation.md",
                     "category": "skill"
+                }
+            ]
+        },
+        "modern-web-guidance": {
+            "name": "modern-web-guidance",
+            "version": "1.0.0",
+            "description": "Modern web platform guidance — browser APIs, CSS, performance, accessibility and responsible fallbacks",
+            "use-when": "The project builds web applications and needs current web platform capabilities and browser compatibility guidance",
+            "default": false,
+            "platforms": [
+                "claude-code"
+            ],
+            "items": [],
+            "refs": [
+                {
+                    "source": "gh:GoogleChrome/modern-web-guidance/skills/modern-web-guidance#4f2b13e25c5815b3f080ca0d983e828d96561a0f",
+                    "target": "skills/modern-web-guidance"
                 }
             ]
         }

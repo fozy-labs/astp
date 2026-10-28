@@ -9,7 +9,10 @@ import { itemSupportsPlatform, resolveItemTarget } from "@/types/index.js";
 
 import { validateManifest } from "./manifest.js";
 import { assertSafeRelativePath } from "./path-safety.js";
+import { listSkillTree } from "./skill-tree.js";
 import type { ManifestSource } from "./source.js";
+import type { TemplateUnit } from "./units.js";
+import { groupTemplateItems } from "./units.js";
 
 const NPM_REGISTRY = "https://registry.npmjs.org";
 
@@ -46,8 +49,13 @@ export async function fetchManifest(source: ManifestSource): Promise<Manifest> {
     return validateManifest(data);
 }
 
-/** Copies or fetches bundle `<root>/<bundle>/` into a fresh temp dir laid out by effective item targets. */
-export async function downloadBundle(source: ManifestSource, bundle: Bundle, platform?: Platform): Promise<string> {
+/** Fetches regular items and external skill refs into a fresh temp dir laid out by install target. */
+export async function downloadBundle(
+    source: ManifestSource,
+    bundle: Bundle,
+    units: TemplateUnit[] = groupTemplateItems(bundle),
+    platform?: Platform,
+): Promise<string> {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), `astp-${bundle.name}-`));
     try {
         if (source.kind === "url") {
@@ -75,23 +83,43 @@ export async function downloadBundle(source: ManifestSource, bundle: Bundle, pla
                 await fs.mkdir(path.dirname(filePath), { recursive: true });
                 await fs.writeFile(filePath, Buffer.from(await response.arrayBuffer()));
             }
-            return tempDir;
+        } else if (bundle.items.length > 0 || !bundle.refs?.length) {
+            const manifestRoot =
+                source.kind === "local"
+                    ? path.dirname(source.manifestPath)
+                    : path.dirname(path.join(await downloadArchive(source), source.manifestFile));
+            const bundleDir = path.join(manifestRoot, bundle.name);
+            try {
+                if (source.kind === "archive" && !(await isInsideDownload(source, bundleDir))) {
+                    throw new Error("bundle directory resolves outside the downloaded source");
+                }
+                await fs.cp(bundleDir, tempDir, { recursive: true, filter: isPlainEntry });
+                await copyTargetOverrides(tempDir, bundle, platform);
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+                throw new Error(`bundle directory not found: ${source.kind === "local" ? bundleDir : bundle.name}`);
+            }
         }
 
-        const manifestRoot =
-            source.kind === "local"
-                ? path.dirname(source.manifestPath)
-                : path.dirname(path.join(await downloadArchive(source), source.manifestFile));
-        const bundleDir = path.join(manifestRoot, bundle.name);
-        try {
-            if (source.kind === "archive" && !(await isInsideDownload(source, bundleDir))) {
-                throw new Error("bundle directory resolves outside the downloaded source");
+        for (const unit of units) {
+            if (unit.kind !== "skill" || !unit.ref) continue;
+            assertSafeRelativePath(unit.relativePath, "ref target");
+            const refDir = path.join(tempDir, unit.relativePath);
+            await downloadRef(source, unit.ref.source, refDir);
+            const { files, special } = await listSkillTree(refDir);
+            if (special.length > 0) {
+                throw new Error(
+                    `Referenced skill '${unit.ref.source}' contains non-regular files: ${special.join(", ")}`,
+                );
             }
-            await fs.cp(bundleDir, tempDir, { recursive: true, filter: isPlainEntry });
-            await copyTargetOverrides(tempDir, bundle, platform);
-        } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-            throw new Error(`bundle directory not found: ${source.kind === "local" ? bundleDir : bundle.name}`);
+            if (!files.includes("SKILL.md")) {
+                throw new Error(`Referenced skill '${unit.ref.source}' has no SKILL.md`);
+            }
+            unit.items = files.sort().map((file) => {
+                const target = `${unit.relativePath}/${file}`;
+                assertSafeRelativePath(target, "referenced skill file");
+                return { source: unit.ref!.source, target, category: "skill" };
+            });
         }
         return tempDir;
     } catch (error) {
@@ -99,6 +127,27 @@ export async function downloadBundle(source: ManifestSource, bundle: Bundle, pla
         const message = error instanceof Error ? error.message : String(error);
         throw new Error(`Failed to download bundle '${bundle.name}' from '${source.spec}': ${message}`);
     }
+}
+
+const LOCAL_REF_RE = /^(?:\.{1,2}(?:[\\/]|$)|[\\/]|[A-Za-z]:[\\/])/;
+
+async function downloadRef(source: ManifestSource, refSource: string, outputDir: string): Promise<void> {
+    if (LOCAL_REF_RE.test(refSource)) {
+        if (source.kind !== "local") {
+            throw new Error(`Local ref '${refSource}' requires a local manifest`);
+        }
+        const manifestDir = path.dirname(source.manifestPath);
+        const refDir = path.resolve(manifestDir, refSource);
+        const relative = path.relative(manifestDir, refDir);
+        if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+            throw new Error(`Local ref '${refSource}' resolves outside the manifest directory`);
+        }
+        await fs.cp(refDir, outputDir, { recursive: true, filter: isPlainEntry });
+        return;
+    }
+    await withGigetEnv(/^(?:gh|github):/.test(refSource), () =>
+        downloadTemplate(refSource, { dir: outputDir, force: true }),
+    );
 }
 
 async function copyTargetOverrides(tempDir: string, bundle: Bundle, platform?: Platform): Promise<void> {

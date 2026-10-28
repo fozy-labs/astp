@@ -75,7 +75,7 @@ async function list(
             const entry = installedSources.get(name) ?? listing;
             const bundle = entry.manifest.bundles[name];
             const installed = installedOf(name);
-            const total = bundle ? groupTemplateItems(bundle.items, platform).length : (installed?.units.length ?? 0);
+            const total = bundle ? groupTemplateItems(bundle, platform).length : (installed?.units.length ?? 0);
             return {
                 name,
                 description: bundle?.description ?? null,
@@ -138,10 +138,10 @@ async function list(
     }
 
     const bundle = manifestBundle;
-    const units = groupTemplateItems(bundle.items, platform);
+    const units = groupTemplateItems(bundle, platform);
     validateUnitTargets(target.rootDir, units);
     if (!options.json) s.start(`Downloading ${bundle.name}...`);
-    const tempDir = await downloadBundle(listing.source, bundle, platform);
+    const tempDir = await downloadBundle(listing.source, bundle, units, platform);
     try {
         await assertBundleSources(tempDir, bundle.name, units);
         if (!options.json) s.stop(`Downloaded ${bundle.name}.`);

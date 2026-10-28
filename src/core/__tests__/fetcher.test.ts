@@ -56,6 +56,60 @@ describe("fetcher", () => {
         await expect(fs.stat(path.join(work, "tests/docs/rules/a.md"))).resolves.toBeTruthy();
     });
 
+    it("downloads an external skill ref without requiring a local bundle directory", async () => {
+        const referenced: Bundle = {
+            ...bundle,
+            items: [],
+            refs: [{ source: "gh:owner/repo/skills/external#main", target: "skills/external" }],
+        };
+        mockedDownloadTemplate.mockImplementation(async (input, options) => {
+            expect(input).toBe("gh:owner/repo/skills/external#main");
+            await fs.mkdir(path.join(options!.dir!, "references"), { recursive: true });
+            await fs.writeFile(path.join(options!.dir!, "SKILL.md"), "---\ndescription: External\n---\n# External\n");
+            await fs.writeFile(path.join(options!.dir!, "references/guide.md"), "Guide\n");
+            return { dir: options!.dir! } as never;
+        });
+        const source = await resolveSource("./manifest.json", work);
+
+        const dir = await downloadBundle(source, referenced);
+        tempDirs.push(dir);
+
+        expect(await fs.readFile(path.join(dir, "skills/external/SKILL.md"), "utf8")).toContain("# External");
+        expect(await fs.readFile(path.join(dir, "skills/external/references/guide.md"), "utf8")).toBe("Guide\n");
+    });
+
+    it("rejects an external ref without SKILL.md", async () => {
+        const referenced: Bundle = {
+            ...bundle,
+            items: [],
+            refs: [{ source: "gh:owner/repo/skills/external", target: "skills/external" }],
+        };
+        mockedDownloadTemplate.mockImplementation(async (_input, options) => {
+            await fs.mkdir(options!.dir!, { recursive: true });
+            return { dir: options!.dir! } as never;
+        });
+        const source = await resolveSource("./manifest.json", work);
+
+        await expect(downloadBundle(source, referenced)).rejects.toThrow(
+            "Referenced skill 'gh:owner/repo/skills/external' has no SKILL.md",
+        );
+    });
+
+    it("rejects a local ref outside the manifest directory", async () => {
+        const referenced: Bundle = {
+            ...bundle,
+            items: [],
+            refs: [{ source: "../private", target: "skills/private" }],
+        };
+        await fs.mkdir(path.join(work, "private"), { recursive: true });
+        await fs.writeFile(path.join(work, "private/SKILL.md"), "# Private\n");
+        const source = await resolveSource("./templates/manifest.json", work);
+
+        await expect(downloadBundle(source, referenced)).rejects.toThrow(
+            "Local ref '../private' resolves outside the manifest directory",
+        );
+    });
+
     it("copies a local item to its platform target without changing the source", async () => {
         await writeRoot(work);
         const source = await resolveSource("./manifest.json", work);
@@ -63,7 +117,7 @@ describe("fetcher", () => {
             ...bundle,
             items: [{ ...bundle.items[0]!, targets: { "kimi-code": "AGENTS.md" } }],
         };
-        const dir = await downloadBundle(source, overridden, "kimi-code");
+        const dir = await downloadBundle(source, overridden, undefined, "kimi-code");
         tempDirs.push(dir);
 
         expect(await fs.readFile(path.join(dir, "AGENTS.md"), "utf8")).toBe("# a\n");
@@ -87,7 +141,7 @@ describe("fetcher", () => {
         await writeRoot(work);
         await fs.writeFile(path.join(work, "docs/rules/b.md"), "# b\n");
         const local = await resolveSource("./manifest.json", work);
-        const localDir = await downloadBundle(local, chained, "kimi-code");
+        const localDir = await downloadBundle(local, chained, undefined, "kimi-code");
         tempDirs.push(localDir);
         expect(await fs.readFile(path.join(localDir, "rules/b.md"), "utf8")).toBe("# a\n");
         expect(await fs.readFile(path.join(localDir, "rules/c.md"), "utf8")).toBe("# b\n");
@@ -98,7 +152,7 @@ describe("fetcher", () => {
             return { dir: options!.dir! } as never;
         });
         const archive = await resolveSource("gh:o/r", work);
-        const archiveDir = await downloadBundle(archive, chained, "kimi-code");
+        const archiveDir = await downloadBundle(archive, chained, undefined, "kimi-code");
         tempDirs.push(archiveDir);
         await closeSource(archive);
         expect(await fs.readFile(path.join(archiveDir, "rules/b.md"), "utf8")).toBe("# a\n");
@@ -245,7 +299,7 @@ describe("fetcher", () => {
             ...bundle,
             items: [{ ...bundle.items[0]!, targets: { "kimi-code": "AGENTS.md" } }],
         };
-        const dir = await downloadBundle(source, overridden, "kimi-code");
+        const dir = await downloadBundle(source, overridden, undefined, "kimi-code");
         tempDirs.push(dir);
 
         expect(await fs.readFile(path.join(dir, "AGENTS.md"), "utf8")).toBe("file /m/docs/rules/a.md");
@@ -272,7 +326,7 @@ describe("fetcher", () => {
                 },
             ],
         };
-        const dir = await downloadBundle(source, filtered, "kimi-code");
+        const dir = await downloadBundle(source, filtered, undefined, "kimi-code");
         tempDirs.push(dir);
 
         expect(await fs.readFile(path.join(dir, "AGENTS.md"), "utf8")).toBe("file /m/docs/AGENTS.md");
