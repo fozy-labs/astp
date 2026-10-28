@@ -5,6 +5,17 @@ import { resolveGitCommit } from "../git.js";
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 const NEXT_SHA = "fedcba9876543210fedcba9876543210fedcba98";
 
+function packet(value: string): string {
+    return `${(value.length + 4).toString(16).padStart(4, "0")}${value}`;
+}
+
+function refAdvertisement(refs: Array<[string, string]>): string {
+    const lines = refs
+        .map(([name, sha], index) => packet(`${sha} ${name}${index === 0 ? "\0symref=HEAD:refs/heads/main" : ""}\n`))
+        .join("");
+    return `${packet("# service=git-upload-pack\n")}0000${lines}0000`;
+}
+
 describe("resolveGitCommit", () => {
     afterEach(() => {
         vi.unstubAllGlobals();
@@ -56,18 +67,57 @@ describe("resolveGitCommit", () => {
         });
     });
 
-    it("resolves SourceHut refs through GraphQL", async () => {
+    it("resolves SourceHut HEAD through unauthenticated Git smart HTTP", async () => {
+        vi.stubEnv("GIGET_AUTH", "secret");
         const fetchMock = vi.fn(
-            async (_url: string, _init?: RequestInit) =>
-                new Response(JSON.stringify({ data: { user: { repository: { revparse_single: { id: SHA } } } } })),
+            async () =>
+                new Response(
+                    refAdvertisement([
+                        ["HEAD", SHA],
+                        ["refs/heads/main", SHA],
+                    ]),
+                ),
         );
         vi.stubGlobal("fetch", fetchMock);
 
-        await expect(resolveGitCommit({ provider: "sourcehut", repo: "~o/r", ref: "main" })).resolves.toBe(SHA);
-        expect(fetchMock).toHaveBeenCalledWith("https://git.sr.ht/query", expect.objectContaining({ method: "POST" }));
-        const init = fetchMock.mock.calls[0]![1];
-        const body = JSON.parse(String(init?.body)) as { variables: Record<string, string> };
-        expect(body.variables).toMatchObject({ owner: "~o", repo: "r", ref: "main" });
+        await expect(resolveGitCommit({ provider: "sourcehut", repo: "~o/r", ref: "HEAD" })).resolves.toBe(SHA);
+        expect(fetchMock).toHaveBeenCalledWith("https://git.sr.ht/~o/r/info/refs?service=git-upload-pack", {
+            method: "GET",
+            headers: { Accept: "application/x-git-upload-pack-advertisement" },
+        });
+    });
+
+    it.each([
+        { ref: "main", refs: [["refs/heads/main", NEXT_SHA]] as Array<[string, string]> },
+        { ref: "refs/heads/main", refs: [["refs/heads/main", NEXT_SHA]] as Array<[string, string]> },
+        {
+            ref: "v1.0.0",
+            refs: [
+                ["refs/tags/v1.0.0", SHA],
+                ["refs/tags/v1.0.0^{}", NEXT_SHA],
+            ] as Array<[string, string]>,
+        },
+    ])("resolves SourceHut ref $ref and prefers peeled tags", async ({ ref, refs }) => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => new Response(refAdvertisement(refs))),
+        );
+
+        await expect(resolveGitCommit({ provider: "sourcehut", repo: "~o/r", ref })).resolves.toBe(NEXT_SHA);
+    });
+
+    it.each([
+        { body: refAdvertisement([["refs/heads/main", SHA]]), ref: "missing" },
+        { body: "not a pkt-line advertisement", ref: "HEAD" },
+    ])("rejects an unresolvable or invalid SourceHut advertisement", async ({ body, ref }) => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => new Response(body)),
+        );
+
+        await expect(resolveGitCommit({ provider: "sourcehut", repo: "~o/r", ref })).rejects.toThrow(
+            "provider did not return a full commit SHA",
+        );
     });
 
     it("rejects invalid or ambiguous provider responses", async () => {

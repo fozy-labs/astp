@@ -179,7 +179,7 @@ export async function syncBundle(args: {
                     unit.kind === "skill"
                         ? await installSkill(args.tempDir, unit, args.target)
                         : await installFile(args.tempDir, unit.item, args.target);
-                lockBundle.units[unit.relativePath] = { kind: unit.kind, version: args.bundle.version, hash };
+                lockBundle.units[unit.relativePath] = createLockUnit(unit, args.bundle.version, hash);
                 if (current.origin === "legacy") removedLegacy.add(current.relativePath);
                 result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
                 continue;
@@ -189,11 +189,11 @@ export async function syncBundle(args: {
                 if (untracked) {
                     const diskState = await compareUntracked(rootDir, args.tempDir, unit);
                     if (diskState === "equal") {
-                        lockBundle.units[unit.relativePath] = {
-                            kind: unit.kind,
-                            version: args.bundle.version,
-                            hash: await computeTemplateUnitHash(args.tempDir, unit),
-                        };
+                        lockBundle.units[unit.relativePath] = createLockUnit(
+                            unit,
+                            args.bundle.version,
+                            await computeTemplateUnitHash(args.tempDir, unit),
+                        );
                         result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
                         continue;
                     }
@@ -207,7 +207,7 @@ export async function syncBundle(args: {
                     unit.kind === "skill"
                         ? await installSkill(args.tempDir, unit, args.target)
                         : await installFile(args.tempDir, unit.item, args.target);
-                lockBundle.units[unit.relativePath] = { kind: unit.kind, version: args.bundle.version, hash };
+                lockBundle.units[unit.relativePath] = createLockUnit(unit, args.bundle.version, hash);
                 if (current?.origin === "legacy") removedLegacy.add(current.relativePath);
                 result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
                 continue;
@@ -239,13 +239,10 @@ export async function syncBundle(args: {
             if (untracked && !adopted) {
                 const diskState = await compareUntrackedBlocks(rootDir, args.tempDir, unit, merged.contents);
                 if (diskState === "equal") {
-                    lockBundle.units[unit.relativePath] = {
-                        kind: unit.kind,
-                        version: args.bundle.version,
-                        hash,
+                    lockBundle.units[unit.relativePath] = createLockUnit(unit, args.bundle.version, hash, {
                         blocks: merged.blocks,
                         declinedBlocks: merged.declinedBlocks,
-                    };
+                    });
                     result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
                     continue;
                 }
@@ -260,21 +257,10 @@ export async function syncBundle(args: {
             } else {
                 await installFile(args.tempDir, unit.item, args.target, merged.contents.get(unit.item.target));
             }
-            lockBundle.units[unit.relativePath] = {
-                kind: unit.kind,
-                version: args.bundle.version,
-                hash,
-                ...(unit.kind === "skill" && unit.ref
-                    ? {
-                          ref: {
-                              source: unit.ref.source,
-                              ...(unit.resolvedCommit ? { resolvedCommit: unit.resolvedCommit } : {}),
-                          },
-                      }
-                    : {}),
+            lockBundle.units[unit.relativePath] = createLockUnit(unit, args.bundle.version, hash, {
                 blocks: merged.blocks,
                 declinedBlocks: merged.declinedBlocks,
-            };
+            });
             if (current?.origin === "legacy") removedLegacy.add(current.relativePath);
             result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
         }
@@ -297,6 +283,28 @@ export async function syncBundle(args: {
         if (args.writeLock !== false) await writeLock(rootDir, args.lock);
     }
     return result;
+}
+
+function createLockUnit(
+    unit: TemplateUnit,
+    version: string,
+    hash: string,
+    blockState?: Pick<LockUnit, "blocks" | "declinedBlocks">,
+): LockUnit {
+    return {
+        kind: unit.kind,
+        version,
+        hash,
+        ...(unit.kind === "skill" && unit.ref
+            ? {
+                  ref: {
+                      source: unit.ref.source,
+                      ...(unit.resolvedCommit ? { resolvedCommit: unit.resolvedCommit } : {}),
+                  },
+              }
+            : {}),
+        ...blockState,
+    };
 }
 
 interface MergedUnit {

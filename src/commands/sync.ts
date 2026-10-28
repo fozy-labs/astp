@@ -4,15 +4,17 @@ import path from "node:path";
 import {
     assertBundleBlocks,
     assertBundleSources,
+    blockHash,
     computeTemplateUnitHash,
     downloadBundle,
     groupTemplateItems,
     loadInstalled,
+    ownTemplateContent,
     readUnitBlockFiles,
     syncBundle,
     validateUnitTargets,
 } from "@/core/index.js";
-import type { BlockSelections, LockBundle, RevisionOptions } from "@/core/index.js";
+import type { BlockSelections, LockBundle, LockUnit, RevisionOptions, UnitBlockFile } from "@/core/index.js";
 import type { TemplateUnit } from "@/core/units.js";
 import type { Bundle, FileStatus, InstalledBundle, InstallTargetType, Platform } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
@@ -24,6 +26,7 @@ import {
     showSuccess,
     spinner,
     warnForeign,
+    warnMixedVersion,
     warnModified,
 } from "@/ui/prompts.js";
 
@@ -66,6 +69,7 @@ export async function executeSync(options: SyncOptions): Promise<void> {
             declined: Set<string>;
             blockSelections: BlockSelections;
         }> = [];
+        const mixedVersion: Array<{ bundle: string; unit: string; version: string; sourceVersion: string }> = [];
         for (const installed of bundles) {
             const bundleName = installed.bundleName;
             const lockBundle = installedState.lock.bundles[bundleName]!;
@@ -75,28 +79,41 @@ export async function executeSync(options: SyncOptions): Promise<void> {
             const units = groupTemplateItems(bundle, platform);
             validateUnitTargets(target.rootDir, units);
             const selected = new Set(Object.keys(lockBundle.units));
+            const lockedVersions = new Set(Object.values(lockBundle.units).map((unit) => unit.version));
+            for (const unitPath of selected) {
+                const lockUnit = lockBundle.units[unitPath]!;
+                if (lockedVersions.size > 1 && lockUnit.version !== bundle.version) {
+                    mixedVersion.push({
+                        bundle: bundleName,
+                        unit: unitPath,
+                        version: lockUnit.version,
+                        sourceVersion: bundle.version,
+                    });
+                    selected.delete(unitPath);
+                }
+            }
             for (const unitPath of selected) {
                 if (!units.some((unit) => unit.relativePath === unitPath)) {
                     throw new Error(`Locked unit '${bundleName}/${unitPath}' is missing from its locked manifest`);
                 }
             }
 
+            const downloadUnits = units.filter((unit) => selected.has(unit.relativePath));
             s.start(`Downloading ${bundleName}...`);
             const tempDir = await downloadBundle(
                 source.source,
                 bundle,
-                units,
+                downloadUnits,
                 platform,
-                syncRefRevisions(lockBundle, units),
+                syncRefRevisions(lockBundle, downloadUnits),
             );
             tempDirs.push(tempDir);
-            await assertBundleSources(tempDir, bundleName, units);
-            await assertBundleBlocks(tempDir, bundleName, units);
+            await assertBundleSources(tempDir, bundleName, downloadUnits);
+            await assertBundleBlocks(tempDir, bundleName, downloadUnits);
             s.stop(`Downloaded ${bundleName}.`);
 
             const blockSelections: BlockSelections = new Map();
-            for (const unit of units) {
-                if (!selected.has(unit.relativePath)) continue;
+            for (const unit of downloadUnits) {
                 const lockUnit = lockBundle.units[unit.relativePath]!;
                 const blockFiles = await readUnitBlockFiles(tempDir, unit, platform);
                 const blockTargets = new Set(blockFiles.keys());
@@ -106,7 +123,11 @@ export async function executeSync(options: SyncOptions): Promise<void> {
                             ? new Set([...blockTargets].map((target) => path.posix.relative(unit.relativePath, target)))
                             : blockTargets,
                 });
-                if (lockUnit.version !== bundle.version || hash !== lockUnit.hash) {
+                if (
+                    lockUnit.version !== bundle.version ||
+                    hash !== lockUnit.hash ||
+                    !lockedBlocksMatch(lockUnit, blockFiles)
+                ) {
                     throw new Error(
                         `Locked unit '${bundleName}/${unit.relativePath}' does not match its source; run astp update before sync`,
                     );
@@ -124,7 +145,10 @@ export async function executeSync(options: SyncOptions): Promise<void> {
             }
             plans.push({
                 bundleName,
-                installed: { ...installed, units: installed.units.filter((unit) => unit.origin === "lock") },
+                installed: {
+                    ...installed,
+                    units: installed.units.filter((unit) => unit.origin === "lock" && selected.has(unit.relativePath)),
+                },
                 source,
                 bundle,
                 tempDir,
@@ -134,6 +158,7 @@ export async function executeSync(options: SyncOptions): Promise<void> {
                 blockSelections,
             });
         }
+        if (mixedVersion.length > 0) warnMixedVersion(mixedVersion);
 
         const installedStatuses: FileStatus[] = [];
         const skipped: FileStatus[] = [];
@@ -183,6 +208,25 @@ function syncRefRevisions(lockBundle: LockBundle, units: TemplateUnit[]): Readon
         }
     }
     return revisions;
+}
+
+function lockedBlocksMatch(lockUnit: LockUnit, blockFiles: Map<string, UnitBlockFile>): boolean {
+    const selected = new Set(Object.keys(lockUnit.blocks ?? {}));
+    for (const [key, hash] of Object.entries(lockUnit.blocks ?? {})) {
+        const separator = key.lastIndexOf("#");
+        const file = blockFiles.get(key.slice(0, separator));
+        const block = file?.blocks.find((candidate) => candidate.name === key.slice(separator + 1));
+        if (!block || blockHash(ownTemplateContent(block)) !== hash) return false;
+    }
+    for (const [fileTarget, file] of blockFiles) {
+        for (const block of file.blocks) {
+            const key = `${fileTarget}#${block.name}`;
+            const parentKey = block.parent ? `${fileTarget}#${block.parent}` : undefined;
+            if (selected.has(key) && parentKey && !selected.has(parentKey)) return false;
+            if (block.required && (!parentKey || selected.has(parentKey)) && !selected.has(key)) return false;
+        }
+    }
+    return true;
 }
 
 function blockNames(blocks: Record<string, string> | undefined, fileTarget: string): Set<string> {

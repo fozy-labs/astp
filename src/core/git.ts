@@ -24,13 +24,24 @@ export async function resolveGitCommit(git: GitCoordinates): Promise<string> {
     }
     if (!response.ok) throw new Error(`Cannot resolve ${label}: HTTP ${response.status}`);
 
-    let data: unknown;
-    try {
-        data = await response.json();
-    } catch {
-        throw new Error(`Cannot resolve ${label}: provider returned invalid JSON`);
+    let commit: unknown;
+    if (git.provider === "sourcehut") {
+        let data: ArrayBuffer;
+        try {
+            data = await response.arrayBuffer();
+        } catch {
+            throw new Error(`Cannot resolve ${label}: provider returned an invalid Git ref advertisement`);
+        }
+        commit = sourcehutCommit(new Uint8Array(data), git.ref);
+    } else {
+        let data: unknown;
+        try {
+            data = await response.json();
+        } catch {
+            throw new Error(`Cannot resolve ${label}: provider returned invalid JSON`);
+        }
+        commit = responseCommit(git.provider, data);
     }
-    const commit = responseCommit(git.provider, data);
     if (!isCommitSha(commit)) throw new Error(`Cannot resolve ${label}: provider did not return a full commit SHA`);
     return commit;
 }
@@ -60,32 +71,51 @@ function gitRequest(git: GitCoordinates): { url: string; init: RequestInit } {
         };
     }
 
-    const separator = git.repo.indexOf("/");
-    const owner = git.repo.slice(0, separator);
-    const repository = git.repo.slice(separator + 1);
     return {
-        url: "https://git.sr.ht/query",
-        init: {
-            method: "POST",
-            headers: { ...headers, "Content-Type": "application/json" },
-            body: JSON.stringify({
-                query: `query ResolveCommit($owner: String!, $repo: String!, $ref: String!) {
-                    user(username: $owner) { repository(name: $repo) { revparse_single(revspec: $ref) { id } } }
-                }`,
-                variables: { owner, repo: repository, ref: git.ref },
-            }),
-        },
+        url: `https://git.sr.ht/${repo}/info/refs?service=git-upload-pack`,
+        init: { method: "GET", headers: { Accept: "application/x-git-upload-pack-advertisement" } },
     };
 }
 
-function responseCommit(provider: GitProvider, data: unknown): unknown {
+function sourcehutCommit(data: Uint8Array, ref: string): string | undefined {
+    const refs = new Map<string, string>();
+    const decoder = new TextDecoder();
+    let offset = 0;
+    while (offset < data.length) {
+        if (offset + 4 > data.length) return undefined;
+        const header = decoder.decode(data.subarray(offset, offset + 4));
+        if (!/^[0-9a-f]{4}$/i.test(header)) return undefined;
+        const length = Number.parseInt(header, 16);
+        offset += 4;
+        if (length === 0) continue;
+        if (length < 4 || offset + length - 4 > data.length) return undefined;
+        const line = decoder
+            .decode(data.subarray(offset, offset + length - 4))
+            .replace(/\n$/, "")
+            .split("\0", 1)[0]!;
+        offset += length - 4;
+        const match = /^([0-9a-f]{40}) (\S+)$/i.exec(line);
+        if (match) refs.set(match[2]!, match[1]!);
+    }
+
+    const candidates =
+        ref === "HEAD"
+            ? ["HEAD"]
+            : ref.startsWith("refs/")
+              ? [`${ref}^{}`, ref]
+              : [`refs/heads/${ref}`, `refs/tags/${ref}^{}`, `refs/tags/${ref}`];
+    for (const candidate of candidates) {
+        const commit = refs.get(candidate);
+        if (isCommitSha(commit)) return commit;
+    }
+    return undefined;
+}
+
+function responseCommit(provider: Exclude<GitProvider, "sourcehut">, data: unknown): unknown {
     if (!isRecord(data)) return undefined;
     if (provider === "gh") return data.sha;
     if (provider === "gitlab") return data.id;
-    if (provider === "bitbucket") return data.hash;
-    if (!isRecord(data.data) || !isRecord(data.data.user) || !isRecord(data.data.user.repository)) return undefined;
-    const commit = data.data.user.repository.revparse_single;
-    return isRecord(commit) ? commit.id : undefined;
+    return data.hash;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

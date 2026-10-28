@@ -8,6 +8,7 @@ import { executeSync } from "@/commands/sync.js";
 import { executeUpdate } from "@/commands/update.js";
 import type { Bundle, Manifest } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
+import { warnMixedVersion } from "@/ui/prompts.js";
 
 import { createTempProject, makeProjectTarget } from "./helpers.js";
 
@@ -27,6 +28,7 @@ vi.mock("@/ui/prompts.js", () => ({
     showInfo: vi.fn(),
     showUpdateReport: vi.fn(),
     warnModified: vi.fn(),
+    warnMixedVersion: vi.fn(),
     warnLegacyModified: vi.fn(),
     warnBlockConflicts: vi.fn(),
     warnKeptBlocks: vi.fn(),
@@ -142,6 +144,104 @@ describe("E2E: sync", () => {
 
         expect(await fs.readFile(filePath, "utf8")).toContain("Alpha");
         expect(await fs.readFile(filePath, "utf8")).not.toContain("Beta");
+        expect(await fs.readFile(lockPath(), "utf8")).toBe(locked);
+    });
+
+    it("rejects changed block bodies before restoring any files", async () => {
+        const sourceRoot = path.join(projectDir, "block-source/templates");
+        const templatePath = path.join(sourceRoot, "blocks/rules/blocks.md");
+        const bundle: Bundle = {
+            name: "blocks",
+            version: "1.0.0",
+            description: "Blocks",
+            default: true,
+            platforms: ["claude-code"],
+            items: [{ source: "blocks/rules/blocks.md", target: "rules/blocks.md", category: "rule" }],
+        };
+        const manifest: Manifest = { schemaVersion: 1, bundles: { blocks: bundle } };
+        await fs.mkdir(path.dirname(templatePath), { recursive: true });
+        await fs.writeFile(path.join(sourceRoot, "manifest.json"), JSON.stringify(manifest));
+        await fs.writeFile(
+            templatePath,
+            `---\ndescription: Blocks\n---\n<astp-block name="alpha">\nAlpha\n</astp-block>\n`,
+        );
+        await executeInstall({ ...opts, bundle: "blocks", source: "./block-source" });
+        const locked = await fs.readFile(lockPath(), "utf8");
+        const blockPath = path.join(rootDir, "rules/blocks.md");
+        await fs.rm(rulePath());
+        await fs.rm(blockPath);
+        await fs.writeFile(
+            templatePath,
+            `---\ndescription: Blocks\n---\n<astp-block name="alpha">\nChanged upstream\n</astp-block>\n`,
+        );
+
+        await expect(executeSync({ ...opts, force: true })).rejects.toThrow(
+            "Locked unit 'blocks/rules/blocks.md' does not match its source; run astp update before sync",
+        );
+
+        await expect(fs.lstat(rulePath())).rejects.toMatchObject({ code: "ENOENT" });
+        await expect(fs.lstat(blockPath)).rejects.toMatchObject({ code: "ENOENT" });
+        expect(await fs.readFile(lockPath(), "utf8")).toBe(locked);
+    });
+
+    it("restores locked units without downloading an unselected Git ref", async () => {
+        const manifestPath = path.join(projectDir, "source/templates/manifest.json");
+        const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as Manifest;
+        manifest.bundles.core!.refs = [
+            { source: "gh:owner/unselected-skill", target: "skills/unselected", optional: true },
+        ];
+        await fs.writeFile(manifestPath, JSON.stringify(manifest));
+        const locked = await fs.readFile(lockPath(), "utf8");
+        await fs.rm(rulePath());
+
+        await executeSync(opts);
+
+        expect(await fs.readFile(rulePath(), "utf8")).toContain("1.0.0");
+        await expect(fs.lstat(path.join(rootDir, "skills/unselected"))).rejects.toMatchObject({ code: "ENOENT" });
+        expect(await fs.readFile(lockPath(), "utf8")).toBe(locked);
+    });
+
+    it("skips mixed-version units under force and restores the other locked units", async () => {
+        const sourceRoot = path.join(projectDir, "mixed-source/templates");
+        const writeMixedSource = async (version: string) => {
+            const bundle: Bundle = {
+                name: "mixed",
+                version,
+                description: "Mixed",
+                default: true,
+                platforms: ["claude-code"],
+                items: [
+                    { source: "mixed/rules/edited.md", target: "rules/edited.md", category: "rule" },
+                    { source: "mixed/rules/restored.md", target: "rules/restored.md", category: "rule" },
+                ],
+            };
+            const manifest: Manifest = { schemaVersion: 1, bundles: { mixed: bundle } };
+            await fs.mkdir(path.join(sourceRoot, "mixed/rules"), { recursive: true });
+            await fs.writeFile(path.join(sourceRoot, "manifest.json"), JSON.stringify(manifest));
+            for (const name of ["edited", "restored"]) {
+                await fs.writeFile(
+                    path.join(sourceRoot, `mixed/rules/${name}.md`),
+                    `---\ndescription: ${name}\n---\n${version}\n`,
+                );
+            }
+        };
+        await writeMixedSource("1.0.0");
+        await executeInstall({ ...opts, bundle: "mixed", source: "./mixed-source" });
+        const editedPath = path.join(rootDir, "rules/edited.md");
+        const restoredPath = path.join(rootDir, "rules/restored.md");
+        await fs.writeFile(editedPath, "local edit\n");
+        await writeMixedSource("2.0.0");
+        await executeUpdate(opts);
+        const locked = await fs.readFile(lockPath(), "utf8");
+        await fs.rm(restoredPath);
+
+        await executeSync({ ...opts, force: true });
+
+        expect(vi.mocked(warnMixedVersion)).toHaveBeenCalledWith([
+            { bundle: "mixed", unit: "rules/edited.md", version: "1.0.0", sourceVersion: "2.0.0" },
+        ]);
+        expect(await fs.readFile(editedPath, "utf8")).toBe("local edit\n");
+        expect(await fs.readFile(restoredPath, "utf8")).toContain("2.0.0");
         expect(await fs.readFile(lockPath(), "utf8")).toBe(locked);
     });
 

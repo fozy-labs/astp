@@ -27,17 +27,17 @@ Route by the first rule that matches:
 
 ## Commands
 
-Without a terminal the CLI cannot prompt, so always pass `--target project` (`./.claude/`) or `--target user` (`$CLAUDE_CONFIG_DIR` if set, else `~/.claude/`), and give `install` a bundle name. Ask the user which target when it is not clear.
+Without a terminal the CLI cannot prompt, so always pass `--platform <platform>` and `--target project` (`./.claude/`) or `--target user` (`$CLAUDE_CONFIG_DIR` if set, else `~/.claude/`), and give `install` a bundle name. Ask the user which target when it is not clear.
 
 | Goal | Command |
 |------|---------|
-| See bundles (`description`, `use-when`, installed state) | `astp list --target project --json` |
-| See units and blocks of a bundle (`description`, `use-when`, tags) | `astp list <bundle> --target project --json` |
-| Install a whole bundle | `astp install <bundle> --target project` |
-| Add units or blocks | `astp install <bundle> --skill <name> --block <name> --target project` |
-| Check, then update | `astp check --target project`, then `astp update --target project` |
-| Restore the locked state without changing `astp.lock` | `astp sync --target project` |
-| Remove | `astp delete <bundle> [--skill <name>] --target project` |
+| See bundles (`description`, `use-when`, installed state) | `astp list --platform claude-code --target project --json` |
+| See units and blocks of a bundle (`description`, `use-when`, tags) | `astp list <bundle> --platform claude-code --target project --json` |
+| Install a whole bundle | `astp install <bundle> --platform claude-code --target project` |
+| Add units or blocks | `astp install <bundle> --skill <name> --block <name> --platform claude-code --target project` |
+| Check, then update | `astp check --platform claude-code --target project`, then `astp update --platform claude-code --target project` |
+| Restore the locked state without changing `astp.lock` | `astp sync --platform claude-code --target project` |
+| Remove | `astp delete <bundle> [--skill <name>] --platform claude-code --target project` |
 
 - To add to an installed bundle, pass `--skill` or `--block`: a plain `install <bundle>` also brings back what the user declined.
 - Commit `astp.lock` with the installed files; never edit it by hand. Use `sync` to restore it and `update` to advance it.
@@ -51,8 +51,8 @@ astp skips files the user changed and files it does not own. When the output rep
 
 Read-only unless the user asks what to install for the project and approves the selection:
 
-- **Question about bundles, units, blocks or the CLI:** run `astp list --target <target> --json` and `astp list <bundle> --target <target> --json` for the relevant bundles (plus `astp check --target <target>` or `.claude/astp.lock` when installed state matters), then answer without changing files.
-- **What to install for this project** (`/astp ask` with no question, or a request to recommend): inspect the project (`package.json`, directory layout, `CLAUDE.md`, existing `.claude/`), match it against the `description` and `use-when` fields from `astp list --target project --json` and `astp list <bundle> --target project --json` for candidate bundles, propose the matching bundles, units and optional blocks with a one-line reason per item, and install only what the user approves.
+- **Question about bundles, units, blocks or the CLI:** run `astp list --platform <platform> --target <target> --json` and `astp list <bundle> --platform <platform> --target <target> --json` for the relevant bundles (plus `astp check --platform <platform> --target <target>` or `.claude/astp.lock` when installed state matters), then answer without changing files.
+- **What to install for this project** (`/astp ask` with no question, or a request to recommend): inspect the project (`package.json`, directory layout, `CLAUDE.md`, existing `.claude/`), match it against the `description` and `use-when` fields from `astp list --platform claude-code --target project --json` and `astp list <bundle> --platform claude-code --target project --json` for candidate bundles, propose the matching bundles, units and optional blocks with a one-line reason per item, and install only what the user approves.
 
 ## Fill
 

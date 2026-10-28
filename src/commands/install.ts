@@ -156,7 +156,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                     units,
                     platform,
                     source.useLockedRevisions
-                        ? lockedRefRevisions(installedState.lock.bundles[bundle.name])
+                        ? lockedRefRevisions(installedState.lock.bundles[bundle.name], false, units)
                         : undefined,
                 );
                 tempDirs.push(tempDir);

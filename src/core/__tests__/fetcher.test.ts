@@ -147,6 +147,94 @@ describe("fetcher", () => {
         );
     });
 
+    it.each([
+        { direction: "ref nested in a skill", unitPath: "skills/trusted", refTarget: "skills/trusted/nested" },
+        { direction: "skill nested in a ref", unitPath: "skills/trusted/nested", refTarget: "skills/trusted" },
+    ])("rejects a $direction before downloading", async ({ unitPath, refTarget }) => {
+        const skillRoot = path.join(work, "docs", unitPath);
+        await fs.mkdir(skillRoot, { recursive: true });
+        await fs.writeFile(path.join(skillRoot, "SKILL.md"), "trusted\n");
+        const overlapping: Bundle = {
+            ...bundle,
+            items: [
+                {
+                    source: `docs/${unitPath}/SKILL.md`,
+                    target: `${unitPath}/SKILL.md`,
+                    category: "skill",
+                },
+            ],
+            refs: [{ source: "gh:owner/repo/skills/external#main", target: refTarget }],
+        };
+        mockedDownloadTemplate.mockImplementation(async (_input, options) => {
+            await fs.mkdir(options!.dir!, { recursive: true });
+            await fs.writeFile(path.join(options!.dir!, "SKILL.md"), "malicious\n");
+            return { dir: options!.dir! } as never;
+        });
+        const source = await resolveSource("./manifest.json", work);
+
+        await expect(downloadBundle(source, overlapping)).rejects.toThrow(
+            `Ref target '${refTarget}' overlaps existing unit '${unitPath}'`,
+        );
+        expect(mockedDownloadTemplate).not.toHaveBeenCalled();
+    });
+
+    it("rejects a ref whose target contains an ordinary file before downloading", async () => {
+        await writeRoot(work);
+        const overlapping: Bundle = {
+            ...bundle,
+            refs: [{ source: "gh:owner/repo/skills/external#main", target: "rules" }],
+        };
+        mockedDownloadTemplate.mockImplementation(async (_input, options) => {
+            await fs.mkdir(options!.dir!, { recursive: true });
+            await fs.writeFile(path.join(options!.dir!, "SKILL.md"), "external\n");
+            await fs.writeFile(path.join(options!.dir!, "a.md"), "malicious\n");
+            return { dir: options!.dir! } as never;
+        });
+        const source = await resolveSource("./manifest.json", work);
+
+        await expect(downloadBundle(source, overlapping)).rejects.toThrow(
+            "Ref target 'rules' overlaps existing unit 'rules/a.md'",
+        );
+        expect(mockedDownloadTemplate).not.toHaveBeenCalled();
+    });
+
+    it("rejects overlapping ref targets before downloading either ref", async () => {
+        const overlapping: Bundle = {
+            ...bundle,
+            items: [],
+            refs: [
+                { source: "gh:owner/repo/skills/external#main", target: "skills/external" },
+                { source: "gh:owner/repo/skills/other#main", target: "skills/external/nested" },
+            ],
+        };
+        const source = await resolveSource("./manifest.json", work);
+
+        await expect(downloadBundle(source, overlapping)).rejects.toThrow(
+            "Ref target 'skills/external/nested' overlaps existing unit 'skills/external'",
+        );
+        expect(mockedDownloadTemplate).not.toHaveBeenCalled();
+    });
+
+    it("preserves legitimate refs alongside disjoint template units", async () => {
+        await writeRoot(work);
+        const referenced: Bundle = {
+            ...bundle,
+            refs: [{ source: "gh:owner/repo/skills/external#main", target: "skills/external" }],
+        };
+        mockedDownloadTemplate.mockImplementation(async (_input, options) => {
+            await fs.mkdir(options!.dir!, { recursive: true });
+            await fs.writeFile(path.join(options!.dir!, "SKILL.md"), "external\n");
+            return { dir: options!.dir! } as never;
+        });
+        const source = await resolveSource("./manifest.json", work);
+
+        const dir = await downloadBundle(source, referenced);
+        tempDirs.push(dir);
+
+        expect(await fs.readFile(path.join(dir, "rules/a.md"), "utf8")).toBe("# a\n");
+        expect(await fs.readFile(path.join(dir, "skills/external/SKILL.md"), "utf8")).toBe("external\n");
+    });
+
     it("copies a local item to its platform target without changing the source", async () => {
         await writeRoot(work);
         const source = await resolveSource("./manifest.json", work);

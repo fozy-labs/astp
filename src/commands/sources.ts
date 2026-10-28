@@ -8,6 +8,7 @@ import {
     resolveSourceRevision,
 } from "@/core/index.js";
 import type { Lock, LockBundle, ManifestSource, RevisionOptions } from "@/core/index.js";
+import type { TemplateUnit } from "@/core/units.js";
 import type { InstalledBundle, InstallTarget, Manifest, UpdateReport } from "@/types/index.js";
 import { warnNewerManifest } from "@/ui/prompts.js";
 
@@ -142,10 +143,16 @@ export function mergeReports(reports: UpdateReport[]): UpdateReport {
 export function lockedRefRevisions(
     lockBundle: LockBundle | undefined,
     requireLocked = false,
+    units?: readonly TemplateUnit[],
 ): ReadonlyMap<string, RevisionOptions> {
+    const currentRefSources = new Map(
+        (units ?? []).flatMap((unit) =>
+            unit.kind === "skill" && unit.ref ? [[unit.relativePath, unit.ref.source] as const] : [],
+        ),
+    );
     const revisions = new Map<string, RevisionOptions>();
     for (const [unitPath, unit] of Object.entries(lockBundle?.units ?? {})) {
-        if (!unit.ref) continue;
+        if (!unit.ref || (units && currentRefSources.get(unitPath) !== unit.ref.source)) continue;
         revisions.set(unitPath, { lockedCommit: unit.ref.resolvedCommit, requireLocked });
     }
     return revisions;

@@ -441,4 +441,88 @@ describe("syncBundle", () => {
             expect(content).toContain("<principles>");
         });
     });
+
+    describe("external skill ref metadata", () => {
+        const REF_SOURCE = "gh:owner/repo/skills/external#main";
+        const REF_SHA = "0123456789abcdef0123456789abcdef01234567";
+        const REF_PATH = "skills/external";
+        const refBundle: Bundle = {
+            ...bundle([]),
+            refs: [{ source: REF_SOURCE, target: REF_PATH }],
+        };
+
+        const syncReferenced = (installed: Awaited<ReturnType<typeof loadInstalled>>, files = ["SKILL.md"]) =>
+            syncBundle({
+                target,
+                source: "test",
+                bundle: refBundle,
+                units: [
+                    {
+                        kind: "skill",
+                        relativePath: REF_PATH,
+                        items: files.map((file) => ({
+                            source: REF_SOURCE,
+                            target: `${REF_PATH}/${file}`,
+                            category: "skill",
+                        })),
+                        ref: refBundle.refs![0]!,
+                        resolvedCommit: REF_SHA,
+                    },
+                ],
+                installed: installed.bundles.find((entry) => entry.bundleName === "core"),
+                lock: installed.lock,
+                tempDir,
+                selected: new Set([REF_PATH]),
+                declined: new Set(),
+                force: false,
+            });
+
+        async function expectPersistedRef() {
+            const lock = await readLock(rootDir);
+            expect(lock.bundles.core!.units[REF_PATH]?.ref).toEqual({
+                source: REF_SOURCE,
+                resolvedCommit: REF_SHA,
+            });
+        }
+
+        it("persists ref metadata for a plain referenced skill", async () => {
+            await writeFiles(tempDir, { [`${REF_PATH}/SKILL.md`]: A_V1 });
+
+            await syncReferenced(await loadInstalled(rootDir));
+
+            await expectPersistedRef();
+        });
+
+        it("persists ref metadata when adopting equal plain content", async () => {
+            await writeFiles(rootDir, { [`${REF_PATH}/SKILL.md`]: A_V1 });
+            await writeFiles(tempDir, { [`${REF_PATH}/SKILL.md`]: A_V1 });
+
+            await syncReferenced(await loadInstalled(rootDir));
+
+            await expectPersistedRef();
+        });
+
+        it("persists ref metadata when adopting equal block content", async () => {
+            await writeFiles(rootDir, { [`${REF_PATH}/SKILL.md`]: "<body>\nExternal\n</body>\n" });
+            await writeFiles(tempDir, {
+                [`${REF_PATH}/SKILL.md`]: '<astp-block name="body" required>\nExternal\n</astp-block>\n',
+            });
+
+            await syncReferenced(await loadInstalled(rootDir));
+
+            await expectPersistedRef();
+        });
+
+        it("persists ref metadata when a block skill becomes plain", async () => {
+            await writeFiles(tempDir, {
+                [`${REF_PATH}/SKILL.md`]: '<astp-block name="body" required>\nExternal\n</astp-block>\n',
+            });
+            await syncReferenced(await loadInstalled(rootDir));
+            await writeFiles(tempDir, { [`${REF_PATH}/SKILL.md`]: A_V1 });
+
+            await syncReferenced(await loadInstalled(rootDir));
+
+            await expectPersistedRef();
+        });
+    });
 });
