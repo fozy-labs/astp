@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { InstallTarget } from "@/types/index.js";
 
-import { formatSource, resolveSource } from "../source.js";
+import { formatSource, formatSourceAt, resolveSource } from "../source.js";
 
 const cwd = path.resolve("/work/project");
 
@@ -24,6 +24,26 @@ describe("resolveSource", () => {
         await expect(resolveSource(".", cwd)).resolves.toMatchObject({
             manifestPath: path.join(cwd, "templates/manifest.json"),
         });
+    });
+
+    it("falls back to a direct local manifest while preferring the repository layout", async () => {
+        const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "astp-src-"));
+        try {
+            await fs.mkdir(path.join(tmp, "proxy"));
+            await fs.writeFile(path.join(tmp, "proxy", "manifest.json"), "{}");
+            await expect(resolveSource("./proxy", tmp)).resolves.toMatchObject({
+                manifestPath: path.join(tmp, "proxy", "manifest.json"),
+            });
+
+            await fs.mkdir(path.join(tmp, "repo", "templates"), { recursive: true });
+            await fs.writeFile(path.join(tmp, "repo", "manifest.json"), "{}");
+            await fs.writeFile(path.join(tmp, "repo", "templates", "manifest.json"), "{}");
+            await expect(resolveSource("./repo", tmp)).resolves.toMatchObject({
+                manifestPath: path.join(tmp, "repo", "templates", "manifest.json"),
+            });
+        } finally {
+            await fs.rm(tmp, { recursive: true, force: true });
+        }
     });
 
     it.each([
@@ -180,6 +200,15 @@ describe("formatSource", () => {
         expect(formatSource(source, user)).toBe(path.join(cwd, "tests/test.manifest.json"));
         const reread = await resolveSource(formatSource(source, project), project.rootDir);
         expect(reread.spec).toBe(source.spec);
+    });
+
+    it("formats a source against a proxy output root", async () => {
+        const source = await resolveSource("./tests/test.manifest.json", cwd);
+        const output = path.join(cwd, "templates");
+        expect(formatSourceAt(source, output)).toBe("../tests/test.manifest.json");
+        await expect(resolveSource(formatSourceAt(source, output), output)).resolves.toMatchObject({
+            spec: source.spec,
+        });
     });
 
     it("stores a local path outside the project as absolute", async () => {

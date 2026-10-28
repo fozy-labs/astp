@@ -21,7 +21,7 @@ Every command accepts `--output <dir>`, defaulting to `./templates`, resolved fr
 - There is no `--platform` or `--target`: a proxy preserves all platforms and per-platform target overrides.
 - There is no `--block`: proxy copies `<astp-block>` templates verbatim, leaving block selection to downstream consumers.
 - `--source` selects or switches the upstream of a bundle. Without it, `install` uses the source recorded in the proxy lock, then the default astp source.
-- `update` and `check` read every upstream from the proxy lock. `delete` updates both the copied files and the generated manifest.
+- `update` and `check` read every upstream from the proxy lock. `delete` updates both the copied files and the generated manifest; deleting the last bundle removes `manifest.json` and `astp.lock`.
 
 `astp list --source ./templates` remains the way to inspect the generated source; proxy does not add a second list command.
 

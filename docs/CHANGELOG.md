@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- [`astp proxy`](../README.md#proxy) creates an editable template source in `./templates`, with independent versions, local-edit protection, lazy remote refs, materialized local refs, and downstream install from the generated manifest.
 - Bundle `refs` install external skill directories without vendoring them; the first is `modern-web-guidance` from Google Chrome.
 - Nested `<astp-block>` blocks with independent selection, updates and local-edit protection; selecting a child selects its ancestors.
 - Skill, agent and rule descriptions from frontmatter in install and update selection prompts.

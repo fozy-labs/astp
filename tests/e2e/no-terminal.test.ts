@@ -57,6 +57,9 @@ describe("without a terminal", () => {
             ["delete", "--platform", "claude-code", "--target", "project"],
             "delete needs a bundle name without a terminal",
         ],
+        [["proxy"], "proxy install needs a bundle name without a terminal"],
+        [["proxy", "install"], "proxy install needs a bundle name without a terminal"],
+        [["proxy", "delete"], "proxy delete needs a bundle name without a terminal"],
         [[], "astp needs a command without a terminal; run astp --help"],
     ];
 
