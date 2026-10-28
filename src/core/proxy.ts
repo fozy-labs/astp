@@ -186,12 +186,7 @@ export async function syncProxyBundle(args: {
     const skipped = new Set<string>();
     const contentChanged = new Set<string>();
 
-    for (const unit of oldUnits) {
-        const sourcePath = proxyUnitPath(bundle.name, unit.relativePath);
-        if (!(sourcePath in lockBundle.units) && !(sourcePath in (lockBundle.refs ?? {}))) {
-            retained.add(unit.relativePath);
-        }
-    }
+    for (const unit of oldUnits) retained.add(unit.relativePath);
 
     const keepRegular = (unit: InstalledUnit): void => {
         const target = stripBundlePrefix(bundle.name, unit.relativePath);
@@ -199,6 +194,7 @@ export async function syncProxyBundle(args: {
         result.kept.push(proxyStatus(unit));
     };
     const removeRegular = async (unit: InstalledUnit, addDecline: boolean): Promise<void> => {
+        const target = stripBundlePrefix(bundle.name, unit.relativePath);
         if (unit.state === "modified" && !args.force) {
             delete lockBundle.units[unit.relativePath];
             keepRegular(unit);
@@ -206,6 +202,7 @@ export async function syncProxyBundle(args: {
         }
         await removeProxyPath(rootDir, unit.relativePath);
         delete lockBundle.units[unit.relativePath];
+        retained.delete(target);
         if (addDecline) declined.add(unit.relativePath);
         result.removed.push(proxyStatus(unit));
     };
@@ -223,6 +220,7 @@ export async function syncProxyBundle(args: {
             return;
         }
         if (lockBundle.refs) delete lockBundle.refs[sourcePath];
+        retained.delete(target);
         if (addDecline) declined.add(sourcePath);
         result.removed.push(proxyTargetStatus(bundle.name, target, "skill", "unmodified"));
     };
@@ -715,10 +713,21 @@ async function copyProxyUnit(
     await assertInsideRoot(rootDir, sourcePath);
     if (unit.kind === "file") {
         const targetFile = path.join(rootDir, sourcePath);
-        await fs.mkdir(path.dirname(targetFile), { recursive: true });
-        await fs.rm(targetFile, { recursive: true, force: true });
-        await fs.copyFile(path.join(tempDir, unit.item.target), targetFile);
-        return computeTemplateUnitHash(tempDir, unit);
+        const stagingFile = path.join(rootDir, `.astp-proxy-tmp-${randomUUID()}`);
+        let stagingCreated = false;
+        try {
+            await fs.mkdir(path.dirname(targetFile), { recursive: true });
+            await fs.copyFile(path.join(tempDir, unit.item.target), stagingFile);
+            stagingCreated = true;
+            const hash = await computeTemplateUnitHash(tempDir, unit);
+            await assertInsideRoot(rootDir, sourcePath);
+            await fs.rm(targetFile, { recursive: true, force: true });
+            await fs.rename(stagingFile, targetFile);
+            stagingCreated = false;
+            return hash;
+        } finally {
+            if (stagingCreated) await fs.rm(stagingFile, { force: true }).catch(() => undefined);
+        }
     }
 
     const skillDir = path.join(rootDir, sourcePath);

@@ -223,3 +223,31 @@ it("removes only a bundle symlink during forced replacement and preserves its de
     expect(await fs.readFile(path.join(outside, "keep.txt"), "utf8")).toBe("keep\n");
     expect(await fs.readFile(path.join(outputDir, "core/rules/core.md"), "utf8")).toBe("rule\n");
 });
+
+it("keeps unprocessed manifest units when a later copy fails", async () => {
+    const initial = ruleBundle();
+    initial.items.push({ source: "core/rules/extra.md", target: "rules/extra.md", category: "rule" });
+    await writeUpstream(initial, { "core/rules/core.md": "core v1\n", "core/rules/extra.md": "extra v1\n" });
+    await sync(initial);
+    const upstream = ruleBundle("1.1.0");
+    upstream.items.push({ source: "core/rules/extra.md", target: "rules/extra.md", category: "rule" });
+    await writeUpstream(upstream, { "core/rules/core.md": "core v2\n", "core/rules/extra.md": "extra v2\n" });
+    const copyFile = fs.copyFile;
+    let copies = 0;
+    const spy = vi.spyOn(fs, "copyFile").mockImplementation(async (source, destination) => {
+        copies += 1;
+        if (copies === 2) throw new Error("copy failed");
+        return copyFile(source, destination);
+    });
+
+    try {
+        await expect(sync(upstream)).rejects.toThrow("copy failed");
+    } finally {
+        spy.mockRestore();
+    }
+
+    const manifest = await generated();
+    expect(manifest.bundles.core!.items.map((item) => item.target).sort()).toEqual(["rules/core.md", "rules/extra.md"]);
+    expect(manifest.bundles.core!.version).toBe("1.0.1");
+    expect(await fs.readFile(path.join(outputDir, "core/rules/extra.md"), "utf8")).toBe("extra v1\n");
+});
