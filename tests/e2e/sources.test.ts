@@ -351,12 +351,12 @@ describe("E2E: manifest sources", () => {
 
         await fs.writeFile(manifestPath, JSON.stringify({ ...raw, schemaVersion: "4.0" }));
         await expect(executeInstall({ ...opts, bundle: "core", source: "./a" })).rejects.toThrow(
-            "Unsupported manifest schema version 4.0 (supported: 1.0, 2.0–2.1, 3.0). Update astp CLI: npm install -g @fozy-labs/astp",
+            "Unsupported manifest schema version 4.0 (supported: 1.0, 2.0–2.1, 3.0–3.1). Update astp CLI: npm install -g @fozy-labs/astp",
         );
     });
 
     it("installs and updates a refs-only bundle from an external skill directory", async () => {
-        const external = path.join(projectDir, "external-skill");
+        const external = path.join(projectDir, "refs/templates/external-skill");
         const manifestPath = path.join(projectDir, "refs/templates/manifest.json");
         const writeManifest = async (version: string) => {
             const manifest: Manifest = {
@@ -370,7 +370,7 @@ describe("E2E: manifest sources", () => {
                         items: [],
                         refs: [
                             {
-                                source: "../../external-skill",
+                                source: "./external-skill",
                                 target: "skills/external",
                             },
                         ],

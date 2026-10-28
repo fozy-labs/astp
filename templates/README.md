@@ -74,7 +74,7 @@ The `manifest.json` file defines all available bundles and their contents. It is
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `source` | `string` | Giget source of the external skill directory, e.g. `gh:owner/repo/skills/name#ref`. For a local manifest, a local path resolved from the manifest directory also works. |
+| `source` | `string` | Giget source of the external skill directory, e.g. `gh:owner/repo/skills/name#ref`. Pin shipped refs to a commit and bump the bundle version when updating the pin. For a local manifest, a local path inside the manifest directory also works. |
 | `target` | `string` | Install directory in the form `skills/<name>`. |
 | `optional`, `labels`, `platforms` | Same as `TemplateItem` *(optional)* | Unit selection and platform metadata for the whole referenced skill. |
 

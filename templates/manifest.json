@@ -1,5 +1,5 @@
 {
-    "schemaVersion": "3.0",
+    "schemaVersion": "3.1",
     "repository": "fozy-labs/astp",
     "bundles": {
         "astp": {
@@ -570,7 +570,7 @@
             "items": [],
             "refs": [
                 {
-                    "source": "gh:GoogleChrome/modern-web-guidance/skills/modern-web-guidance",
+                    "source": "gh:GoogleChrome/modern-web-guidance/skills/modern-web-guidance#4f2b13e25c5815b3f080ca0d983e828d96561a0f",
                     "target": "skills/modern-web-guidance"
                 }
             ]

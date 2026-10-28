@@ -9,7 +9,7 @@ import { groupTemplateItems } from "./units.js";
 export const SUPPORTED_SCHEMA_VERSIONS: Readonly<Record<number, number>> = {
     1: 0,
     2: 1,
-    3: 0,
+    3: 1,
 };
 
 export const UPDATE_CLI_COMMAND = "npm install -g @fozy-labs/astp";
@@ -177,12 +177,15 @@ function validateBundle(key: string, data: unknown, schemaMajor: number): void {
     const what = (bundle.refs?.length ?? 0) > 0 ? "items and refs" : "items";
     assertNoCollisions(targets, `Invalid bundle '${key}': ${what}`);
 
-    const items = bundle.items as Bundle["items"];
     for (const platform of ALL_PLATFORMS) {
-        const effectiveTargets = groupTemplateItems(items, platform).flatMap((unit) =>
-            unit.kind === "skill" ? unit.items.map((item) => item.target) : [unit.item.target],
+        const effectiveTargets = groupTemplateItems(bundle as unknown as Bundle, platform).flatMap((unit) =>
+            unit.kind === "file"
+                ? [unit.item.target]
+                : unit.ref
+                  ? [unit.relativePath]
+                  : unit.items.map((item) => item.target),
         );
-        assertNoCollisions(effectiveTargets, `Invalid bundle '${key}': items for platform '${platform}'`);
+        assertNoCollisions(effectiveTargets, `Invalid bundle '${key}': ${what} for platform '${platform}'`);
     }
 
     validatePlatforms(bundle.platforms, `Invalid bundle '${key}'`);

@@ -136,7 +136,12 @@ async function downloadRef(source: ManifestSource, refSource: string, outputDir:
         if (source.kind !== "local") {
             throw new Error(`Local ref '${refSource}' requires a local manifest`);
         }
-        const refDir = path.resolve(path.dirname(source.manifestPath), refSource);
+        const manifestDir = path.dirname(source.manifestPath);
+        const refDir = path.resolve(manifestDir, refSource);
+        const relative = path.relative(manifestDir, refDir);
+        if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+            throw new Error(`Local ref '${refSource}' resolves outside the manifest directory`);
+        }
         await fs.cp(refDir, outputDir, { recursive: true, filter: isPlainEntry });
         return;
     }

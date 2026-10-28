@@ -95,6 +95,21 @@ describe("fetcher", () => {
         );
     });
 
+    it("rejects a local ref outside the manifest directory", async () => {
+        const referenced: Bundle = {
+            ...bundle,
+            items: [],
+            refs: [{ source: "../private", target: "skills/private" }],
+        };
+        await fs.mkdir(path.join(work, "private"), { recursive: true });
+        await fs.writeFile(path.join(work, "private/SKILL.md"), "# Private\n");
+        const source = await resolveSource("./templates/manifest.json", work);
+
+        await expect(downloadBundle(source, referenced)).rejects.toThrow(
+            "Local ref '../private' resolves outside the manifest directory",
+        );
+    });
+
     it("copies a local item to its platform target without changing the source", async () => {
         await writeRoot(work);
         const source = await resolveSource("./manifest.json", work);
