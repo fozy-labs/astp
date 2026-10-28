@@ -717,8 +717,8 @@ async function copyProxyUnit(
         let stagingCreated = false;
         try {
             await fs.mkdir(path.dirname(targetFile), { recursive: true });
-            await fs.copyFile(path.join(tempDir, unit.item.target), stagingFile);
             stagingCreated = true;
+            await fs.copyFile(path.join(tempDir, unit.item.target), stagingFile);
             const hash = await computeTemplateUnitHash(tempDir, unit);
             await assertInsideRoot(rootDir, sourcePath);
             await fs.rm(targetFile, { recursive: true, force: true });

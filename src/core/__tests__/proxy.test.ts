@@ -236,7 +236,10 @@ it("keeps unprocessed manifest units when a later copy fails", async () => {
     let copies = 0;
     const spy = vi.spyOn(fs, "copyFile").mockImplementation(async (source, destination) => {
         copies += 1;
-        if (copies === 2) throw new Error("copy failed");
+        if (copies === 2) {
+            await fs.writeFile(destination, "partial");
+            throw new Error("copy failed");
+        }
         return copyFile(source, destination);
     });
 
@@ -250,4 +253,5 @@ it("keeps unprocessed manifest units when a later copy fails", async () => {
     expect(manifest.bundles.core!.items.map((item) => item.target).sort()).toEqual(["rules/core.md", "rules/extra.md"]);
     expect(manifest.bundles.core!.version).toBe("1.0.1");
     expect(await fs.readFile(path.join(outputDir, "core/rules/extra.md"), "utf8")).toBe("extra v1\n");
+    expect((await fs.readdir(outputDir)).filter((name) => name.startsWith(".astp-proxy-tmp-"))).toEqual([]);
 });
