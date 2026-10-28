@@ -8,7 +8,7 @@ This directory contains the canonical template files for the `astp` CLI tool. Te
 templates/
 ├── manifest.json    ← source of truth
 ├── README.md        ← this guide
-└── <bundle>/        ← astp, fozy-labs, docs, thinking, ponytail, agreement, web
+└── <bundle>/        ← astp, fozy-labs, docs, thinking, ponytail, agreement
     └── <category>/  ← skills, agents or rules
 ```
 
