@@ -789,6 +789,8 @@ export function showProxyCheckReport(reports: ProxyComparison[]): void {
         if (report.newUnits.length > 0) lines.push(`  new: ${report.newUnits.join(", ")}`);
         if (report.removedUnits.length > 0) lines.push(`  removed: ${report.removedUnits.join(", ")}`);
         if (report.modifiedUnits.length > 0) lines.push(`  changed locally: ${report.modifiedUnits.join(", ")}`);
+        if (report.missingUnits.length > 0) lines.push(`  missing: ${report.missingUnits.join(", ")}`);
+        if (report.driftUnits.length > 0) lines.push(`  manifest drift: ${report.driftUnits.join(", ")}`);
     }
     p.log.info(lines.join("\n"));
 }

@@ -45,7 +45,7 @@ async function writeUpstream(bundle: Bundle, files: Record<string, string>): Pro
     }
 }
 
-async function sync(bundle: Bundle, selected?: Set<string>, force = false) {
+async function sync(bundle: Bundle, selected?: Set<string>, force = false, replaceBundle = false) {
     const source = await resolveSource(path.join(upstreamDir, "manifest.json"), rootDir);
     const units = groupTemplateItems(bundle);
     const { tempDir, units: downloaded } = await downloadProxyBundle(source, bundle, units);
@@ -69,6 +69,7 @@ async function sync(bundle: Bundle, selected?: Set<string>, force = false) {
             units,
             selected: selected ?? new Set(units.map((unit) => unit.relativePath)),
             force,
+            replaceBundle,
             state,
         });
     } finally {
@@ -160,4 +161,65 @@ it("keeps local edits until forced and retains a modified upstream removal", asy
     expect(await fs.readFile(outputFile, "utf8")).toBe("owned\n");
     expect((await generated()).bundles.core!.items).toHaveLength(1);
     expect((await loadProxyState(outputDir)).lock.bundles.core).toBeUndefined();
+});
+
+it("does not replace an organization-owned ref target without force", async () => {
+    const initial = ruleBundle();
+    await writeUpstream(initial, { "core/rules/core.md": "rule\n" });
+    await sync(initial);
+    const current = await generated();
+    current.bundles.core!.refs = [{ source: "gh:org/custom#one", target: "skills/shared" }];
+    await fs.writeFile(path.join(outputDir, "manifest.json"), JSON.stringify(current));
+
+    const upstream = ruleBundle("1.1.0");
+    upstream.refs = [{ source: "gh:upstream/shared#two", target: "skills/shared" }];
+    await writeUpstream(upstream, { "core/rules/core.md": "rule\n" });
+    const result = await sync(upstream);
+
+    expect(result.foreign.map((unit) => unit.targetPath)).toEqual(["core/skills/shared"]);
+    expect((await generated()).bundles.core!.refs).toEqual([{ source: "gh:org/custom#one", target: "skills/shared" }]);
+});
+
+it("upgrades an existing output schema before writing platform target overrides", async () => {
+    await fs.mkdir(outputDir, { recursive: true });
+    const existing: Manifest = {
+        schemaVersion: "2.1",
+        bundles: {
+            other: {
+                name: "other",
+                version: "1.0.0",
+                description: "Other",
+                default: false,
+                items: [{ source: "other/rules/a.md", target: "rules/a.md", category: "rule" }],
+            },
+        },
+    };
+    await fs.writeFile(path.join(outputDir, "manifest.json"), JSON.stringify(existing));
+    const bundle = ruleBundle();
+    bundle.items[0]!.targets = { "kimi-code": "AGENTS.md" };
+    await writeUpstream(bundle, { "core/rules/core.md": "rule\n" });
+
+    await sync(bundle);
+
+    const manifest = await generated();
+    expect(manifest.schemaVersion).toBe("3.1");
+    expect(manifest.bundles.other).toEqual(existing.bundles.other);
+    expect(manifest.bundles.core!.items[0]!.targets).toEqual({ "kimi-code": "AGENTS.md" });
+});
+
+it("removes only a bundle symlink during forced replacement and preserves its destination", async () => {
+    await fs.mkdir(outputDir, { recursive: true });
+    const outside = path.join(rootDir, "outside");
+    await fs.mkdir(outside);
+    await fs.writeFile(path.join(outside, "keep.txt"), "keep\n");
+    await fs.symlink(outside, path.join(outputDir, "core"), "junction");
+    const existing: Manifest = { schemaVersion: "3.1", bundles: { core: ruleBundle() } };
+    await fs.writeFile(path.join(outputDir, "manifest.json"), JSON.stringify(existing));
+    const bundle = ruleBundle();
+    await writeUpstream(bundle, { "core/rules/core.md": "rule\n" });
+
+    await sync(bundle, undefined, true, true);
+
+    expect(await fs.readFile(path.join(outside, "keep.txt"), "utf8")).toBe("keep\n");
+    expect(await fs.readFile(path.join(outputDir, "core/rules/core.md"), "utf8")).toBe("rule\n");
 });

@@ -62,6 +62,8 @@ export interface ProxyComparison {
     newUnits: string[];
     removedUnits: string[];
     modifiedUnits: string[];
+    missingUnits: string[];
+    driftUnits: string[];
     outOfSync: boolean;
 }
 
@@ -246,6 +248,12 @@ export async function syncProxyBundle(args: {
                 continue;
             }
             declined.delete(sourcePath);
+            const lockUnit = lockBundle.units[sourcePath];
+            if (retained.has(target) && !lockUnit && oldByTarget.has(target) && !args.force) {
+                declined.add(sourcePath);
+                result.foreign.push({ targetPath: sourcePath, kind: unit.kind, state: "modified" });
+                continue;
+            }
             if (current?.state === "modified" && !args.force) {
                 skipped.add(target);
                 result.skipped.push(proxyStatus(current));
@@ -253,7 +261,6 @@ export async function syncProxyBundle(args: {
             }
 
             const templateHash = await computeTemplateUnitHash(args.tempDir, unit);
-            const lockUnit = lockBundle.units[sourcePath];
             if (current?.state === "unmodified" && lockUnit?.hash === templateHash) {
                 lockUnit.version = bundle.version;
                 managed.add(target);
@@ -305,6 +312,11 @@ export async function syncProxyBundle(args: {
             }
             declined.delete(sourcePath);
             const locked = lockBundle.refs?.[sourcePath];
+            if (retained.has(target) && !locked && oldByTarget.has(target) && !args.force) {
+                declined.add(sourcePath);
+                result.foreign.push({ targetPath: sourcePath, kind: "skill", state: "modified" });
+                continue;
+            }
             const oldRef = unitRef(oldByTarget.get(target));
             if (locked && oldRef && hashProxyRef(oldRef) !== locked.hash && !args.force) {
                 skipped.add(target);
@@ -351,6 +363,7 @@ export async function syncProxyBundle(args: {
         await writeLock(rootDir, state.lock);
         const nextManifest = {
             ...state.manifest,
+            schemaVersion: latestProxySchemaVersion(),
             bundles: { ...state.manifest.bundles, [bundle.name]: result.bundle },
         };
         await writeProxyManifest(rootDir, nextManifest);
@@ -411,7 +424,11 @@ export async function deleteProxyUnits(args: {
 
     const remaining = oldUnits.filter((unit) => !removed.has(unit.relativePath));
     if (remaining.length === 0) {
-        const nextManifest = { ...state.manifest, bundles: { ...state.manifest.bundles } };
+        const nextManifest = {
+            ...state.manifest,
+            schemaVersion: latestProxySchemaVersion(),
+            bundles: { ...state.manifest.bundles },
+        };
         delete nextManifest.bundles[bundleName];
         state.manifest = nextManifest;
     } else {
@@ -420,6 +437,7 @@ export async function deleteProxyUnits(args: {
         result.bundle = nextBundle;
         state.manifest = {
             ...state.manifest,
+            schemaVersion: latestProxySchemaVersion(),
             bundles: { ...state.manifest.bundles, [bundleName]: nextBundle },
         };
     }
@@ -472,8 +490,16 @@ export function compareProxyBundle(args: {
         if (!upstreamByPath.has(`skill\0${refPath}`)) removedUnits.push(refPath);
     }
     const modifiedUnits = (installed?.units ?? [])
-        .filter((unit) => unit.state !== "unmodified")
+        .filter((unit) => unit.state === "modified")
         .map((unit) => unit.relativePath);
+    const missingUnits = (installed?.units ?? [])
+        .filter((unit) => unit.state === "missing")
+        .map((unit) => unit.relativePath);
+    const manifestRefTargets = new Set((manifestBundle?.refs ?? []).map((ref) => ref.target));
+    for (const refPath of Object.keys(lockBundle?.refs ?? {})) {
+        const target = stripBundlePrefix(bundleName, refPath);
+        if (upstreamByPath.has(`skill\0${refPath}`) && !manifestRefTargets.has(target)) missingUnits.push(refPath);
+    }
     if (manifestBundle) {
         for (const unit of groupTemplateItems(manifestBundle)) {
             if (!unitRef(unit)) continue;
@@ -482,12 +508,15 @@ export function compareProxyBundle(args: {
             if (locked && locked.hash !== hashProxyRef(unitRef(unit)!)) modifiedUnits.push(sourcePath);
         }
     }
+    const driftUnits = upstream && manifestBundle ? proxyMetadataDrift(upstream, manifestBundle, lockBundle) : [];
     const installedVersion = installed?.version || Object.values(lockBundle?.refs ?? {})[0]?.version || "";
     const availableVersion = upstream?.version ?? null;
     const outOfSync =
         !upstream ||
         newUnits.length > 0 ||
         removedUnits.length > 0 ||
+        missingUnits.length > 0 ||
+        driftUnits.length > 0 ||
         compareVersions(installedVersion, upstream.version) < 0;
     return {
         bundleName,
@@ -496,8 +525,39 @@ export function compareProxyBundle(args: {
         newUnits,
         removedUnits: [...new Set(removedUnits)].sort(),
         modifiedUnits: [...new Set(modifiedUnits)].sort(),
+        missingUnits: [...new Set(missingUnits)].sort(),
+        driftUnits,
         outOfSync,
     };
+}
+
+function proxyMetadataDrift(upstream: Bundle, current: Bundle, lockBundle?: LockBundle): string[] {
+    const drift = new Set<string>();
+    const fields = ["name", "description", "use-when", "default", "platforms"] as const;
+    if (fields.some((field) => canonical(upstream[field]) !== canonical(current[field]))) drift.add(upstream.name);
+    const currentItems = new Map(current.items.map((item) => [item.target, item]));
+    for (const unit of groupTemplateItems(upstream)) {
+        const sourcePath = proxyUnitPath(upstream.name, unit.relativePath);
+        if (!(sourcePath in (lockBundle?.units ?? {}))) continue;
+        const ref = unitRef(unit);
+        if (ref) {
+            const target = `${unit.relativePath}/SKILL.md`;
+            const expected: TemplateItem = {
+                source: `${upstream.name}/${target}`,
+                target,
+                category: "skill",
+                ...(unit.optional !== undefined ? { optional: unit.optional } : {}),
+                ...(unit.labels !== undefined ? { labels: unit.labels } : {}),
+                ...(unit.platforms !== undefined ? { platforms: unit.platforms } : {}),
+            };
+            if (canonical(currentItems.get(target)) !== canonical(expected)) drift.add(sourcePath);
+            continue;
+        }
+        for (const expected of proxyItems(upstream.name, unit)) {
+            if (canonical(currentItems.get(expected.target)) !== canonical(expected)) drift.add(sourcePath);
+        }
+    }
+    return [...drift].sort();
 }
 
 export function isRemoteRef(unit: TemplateUnit): boolean {
@@ -518,10 +578,14 @@ export function stripBundlePrefix(bundleName: string, sourcePath: string): strin
 }
 
 function emptyProxyManifest(): Manifest {
+    return { schemaVersion: latestProxySchemaVersion(), bundles: nullPrototype() };
+}
+
+function latestProxySchemaVersion(): string {
     const [major, minor] = Object.entries(SUPPORTED_SCHEMA_VERSIONS)
         .map(([version, maxMinor]) => [Number(version), maxMinor] as const)
         .sort(([a], [b]) => b - a)[0]!;
-    return { schemaVersion: `${major}.${minor}`, bundles: nullPrototype() };
+    return `${major}.${minor}`;
 }
 
 function buildProxyBundle(args: {

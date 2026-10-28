@@ -199,7 +199,7 @@ proxy
                 source: options.source,
                 skills: options.skill,
                 force: options.force,
-                output: options.output,
+                output: options.output ?? proxy.opts().output,
             });
         },
     );
@@ -210,7 +210,7 @@ proxy
     .option("--force", "Overwrite locally changed files and ref definitions")
     .option("--output <dir>", OUTPUT_HELP)
     .action(async (options: { force?: boolean; output?: string }) => {
-        await executeProxyUpdate(options);
+        await executeProxyUpdate({ ...options, output: options.output ?? proxy.opts().output });
     });
 
 proxy
@@ -218,7 +218,7 @@ proxy
     .description("Report upstream and local proxy changes; changes nothing")
     .option("--output <dir>", OUTPUT_HELP)
     .action(async (options: { output?: string }) => {
-        await executeProxyCheck(options);
+        await executeProxyCheck({ ...options, output: options.output ?? proxy.opts().output });
     });
 
 proxy
@@ -233,7 +233,7 @@ proxy
             bundle,
             skills: options.skill,
             force: options.force,
-            output: options.output,
+            output: options.output ?? proxy.opts().output,
         });
     });
 

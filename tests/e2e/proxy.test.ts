@@ -8,13 +8,14 @@ import { vi } from "vitest";
 import { executeInstall } from "@/commands/install.js";
 import { executeProxyCheck, executeProxyDelete, executeProxyInstall, executeProxyUpdate } from "@/commands/proxy.js";
 import type { Bundle, Manifest } from "@/types/index.js";
-import { showProxyCheckReport } from "@/ui/prompts.js";
+import { confirmProxyAction, isInteractive, selectBundleItems, showProxyCheckReport } from "@/ui/prompts.js";
 
 vi.mock("giget", () => ({ downloadTemplate: vi.fn() }));
 
 vi.mock("@/ui/prompts.js", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@/ui/prompts.js")>()),
     isInteractive: vi.fn(() => false),
+    requireTerminal: vi.fn(),
     selectBundleItems: vi.fn(),
     selectNewUnits: vi.fn(),
     selectProxyBundles: vi.fn(),
@@ -39,6 +40,7 @@ let cwd: string;
 
 beforeEach(async () => {
     vi.clearAllMocks();
+    vi.mocked(isInteractive).mockReturnValue(false);
     mockedDownloadTemplate.mockReset();
     work = await fs.mkdtemp(path.join(os.tmpdir(), "astp-proxy-e2e-"));
     projectDir = path.join(work, "project");
@@ -167,4 +169,64 @@ it("updates with edit protection and deletes units and the empty generated sourc
     await executeProxyDelete({ bundle: "core" });
     await expect(fs.stat(path.join(outputDir, "manifest.json"))).rejects.toMatchObject({ code: "ENOENT" });
     await expect(fs.stat(path.join(outputDir, "astp.lock"))).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("restores missing tracked files during an ordinary update", async () => {
+    await writeUpstream(bundle(), { "core/rules/a.md": "a\n", "core/rules/b.md": "b\n" });
+    await executeProxyInstall({ bundle: "core", source: source() });
+    const missing = path.join(outputDir, "core/rules/a.md");
+    await fs.rm(missing);
+
+    await executeProxyCheck({});
+    expect(vi.mocked(showProxyCheckReport)).toHaveBeenCalledWith([
+        expect.objectContaining({ outOfSync: true, missingUnits: ["core/rules/a.md"] }),
+    ]);
+    await executeProxyUpdate({});
+    expect(await fs.readFile(missing, "utf8")).toBe("a\n");
+});
+
+it("reports and repairs managed manifest metadata drift", async () => {
+    await writeUpstream(bundle(), { "core/rules/a.md": "a\n", "core/rules/b.md": "b\n" });
+    await executeProxyInstall({ bundle: "core", source: source() });
+    const manifest = await readGenerated();
+    manifest.bundles.core!.description = "Custom";
+    await fs.writeFile(path.join(outputDir, "manifest.json"), JSON.stringify(manifest));
+
+    await executeProxyCheck({});
+    expect(vi.mocked(showProxyCheckReport)).toHaveBeenCalledWith([
+        expect.objectContaining({ outOfSync: true, driftUnits: ["core"] }),
+    ]);
+    await executeProxyUpdate({});
+    expect((await readGenerated()).bundles.core).toMatchObject({ description: "Core", version: "1.0.1" });
+});
+
+it("skips organization-owned bundle names in the install wizard", async () => {
+    const other: Bundle = {
+        name: "other",
+        version: "1.0.0",
+        description: "Organization owned",
+        default: false,
+        items: [{ source: "other/rules/a.md", target: "rules/a.md", category: "rule" }],
+    };
+    await writeUpstream(bundle(), { "core/rules/a.md": "a\n", "core/rules/b.md": "b\n" });
+    const upstreamManifest = JSON.parse(await fs.readFile(source(), "utf8")) as Manifest;
+    upstreamManifest.bundles.other = other;
+    await fs.writeFile(source(), JSON.stringify(upstreamManifest));
+    await fs.mkdir(outputDir, { recursive: true });
+    await fs.writeFile(
+        path.join(outputDir, "manifest.json"),
+        JSON.stringify({ schemaVersion: "3.1", bundles: { other } } satisfies Manifest),
+    );
+    vi.mocked(isInteractive).mockReturnValue(true);
+    vi.mocked(confirmProxyAction).mockResolvedValue(true);
+    vi.mocked(selectBundleItems).mockImplementation(async (entries) => {
+        expect(entries.map((entry) => entry.bundle.name)).toEqual(["core"]);
+        return new Map([["core", { units: ["rules/a.md", "rules/b.md"], blocks: [] }]]);
+    });
+
+    await executeProxyInstall({ source: source() });
+
+    const generated = await readGenerated();
+    expect(Object.keys(generated.bundles).sort()).toEqual(["core", "other"]);
+    expect(generated.bundles.other).toEqual(other);
 });

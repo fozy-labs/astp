@@ -99,7 +99,10 @@ export async function executeProxyInstall(options: ProxyInstallOptions): Promise
             const bundle = resolveBundle(opened.manifest, name);
             const replaceBundle = Boolean(state.manifest.bundles[name] && !state.lock.bundles[name]);
             if (replaceBundle && !options.force) {
-                throw new Error(`Bundle '${name}' in ${rootDir} is organization-owned; use --force to replace it`);
+                if (options.bundle) {
+                    throw new Error(`Bundle '${name}' in ${rootDir} is organization-owned; use --force to replace it`);
+                }
+                continue;
             }
             s.start(`Downloading ${name}...`);
             const downloaded = await downloadProxyBundle(opened.source, bundle);
@@ -120,6 +123,10 @@ export async function executeProxyInstall(options: ProxyInstallOptions): Promise
                 tempDir: downloaded.tempDir,
             });
             s.stop(`Downloaded ${name}.`);
+        }
+        if (candidates.length === 0) {
+            showInfo("No bundles available to proxy.");
+            return;
         }
         sources.warnIfNewer();
 
