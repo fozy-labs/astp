@@ -13,6 +13,7 @@ import {
     readUnitDescription,
     syncBundle,
     validateUnitTargets,
+    writeLock,
 } from "@/core/index.js";
 import type { BlockSelections, UnitBlockFile } from "@/core/index.js";
 import type { TemplateUnit } from "@/core/units.js";
@@ -50,6 +51,7 @@ interface UpdatePlan {
     bundleName: string;
     bundle: Bundle;
     spec: string;
+    resolvedCommit?: string;
     installed: InstalledBundle | undefined;
     tempDir: string;
     units: TemplateUnit[];
@@ -75,6 +77,23 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
     try {
         s.start("Fetching manifests...");
         const opened = await sources.openInstalled(installedState.bundles, installedState.lock);
+        const persistResolvedCommits = async (): Promise<void> => {
+            let changed = false;
+            for (const [bundleName, source] of opened) {
+                const lockBundle = installedState.lock.bundles[bundleName];
+                if (
+                    !lockBundle ||
+                    lockBundle.resolvedCommit ||
+                    !source.resolvedCommit ||
+                    !source.manifest.bundles[bundleName]
+                ) {
+                    continue;
+                }
+                lockBundle.resolvedCommit = source.resolvedCommit;
+                changed = true;
+            }
+            if (changed) await writeLock(target.rootDir, installedState.lock);
+        };
         s.stop("Manifests fetched.");
         sources.warnIfNewer();
         const report = mergeReports(
@@ -125,6 +144,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                         `astp update --force --platform ${target.platform} --target ${target.type}`,
                     );
             }
+            await persistResolvedCommits();
             return;
         }
 
@@ -187,7 +207,18 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                 const selections = await selectUpdateBlocks(unit.relativePath, blockFiles, lockUnit);
                 for (const [fileTarget, selection] of selections) blockSelections.set(fileTarget, selection);
             }
-            plans.push({ bundleName, bundle, spec, installed, tempDir, units, selected, declined, blockSelections });
+            plans.push({
+                bundleName,
+                bundle,
+                spec,
+                resolvedCommit: opened.get(bundleName)!.resolvedCommit,
+                installed,
+                tempDir,
+                units,
+                selected,
+                declined,
+                blockSelections,
+            });
         }
 
         const totals = {
@@ -201,6 +232,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             const result = await syncBundle({
                 target,
                 source: plan.spec,
+                resolvedCommit: plan.resolvedCommit,
                 bundle: plan.bundle,
                 installed: plan.installed,
                 lock: installedState.lock,
@@ -233,6 +265,7 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             s.stop(`Updated ${plan.bundleName}.`);
         }
 
+        await persistResolvedCommits();
         const synced = plans.length > 0;
         if (!synced) {
             if (report.notInManifest.length === 0) showInfo("All bundles up to date.");

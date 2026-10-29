@@ -48,6 +48,7 @@ describe("without a terminal", () => {
     const cases: Array<[string[], string]> = [
         [["check", "--platform", "claude-code"], "--target is required without a terminal (project|user)"],
         [["update", "--platform", "claude-code"], "--target is required without a terminal (project|user)"],
+        [["sync", "--platform", "claude-code"], "--target is required without a terminal (project|user)"],
         [["list", "--platform", "claude-code"], "--target is required without a terminal (project|user)"],
         [["delete", "core", "--platform", "claude-code"], "--target is required without a terminal (project|user)"],
         [["install", "core", "--platform", "claude-code"], "--target is required without a terminal (project|user)"],

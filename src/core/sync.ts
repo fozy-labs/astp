@@ -47,6 +47,9 @@ export async function syncBundle(args: {
     target: InstallTarget;
     /** Source string recorded in the lock. */
     source: string;
+    resolvedCommit?: string;
+    /** Set to false for read-only lock restoration via the sync command. */
+    writeLock?: boolean;
     bundle: Bundle;
     installed?: InstalledBundle;
     lock: Lock;
@@ -79,10 +82,16 @@ export async function syncBundle(args: {
     const lockBundle: LockBundle = existingLock
         ? {
               source: args.source,
+              ...(args.resolvedCommit ? { resolvedCommit: args.resolvedCommit } : {}),
               declined: [...existingLock.declined],
               units: nullPrototype(existingLock.units),
           }
-        : { source: args.source, declined: [], units: nullPrototype() };
+        : {
+              source: args.source,
+              ...(args.resolvedCommit ? { resolvedCommit: args.resolvedCommit } : {}),
+              declined: [],
+              units: nullPrototype(),
+          };
     const removedLegacy = new Set<string>();
     const keptPaths = new Set<string>();
 
@@ -170,7 +179,7 @@ export async function syncBundle(args: {
                     unit.kind === "skill"
                         ? await installSkill(args.tempDir, unit, args.target)
                         : await installFile(args.tempDir, unit.item, args.target);
-                lockBundle.units[unit.relativePath] = { kind: unit.kind, version: args.bundle.version, hash };
+                lockBundle.units[unit.relativePath] = createLockUnit(unit, args.bundle.version, hash);
                 if (current.origin === "legacy") removedLegacy.add(current.relativePath);
                 result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
                 continue;
@@ -180,11 +189,11 @@ export async function syncBundle(args: {
                 if (untracked) {
                     const diskState = await compareUntracked(rootDir, args.tempDir, unit);
                     if (diskState === "equal") {
-                        lockBundle.units[unit.relativePath] = {
-                            kind: unit.kind,
-                            version: args.bundle.version,
-                            hash: await computeTemplateUnitHash(args.tempDir, unit),
-                        };
+                        lockBundle.units[unit.relativePath] = createLockUnit(
+                            unit,
+                            args.bundle.version,
+                            await computeTemplateUnitHash(args.tempDir, unit),
+                        );
                         result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
                         continue;
                     }
@@ -198,7 +207,7 @@ export async function syncBundle(args: {
                     unit.kind === "skill"
                         ? await installSkill(args.tempDir, unit, args.target)
                         : await installFile(args.tempDir, unit.item, args.target);
-                lockBundle.units[unit.relativePath] = { kind: unit.kind, version: args.bundle.version, hash };
+                lockBundle.units[unit.relativePath] = createLockUnit(unit, args.bundle.version, hash);
                 if (current?.origin === "legacy") removedLegacy.add(current.relativePath);
                 result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
                 continue;
@@ -230,13 +239,11 @@ export async function syncBundle(args: {
             if (untracked && !adopted) {
                 const diskState = await compareUntrackedBlocks(rootDir, args.tempDir, unit, merged.contents);
                 if (diskState === "equal") {
-                    lockBundle.units[unit.relativePath] = {
-                        kind: unit.kind,
-                        version: args.bundle.version,
-                        hash,
+                    lockBundle.units[unit.relativePath] = createLockUnit(unit, args.bundle.version, hash, {
                         blocks: merged.blocks,
                         declinedBlocks: merged.declinedBlocks,
-                    };
+                        keptBlocks: merged.keptBlocks,
+                    });
                     result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
                     continue;
                 }
@@ -251,13 +258,11 @@ export async function syncBundle(args: {
             } else {
                 await installFile(args.tempDir, unit.item, args.target, merged.contents.get(unit.item.target));
             }
-            lockBundle.units[unit.relativePath] = {
-                kind: unit.kind,
-                version: args.bundle.version,
-                hash,
+            lockBundle.units[unit.relativePath] = createLockUnit(unit, args.bundle.version, hash, {
                 blocks: merged.blocks,
                 declinedBlocks: merged.declinedBlocks,
-            };
+                keptBlocks: merged.keptBlocks,
+            });
             if (current?.origin === "legacy") removedLegacy.add(current.relativePath);
             result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
         }
@@ -277,9 +282,31 @@ export async function syncBundle(args: {
         } else {
             args.lock.bundles[args.bundle.name] = lockBundle;
         }
-        await writeLock(rootDir, args.lock);
+        if (args.writeLock !== false) await writeLock(rootDir, args.lock);
     }
     return result;
+}
+
+function createLockUnit(
+    unit: TemplateUnit,
+    version: string,
+    hash: string,
+    blockState?: Pick<LockUnit, "blocks" | "declinedBlocks" | "keptBlocks">,
+): LockUnit {
+    return {
+        kind: unit.kind,
+        version,
+        hash,
+        ...(unit.kind === "skill" && unit.ref
+            ? {
+                  ref: {
+                      source: unit.ref.source,
+                      ...(unit.resolvedCommit ? { resolvedCommit: unit.resolvedCommit } : {}),
+                  },
+              }
+            : {}),
+        ...blockState,
+    };
 }
 
 interface MergedUnit {
@@ -287,6 +314,7 @@ interface MergedUnit {
     contents: Map<string, string>;
     blocks: Record<string, string>;
     declinedBlocks: string[];
+    keptBlocks: string[];
 }
 
 /** Runs `mergeBlockFile` for every block file of a unit and collects lock entries and warnings. */
@@ -307,6 +335,7 @@ async function mergeUnitBlockFiles(
     const contents = new Map<string, string>();
     const blocks = nullPrototype<string>();
     const declinedBlocks: string[] = [];
+    const keptBlocks: string[] = [];
 
     for (const [target, file] of blockFiles) {
         const lockHashes = nullPrototype<string>();
@@ -358,13 +387,19 @@ async function mergeUnitBlockFiles(
         contents.set(target, merged.content);
         for (const [name, hash] of Object.entries(merged.blocks)) blocks[`${target}#${name}`] = hash;
         for (const name of merged.declinedBlocks) declinedBlocks.push(`${target}#${name}`);
+        keptBlocks.push(...merged.kept.map((name) => `${target}#${name}`));
         result.keptBlocks.push(...merged.kept.map((name) => `${target}#${name}`));
         result.releasedBlocks.push(...merged.released.map((name) => `${target}#${name}`));
         result.foreignBlocks.push(...merged.foreign.map((name) => `${target}#${name}`));
         result.conflictBlocks.push(...merged.conflicts.map((name) => `${target}#${name}`));
     }
 
-    return { contents, blocks, declinedBlocks: [...new Set(declinedBlocks)] };
+    return {
+        contents,
+        blocks,
+        declinedBlocks: [...new Set(declinedBlocks)],
+        keptBlocks: [...new Set(keptBlocks)],
+    };
 }
 
 /**

@@ -167,6 +167,7 @@ describe("executeInstall", () => {
             expect.objectContaining({ name: "core" }),
             expect.any(Array),
             "claude-code",
+            undefined,
         );
         expect(mockSyncBundle).toHaveBeenCalledTimes(1);
         expect(mockSyncBundle).toHaveBeenCalledWith(
@@ -296,6 +297,75 @@ describe("executeInstall", () => {
         expect(mockSyncBundle).toHaveBeenCalledWith(
             expect.objectContaining({ selected: new Set(["skills/orchestrate"]) }),
         );
+    });
+
+    describe("locked external refs", () => {
+        const mainSource = "gh:fozy-labs/astp";
+        const lockedRefSource = "gh:old/repo#main";
+        const lockedRefCommit = "fedcba9876543210fedcba9876543210fedcba98";
+
+        function setupRefInstall(refSource: string): void {
+            const bundle: Bundle = {
+                ...testBundle,
+                items: [],
+                refs: [{ source: refSource, target: "skills/external" }],
+            };
+            mockResolveBundle.mockReturnValue(bundle);
+            mockLoadInstalled.mockResolvedValue({
+                lock: {
+                    schemaVersion: 2,
+                    bundles: {
+                        core: {
+                            source: mainSource,
+                            resolvedCommit: "0123456789abcdef0123456789abcdef01234567",
+                            units: {
+                                "skills/external": {
+                                    kind: "skill",
+                                    version: "1.0.0",
+                                    hash: "h",
+                                    ref: { source: lockedRefSource, resolvedCommit: lockedRefCommit },
+                                },
+                            },
+                            declined: [],
+                        },
+                    },
+                },
+                bundles: [],
+            });
+        }
+
+        it("resolves a changed ref source afresh instead of applying the old commit", async () => {
+            setupRefInstall("gh:new/repo#main");
+
+            await executeInstall({ bundle: "core", platform: "claude-code", target: "project" });
+
+            expect(mockDownloadBundle.mock.calls[0]![4]).toEqual(new Map());
+        });
+
+        it("reuses the locked ref commit when its source is unchanged", async () => {
+            setupRefInstall(lockedRefSource);
+
+            await executeInstall({ bundle: "core", platform: "claude-code", target: "project" });
+
+            expect(mockDownloadBundle.mock.calls[0]![4]).toEqual(
+                new Map([["skills/external", { lockedCommit: lockedRefCommit, requireLocked: false }]]),
+            );
+        });
+
+        it("keeps the locked ref commit for an explicit source equal to the lock", async () => {
+            setupRefInstall(lockedRefSource);
+
+            await executeInstall({
+                bundle: "core",
+                source: mainSource,
+                platform: "claude-code",
+                target: "project",
+            });
+
+            expect(mockDownloadBundle.mock.calls[0]![4]).toEqual(
+                new Map([["skills/external", { lockedCommit: lockedRefCommit, requireLocked: false }]]),
+            );
+        });
     });
 });
 

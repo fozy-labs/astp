@@ -659,6 +659,17 @@ export function warnModified(files: FileStatus[], command: string): void {
     );
 }
 
+export function warnMixedVersion(
+    entries: Array<{ bundle: string; unit: string; version: string; sourceVersion: string }>,
+): void {
+    const list = entries
+        .map((entry) => `  • ${entry.bundle}/${entry.unit} (locked ${entry.version}, source ${entry.sourceVersion})`)
+        .join("\n");
+    p.log.warn(
+        `Locked units from a different source version cannot be restored by sync, even with --force — skipped:\n${list}`,
+    );
+}
+
 export function warnKeptRemoved(units: FileStatus[]): void {
     const paths = units.map((unit) => `  • ${unit.targetPath}`).join("\n");
     p.log.warn(

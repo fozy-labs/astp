@@ -448,7 +448,7 @@ class ProxySources {
         const existing = this.opened.get(key);
         if (existing) return existing;
         this.sources.push(source);
-        const opened = { source, spec: key, manifest: await fetchManifest(source) };
+        const opened = { source, spec: key, useLockedRevisions: false, manifest: await fetchManifest(source) };
         this.opened.set(key, opened);
         return opened;
     }

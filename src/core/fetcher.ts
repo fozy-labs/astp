@@ -8,9 +8,10 @@ import type { Bundle, Manifest, Platform } from "@/types/index.js";
 import { itemSupportsPlatform, resolveItemTarget } from "@/types/index.js";
 
 import { validateManifest } from "./manifest.js";
-import { assertSafeRelativePath } from "./path-safety.js";
+import { assertSafeRelativePath, foldPath } from "./path-safety.js";
 import { listSkillTree } from "./skill-tree.js";
-import type { ManifestSource } from "./source.js";
+import type { ManifestSource, RevisionOptions } from "./source.js";
+import { resolveRefRevision } from "./source.js";
 import type { TemplateUnit } from "./units.js";
 import { groupTemplateItems } from "./units.js";
 
@@ -55,9 +56,11 @@ export async function downloadBundle(
     bundle: Bundle,
     units: TemplateUnit[] = groupTemplateItems(bundle),
     platform?: Platform,
+    refRevisions: ReadonlyMap<string, RevisionOptions> = new Map(),
 ): Promise<string> {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), `astp-${bundle.name}-`));
     try {
+        assertRefTargetsDoNotOverlap(units);
         if (source.kind === "url") {
             const root = new URL(".", source.manifestUrl);
             for (const item of bundle.items) {
@@ -105,7 +108,12 @@ export async function downloadBundle(
             if (unit.kind !== "skill" || !unit.ref) continue;
             assertSafeRelativePath(unit.relativePath, "ref target");
             const refDir = path.join(tempDir, unit.relativePath);
-            await downloadRef(source, unit.ref.source, refDir);
+            unit.resolvedCommit = await downloadRef(
+                source,
+                unit.ref.source,
+                refDir,
+                refRevisions.get(unit.relativePath),
+            );
             const { files, special } = await listSkillTree(refDir);
             if (special.length > 0) {
                 throw new Error(
@@ -129,13 +137,37 @@ export async function downloadBundle(
     }
 }
 
+function assertRefTargetsDoNotOverlap(units: TemplateUnit[]): void {
+    const occupied = units
+        .filter((unit) => unit.kind === "file" || !unit.ref)
+        .map((unit) => ({ path: unit.relativePath, folded: foldPath(unit.relativePath) }));
+    for (const unit of units) {
+        if (unit.kind !== "skill" || !unit.ref) continue;
+        assertSafeRelativePath(unit.relativePath, "ref target");
+        const folded = foldPath(unit.relativePath);
+        const existing = occupied.find(
+            (unit) =>
+                folded === unit.folded || folded.startsWith(`${unit.folded}/`) || unit.folded.startsWith(`${folded}/`),
+        );
+        if (existing) {
+            throw new Error(`Ref target '${unit.relativePath}' overlaps existing unit '${existing.path}'`);
+        }
+        occupied.push({ path: unit.relativePath, folded });
+    }
+}
+
 const LOCAL_REF_RE = /^(?:\.{1,2}(?:[\\/]|$)|[\\/]|[A-Za-z]:[\\/])/;
 
 export function isLocalRefSource(refSource: string): boolean {
     return LOCAL_REF_RE.test(refSource);
 }
 
-async function downloadRef(source: ManifestSource, refSource: string, outputDir: string): Promise<void> {
+async function downloadRef(
+    source: ManifestSource,
+    refSource: string,
+    outputDir: string,
+    revision: RevisionOptions = {},
+): Promise<string | undefined> {
     if (isLocalRefSource(refSource)) {
         if (source.kind !== "local") {
             throw new Error(`Local ref '${refSource}' requires a local manifest`);
@@ -147,11 +179,11 @@ async function downloadRef(source: ManifestSource, refSource: string, outputDir:
             throw new Error(`Local ref '${refSource}' resolves outside the manifest directory`);
         }
         await fs.cp(refDir, outputDir, { recursive: true, filter: isPlainEntry });
-        return;
+        return undefined;
     }
-    await withGigetEnv(/^(?:gh|github):/.test(refSource), () =>
-        downloadTemplate(refSource, { dir: outputDir, force: true }),
-    );
+    const resolved = await resolveRefRevision(refSource, revision);
+    await withGigetEnv(resolved.auth, () => downloadTemplate(resolved.address, { dir: outputDir, force: true }));
+    return resolved.resolvedCommit;
 }
 
 async function copyTargetOverrides(tempDir: string, bundle: Bundle, platform?: Platform): Promise<void> {

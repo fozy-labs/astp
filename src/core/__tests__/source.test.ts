@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { InstallTarget } from "@/types/index.js";
 
-import { formatSource, formatSourceAt, resolveSource } from "../source.js";
+import { formatSource, formatSourceAt, resolveSource, resolveSourceRevision } from "../source.js";
 
 const cwd = path.resolve("/work/project");
 
@@ -58,14 +58,35 @@ describe("resolveSource", () => {
         ],
         ["gitlab:g/p/sub", "gitlab:g/p/sub", "gitlab:g/p/sub/templates#HEAD", "manifest.json", false],
         ["bitbucket:o/r/m.json", "bitbucket:o/r/m.json", "bitbucket:o/r#HEAD", "m.json", false],
+        ["sourcehut:~o/r", "sourcehut:~o/r", "sourcehut:~o/r/templates#HEAD", "manifest.json", false],
     ])("parses git spec %s", async (spec, stored, address, manifestFile, auth) => {
-        await expect(resolveSource(spec, cwd)).resolves.toEqual({
+        await expect(resolveSource(spec, cwd)).resolves.toMatchObject({
             kind: "archive",
             spec: stored,
             address,
             manifestFile,
             auth,
         });
+    });
+
+    it("pins the giget address to the resolved or locked commit", async () => {
+        const sha = "0123456789abcdef0123456789abcdef01234567";
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => new Response(JSON.stringify({ sha }))),
+        );
+        const source = await resolveSource("o/r/sub#main", cwd);
+
+        const resolved = await resolveSourceRevision(source);
+        expect(resolved.resolvedCommit).toBe(sha);
+        expect(resolved.source).toMatchObject({
+            spec: "gh:o/r/sub#main",
+            address: `gh:o/r/sub/templates#${sha}`,
+            resolvedCommit: sha,
+        });
+
+        const locked = await resolveSourceRevision(source, { lockedCommit: sha, requireLocked: true });
+        expect(locked.source).toMatchObject({ address: `gh:o/r/sub/templates#${sha}` });
     });
 
     it("parses npm specs", async () => {

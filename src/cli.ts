@@ -8,6 +8,7 @@ import { executeDelete } from "@/commands/delete.js";
 import { executeInstall } from "@/commands/install.js";
 import { executeList } from "@/commands/list.js";
 import { executeProxyCheck, executeProxyDelete, executeProxyInstall, executeProxyUpdate } from "@/commands/proxy.js";
+import { executeSync } from "@/commands/sync.js";
 import { executeUpdate } from "@/commands/update.js";
 import type { InstallTargetType, Platform } from "@/types/index.js";
 import { ALL_PLATFORMS } from "@/types/index.js";
@@ -108,6 +109,21 @@ program
     )
     .action(async (options: { force?: boolean; platform?: string; target?: string }) => {
         await executeUpdate({
+            force: options.force,
+            platform: parsePlatform(options.platform),
+            target: parseTarget(options.target),
+        });
+    });
+
+program
+    .command("sync")
+    .description("Restore files from the commits and selections recorded in astp.lock")
+    .option("--force", "Overwrite locally changed managed files")
+    .option("--platform <name>", PLATFORM_HELP)
+    .option("--target <type>", TARGET_HELP)
+    .addHelpText("after", "\nDoes not resolve new versions or write astp.lock. Old Git locks need astp update first.")
+    .action(async (options: { force?: boolean; platform?: string; target?: string }) => {
+        await executeSync({
             force: options.force,
             platform: parsePlatform(options.platform),
             target: parseTarget(options.target),

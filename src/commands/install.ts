@@ -43,7 +43,7 @@ import {
 
 import { initialInstallBlocks, installBlockOptions, resolveBlockKeys, selectInstallBlocks } from "./blocks.js";
 import type { OpenedSource } from "./sources.js";
-import { Sources } from "./sources.js";
+import { lockedRefRevisions, Sources } from "./sources.js";
 
 export interface InstallOptions {
     bundle?: string;
@@ -92,8 +92,15 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
     const tempDirs: string[] = [];
     try {
         const openFor = (bundleName: string): Promise<OpenedSource> => {
-            if (options.source !== undefined) return sources.open(options.source, "cli");
-            return sources.open(installedState.lock.bundles[bundleName]?.source ?? DEFAULT_SOURCE, "lock");
+            const lockBundle = installedState.lock.bundles[bundleName];
+            return sources.open(
+                options.source ?? lockBundle?.source ?? DEFAULT_SOURCE,
+                options.source ? "cli" : "lock",
+                {
+                    lockedCommit: lockBundle?.resolvedCommit,
+                    lockedSpec: lockBundle?.source,
+                },
+            );
         };
         s.start("Fetching manifest...");
         const primary = options.bundle
@@ -143,7 +150,15 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             try {
                 const units = groupTemplateItems(bundle, platform);
                 validateUnitTargets(target.rootDir, units);
-                const tempDir = await downloadBundle(source.source, bundle, units, platform);
+                const tempDir = await downloadBundle(
+                    source.source,
+                    bundle,
+                    units,
+                    platform,
+                    source.useLockedRevisions
+                        ? lockedRefRevisions(installedState.lock.bundles[bundle.name], false, units)
+                        : undefined,
+                );
                 tempDirs.push(tempDir);
                 await assertBundleSources(tempDir, bundle.name, units);
                 await assertBundleBlocks(tempDir, bundle.name, units);
@@ -287,6 +302,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             const result = await syncBundle({
                 target,
                 source: plan.source.spec,
+                resolvedCommit: plan.source.resolvedCommit,
                 bundle: plan.bundle,
                 installed: installedState.bundles.find((entry) => entry.bundleName === plan.bundle.name),
                 lock: installedState.lock,

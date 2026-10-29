@@ -121,7 +121,7 @@ it("does not download remote refs while proxying and downloads one when installi
 
     expect(mockedDownloadTemplate).toHaveBeenCalledTimes(1);
     expect(mockedDownloadTemplate).toHaveBeenCalledWith(
-        "gh:example/skills/remote#abc",
+        "gh:example/skills/remote#0123456789abcdef0123456789abcdef01234567",
         expect.objectContaining({ force: true }),
     );
     expect(await fs.readFile(path.join(projectDir, ".claude/skills/remote/SKILL.md"), "utf8")).toContain("remote");
@@ -139,7 +139,7 @@ it("materializes local refs for local and archive downstream sources without the
 
     await fs.rm(path.join(projectDir, ".claude"), { recursive: true, force: true });
     mockedDownloadTemplate.mockImplementation(async (input, options) => {
-        expect(input).toBe("gh:org/proxy/templates#HEAD");
+        expect(input).toBe("gh:org/proxy/templates#0123456789abcdef0123456789abcdef01234567");
         await fs.cp(outputDir, options!.dir!, { recursive: true });
         return { dir: options!.dir! } as never;
     });

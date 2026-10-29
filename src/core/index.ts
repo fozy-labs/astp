@@ -38,8 +38,16 @@ export {
     writeProxyManifest,
 } from "./proxy.js";
 export type { ProxyComparison, ProxyDeleteResult, ProxyDownload, ProxyState, ProxySyncResult } from "./proxy.js";
-export { ACCEPTED_SOURCES, DEFAULT_SOURCE, formatSource, formatSourceAt, resolveSource } from "./source.js";
-export type { ManifestSource } from "./source.js";
+export {
+    ACCEPTED_SOURCES,
+    DEFAULT_SOURCE,
+    formatSource,
+    formatSourceAt,
+    resolveRefRevision,
+    resolveSource,
+    resolveSourceRevision,
+} from "./source.js";
+export type { ManifestSource, RevisionOptions } from "./source.js";
 export { computeSkillTreeHash, computeTemplateUnitHash } from "./skill-tree.js";
 export { readLock, writeLock } from "./lock.js";
 export type { Lock, LockBundle, LockRef, LockUnit } from "./lock.js";
