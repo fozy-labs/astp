@@ -17,6 +17,6 @@ Replace this instruction with the project's exact release procedure, using an ex
 - publication order: merges, commits, tags, Git-host releases and package registries;
 - required approvals, protected-branch rules and the boundary between preparation and publication;
 - verification of each published artifact and recovery from a partial publication without repeating completed steps.
-Delegate Git operations to `/git` and Git-host writes to `tracker` when installed. Do not invent release targets or registries the project does not use.
+Delegate Git operations to `/git` when installed, otherwise use the project's documented Git commands directly. Delegate Git-host writes to `tracker` when installed, otherwise follow the project's documented host workflow. Do not invent release targets or registries the project does not use.
 </FILL_INSTRUCTION>
 </astp-block>
