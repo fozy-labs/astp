@@ -256,21 +256,30 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             );
             if (selectedRefs.length > 0) {
                 s.start(`Downloading selected ${bundle.name} skills...`);
-                await downloadBundleRefs(
-                    source.source,
-                    bundle,
-                    selectedRefs,
-                    tempDir,
-                    source.useLockedRevisions
-                        ? lockedRefRevisions(installedState.lock.bundles[bundle.name], false, selectedRefs)
-                        : undefined,
-                );
-                await assertBundleSources(tempDir, bundle.name, selectedRefs);
-                await assertBundleBlocks(tempDir, bundle.name, selectedRefs);
-                for (const unit of selectedRefs) {
-                    const description = await readUnitDescription(tempDir, unit);
-                    if (description) unit.description = description;
-                    unitBlockFiles.set(unit.relativePath, await readUnitBlockFiles(tempDir, unit, platform));
+                try {
+                    await downloadBundleRefs(
+                        source.source,
+                        bundle,
+                        selectedRefs,
+                        tempDir,
+                        source.useLockedRevisions
+                            ? lockedRefRevisions(installedState.lock.bundles[bundle.name], false, selectedRefs)
+                            : undefined,
+                    );
+                    await assertBundleSources(tempDir, bundle.name, selectedRefs);
+                    await assertBundleBlocks(tempDir, bundle.name, selectedRefs);
+                    for (const unit of selectedRefs) {
+                        const description = await readUnitDescription(tempDir, unit);
+                        if (description) unit.description = description;
+                        unitBlockFiles.set(unit.relativePath, await readUnitBlockFiles(tempDir, unit, platform));
+                    }
+                } catch (error) {
+                    s.stop(`Failed to download selected ${bundle.name} skills.`);
+                    if (options.bundle !== undefined) throw error;
+                    const entry = { bundle: bundle.name, message: errorMessage(error) };
+                    unavailable.push(entry);
+                    warnUnavailable([entry], target);
+                    continue;
                 }
                 s.stop(`Downloaded selected ${bundle.name} skills.`);
             }
