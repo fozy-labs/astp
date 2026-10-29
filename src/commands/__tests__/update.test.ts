@@ -249,6 +249,54 @@ describe("executeUpdate", () => {
         expect(mockSyncBundle).not.toHaveBeenCalled();
     });
 
+    it("does not persist a resolved commit for a bundle missing from the manifest", async () => {
+        const state = createState();
+        state.lock.bundles.pipeline = {
+            source: "gh:fozy-labs/astp",
+            units: { [testItem.target]: { kind: "file", version: "1.0.0", hash: "h" } },
+            declined: [],
+        };
+        mockLoadInstalled.mockResolvedValue(state);
+        mockFetchManifest.mockResolvedValue({ ...testManifest, bundles: {} });
+        mockCompareVersions.mockReturnValue({
+            updates: [],
+            upToDate: [],
+            notInManifest: state.bundles,
+            legacySkills: [],
+        });
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(state.lock.bundles.pipeline.resolvedCommit).toBeUndefined();
+        expect(mockWriteLock).not.toHaveBeenCalled();
+        expect(mockSyncBundle).not.toHaveBeenCalled();
+    });
+
+    it("does not advance a pinned resolved commit for an up-to-date bundle", async () => {
+        const pinnedCommit = "fedcba9876543210fedcba9876543210fedcba98";
+        const installed = createInstalledBundle([], "1.1.0");
+        const state = createState([installed]);
+        state.lock.bundles.pipeline = {
+            source: "gh:fozy-labs/astp",
+            resolvedCommit: pinnedCommit,
+            units: {},
+            declined: [],
+        };
+        mockLoadInstalled.mockResolvedValue(state);
+        mockCompareVersions.mockReturnValue({
+            updates: [],
+            upToDate: [installed],
+            notInManifest: [],
+            legacySkills: [],
+        });
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(state.lock.bundles.pipeline.resolvedCommit).toBe(pinnedCommit);
+        expect(mockWriteLock).not.toHaveBeenCalled();
+        expect(mockSyncBundle).not.toHaveBeenCalled();
+    });
+
     it("persists resolved commits for up-to-date bundles alongside updated bundles", async () => {
         const stable = { ...createInstalledBundle([], "1.1.0"), bundleName: "stable" };
         const state = createState([createInstalledBundle(), stable]);

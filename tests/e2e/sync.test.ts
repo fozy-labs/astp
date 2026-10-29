@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { vi } from "vitest";
 
+import { selectUpdateBlocks } from "@/commands/blocks.js";
 import { executeInstall } from "@/commands/install.js";
 import { executeSync } from "@/commands/sync.js";
 import { executeUpdate } from "@/commands/update.js";
@@ -15,6 +16,11 @@ import { createTempProject, makeProjectTarget } from "./helpers.js";
 vi.mock("@/types/index.js", async (importOriginal) => {
     const actual = await importOriginal<typeof import("@/types/index.js")>();
     return { ...actual, resolveTarget: vi.fn() };
+});
+
+vi.mock("@/commands/blocks.js", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("@/commands/blocks.js")>();
+    return { ...actual, selectUpdateBlocks: vi.fn(actual.selectUpdateBlocks) };
 });
 
 vi.mock("@/ui/prompts.js", () => ({
@@ -144,6 +150,51 @@ describe("E2E: sync", () => {
 
         expect(await fs.readFile(filePath, "utf8")).toContain("Alpha");
         expect(await fs.readFile(filePath, "utf8")).not.toContain("Beta");
+        expect(await fs.readFile(lockPath(), "utf8")).toBe(locked);
+    });
+
+    it("accepts kept deselected blocks whose template bodies changed without rewriting lock", async () => {
+        const sourceRoot = path.join(projectDir, "block-source/templates");
+        const templatePath = path.join(sourceRoot, "blocks/rules/blocks.md");
+        const bundle: Bundle = {
+            name: "blocks",
+            version: "1.0.0",
+            description: "Blocks",
+            default: true,
+            platforms: ["claude-code"],
+            items: [{ source: "blocks/rules/blocks.md", target: "rules/blocks.md", category: "rule" }],
+        };
+        const manifest: Manifest = { schemaVersion: 1, bundles: { blocks: bundle } };
+        await fs.mkdir(path.dirname(templatePath), { recursive: true });
+        await fs.writeFile(path.join(sourceRoot, "manifest.json"), JSON.stringify(manifest));
+        await fs.writeFile(
+            templatePath,
+            `---\ndescription: Blocks\n---\n<astp-block name="wrapper">\nWrapper v1\n<astp-block name="parent">\nParent v1\n<astp-block name="child">\nChild v1\n</astp-block>\n</astp-block>\n</astp-block>\n`,
+        );
+        await executeInstall({ ...opts, bundle: "blocks", source: "./block-source" });
+        const blockPath = path.join(rootDir, "rules/blocks.md");
+        await fs.writeFile(blockPath, (await fs.readFile(blockPath, "utf8")).replace("Child v1", "Local child"));
+
+        bundle.version = "2.0.0";
+        await fs.writeFile(path.join(sourceRoot, "manifest.json"), JSON.stringify(manifest));
+        await fs.writeFile(
+            templatePath,
+            `---\ndescription: Blocks\n---\n<astp-block name="wrapper" optional>\nWrapper v2\n<astp-block name="parent">\nParent v2\n<astp-block name="child">\nChild v2\n</astp-block>\n</astp-block>\n</astp-block>\n`,
+        );
+        vi.mocked(selectUpdateBlocks).mockResolvedValueOnce(
+            new Map([
+                ["rules/blocks.md", { selected: new Set<string>(), declined: new Set(["wrapper", "parent", "child"]) }],
+            ]),
+        );
+        await executeUpdate(opts);
+        const locked = await fs.readFile(lockPath(), "utf8");
+        expect(await fs.readFile(blockPath, "utf8")).toContain("Local child");
+        await fs.rm(rulePath());
+
+        await executeSync(opts);
+
+        expect(await fs.readFile(rulePath(), "utf8")).toContain("1.0.0");
+        expect(await fs.readFile(blockPath, "utf8")).toContain("Local child");
         expect(await fs.readFile(lockPath(), "utf8")).toBe(locked);
     });
 

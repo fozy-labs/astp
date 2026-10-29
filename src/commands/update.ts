@@ -81,7 +81,12 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             let changed = false;
             for (const [bundleName, source] of opened) {
                 const lockBundle = installedState.lock.bundles[bundleName];
-                if (!lockBundle || !source.resolvedCommit || lockBundle.resolvedCommit === source.resolvedCommit) {
+                if (
+                    !lockBundle ||
+                    lockBundle.resolvedCommit ||
+                    !source.resolvedCommit ||
+                    !source.manifest.bundles[bundleName]
+                ) {
                     continue;
                 }
                 lockBundle.resolvedCommit = source.resolvedCommit;
