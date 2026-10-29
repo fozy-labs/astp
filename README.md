@@ -155,6 +155,8 @@ See the [proxy design](docs/proxy-mode.md) for the state and synchronization rul
 
 The `design` bundle was renamed to `thinking`. astp does not move a renamed bundle on its own: if you installed `design`, run `astp delete design`, then `astp install thinking` — on the same `--target` you installed to.
 
+The `modern-web-guidance` bundle was renamed to `web`. If you installed it, run `astp delete modern-web-guidance`, then `astp install web` — again, on the same `--target`.
+
 ## Installing skills with `npx skills`
 
 The `agreement`, `astp`, `docs`, `fozy-labs`, `ponytail` and `thinking` bundles are also published for the [`skills` CLI](https://github.com/vercel-labs/skills), which installs Agent Skills into Claude Code, Cursor, Copilot and other agents:
