@@ -11,12 +11,12 @@ argument-hint: "<release request>"
 Request: $ARGUMENTS
 
 <FILL_INSTRUCTION>
-Replace this instruction with the project's exact release procedure, using an existing release runbook when present and inspecting the repository otherwise. Ask the user about decisions and commands the project does not record. The result must be an executable sequence, not a generic checklist. Define only what this project actually uses:
+Replace this instruction with the project's exact release procedure by inspecting the repository. Ask the user about decisions and commands the project does not record. The result must be an executable sequence, not a generic checklist. Define only what this project actually uses:
 - the release targets and their versioning, including artifacts published independently;
 - preparation: branches and PRs/MRs, checks, build, changelog and files whose versions change;
 - publication order: merges, commits, tags, Git-host releases and package registries;
 - required approvals, protected-branch rules and the boundary between preparation and publication;
 - verification of each published artifact and recovery from a partial publication without repeating completed steps.
-Delegate Git operations to `/git` when installed, otherwise use the project's documented Git commands directly. Delegate Git-host writes to `tracker` when installed, otherwise follow the project's documented host workflow. Do not invent release targets or registries the project does not use.
+Do not invent release targets or registries the project does not use.
 </FILL_INSTRUCTION>
 </astp-block>
