@@ -565,7 +565,10 @@
                 {
                     "source": "gh:obra/superpowers/skills/brainstorming#2ce8aa15d05bd57213e6f746f953aafb7ded7a8b",
                     "target": "skills/brainstorming",
-                    "optional": true
+                    "optional": true,
+                    "platforms": [
+                        "claude-code"
+                    ]
                 }
             ]
         },
