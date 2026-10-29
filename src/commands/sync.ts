@@ -126,12 +126,7 @@ export async function executeSync(options: SyncOptions): Promise<void> {
                 if (
                     lockUnit.version !== bundle.version ||
                     hash !== lockUnit.hash ||
-                    !lockedBlocksMatch(
-                        lockUnit,
-                        blockFiles,
-                        installed.units.find((installedUnit) => installedUnit.relativePath === unit.relativePath)
-                            ?.blocks?.edited ?? [],
-                    )
+                    !lockedBlocksMatch(lockUnit, blockFiles)
                 ) {
                     throw new Error(
                         `Locked unit '${bundleName}/${unit.relativePath}' does not match its source; run astp update before sync`,
@@ -215,19 +210,9 @@ function syncRefRevisions(lockBundle: LockBundle, units: TemplateUnit[]): Readon
     return revisions;
 }
 
-function lockedBlocksMatch(
-    lockUnit: LockUnit,
-    blockFiles: Map<string, UnitBlockFile>,
-    editedBlocks: readonly string[],
-): boolean {
+function lockedBlocksMatch(lockUnit: LockUnit, blockFiles: Map<string, UnitBlockFile>): boolean {
     const selected = new Set(Object.keys(lockUnit.blocks ?? {}));
-    const kept = new Set(editedBlocks);
-    for (const [fileTarget, file] of blockFiles) {
-        for (const block of [...file.blocks].reverse()) {
-            const key = `${fileTarget}#${block.name}`;
-            if (kept.has(key) && block.parent) kept.add(`${fileTarget}#${block.parent}`);
-        }
-    }
+    const kept = new Set(lockUnit.keptBlocks ?? []);
     for (const [key, hash] of Object.entries(lockUnit.blocks ?? {})) {
         const separator = key.lastIndexOf("#");
         const file = blockFiles.get(key.slice(0, separator));

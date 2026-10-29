@@ -242,6 +242,7 @@ export async function syncBundle(args: {
                     lockBundle.units[unit.relativePath] = createLockUnit(unit, args.bundle.version, hash, {
                         blocks: merged.blocks,
                         declinedBlocks: merged.declinedBlocks,
+                        keptBlocks: merged.keptBlocks,
                     });
                     result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
                     continue;
@@ -260,6 +261,7 @@ export async function syncBundle(args: {
             lockBundle.units[unit.relativePath] = createLockUnit(unit, args.bundle.version, hash, {
                 blocks: merged.blocks,
                 declinedBlocks: merged.declinedBlocks,
+                keptBlocks: merged.keptBlocks,
             });
             if (current?.origin === "legacy") removedLegacy.add(current.relativePath);
             result.installed.push({ targetPath: unit.relativePath, kind: unit.kind, state: "unmodified" });
@@ -289,7 +291,7 @@ function createLockUnit(
     unit: TemplateUnit,
     version: string,
     hash: string,
-    blockState?: Pick<LockUnit, "blocks" | "declinedBlocks">,
+    blockState?: Pick<LockUnit, "blocks" | "declinedBlocks" | "keptBlocks">,
 ): LockUnit {
     return {
         kind: unit.kind,
@@ -312,6 +314,7 @@ interface MergedUnit {
     contents: Map<string, string>;
     blocks: Record<string, string>;
     declinedBlocks: string[];
+    keptBlocks: string[];
 }
 
 /** Runs `mergeBlockFile` for every block file of a unit and collects lock entries and warnings. */
@@ -332,6 +335,7 @@ async function mergeUnitBlockFiles(
     const contents = new Map<string, string>();
     const blocks = nullPrototype<string>();
     const declinedBlocks: string[] = [];
+    const keptBlocks: string[] = [];
 
     for (const [target, file] of blockFiles) {
         const lockHashes = nullPrototype<string>();
@@ -383,13 +387,19 @@ async function mergeUnitBlockFiles(
         contents.set(target, merged.content);
         for (const [name, hash] of Object.entries(merged.blocks)) blocks[`${target}#${name}`] = hash;
         for (const name of merged.declinedBlocks) declinedBlocks.push(`${target}#${name}`);
+        keptBlocks.push(...merged.kept.map((name) => `${target}#${name}`));
         result.keptBlocks.push(...merged.kept.map((name) => `${target}#${name}`));
         result.releasedBlocks.push(...merged.released.map((name) => `${target}#${name}`));
         result.foreignBlocks.push(...merged.foreign.map((name) => `${target}#${name}`));
         result.conflictBlocks.push(...merged.conflicts.map((name) => `${target}#${name}`));
     }
 
-    return { contents, blocks, declinedBlocks: [...new Set(declinedBlocks)] };
+    return {
+        contents,
+        blocks,
+        declinedBlocks: [...new Set(declinedBlocks)],
+        keptBlocks: [...new Set(keptBlocks)],
+    };
 }
 
 /**

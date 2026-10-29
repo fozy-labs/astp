@@ -23,6 +23,8 @@ export interface LockUnit {
     blocks?: Record<string, string>;
     /** Deselected block keys, like `declined` for units. Present iff `blocks` is. */
     declinedBlocks?: string[];
+    /** Deselected blocks kept with their previous hashes because they changed locally. */
+    keptBlocks?: string[];
 }
 
 export interface LockRef {
@@ -105,13 +107,16 @@ export async function writeLock(rootDir: string, lock: Lock): Promise<void> {
                                     ...(unit.ref.resolvedCommit ? { resolvedCommit: unit.ref.resolvedCommit } : {}),
                                 };
                             }
-                            if (unit.blocks || unit.declinedBlocks) {
+                            if (unit.blocks || unit.declinedBlocks || unit.keptBlocks) {
                                 entry.blocks = Object.fromEntries(
                                     Object.keys(unit.blocks ?? {})
                                         .sort()
                                         .map((key) => [key, unit.blocks![key]!]),
                                 );
                                 entry.declinedBlocks = [...new Set(unit.declinedBlocks ?? [])].sort();
+                                if (unit.keptBlocks?.length) {
+                                    entry.keptBlocks = [...new Set(unit.keptBlocks)].sort();
+                                }
                             }
                             return [unitPath, entry];
                         }),
@@ -186,12 +191,15 @@ function validateLock(data: unknown): asserts data is Lock {
                     throw new Error(`unit '${bundleName}/${unitPath}'.ref.resolvedCommit must be a full commit SHA`);
                 }
             }
-            if (unit.blocks !== undefined || unit.declinedBlocks !== undefined) {
+            if (unit.blocks !== undefined || unit.declinedBlocks !== undefined || unit.keptBlocks !== undefined) {
                 if (!isRecord(unit.blocks)) {
                     throw new Error(`unit '${bundleName}/${unitPath}'.blocks must be an object`);
                 }
                 if (!Array.isArray(unit.declinedBlocks)) {
                     throw new Error(`unit '${bundleName}/${unitPath}'.declinedBlocks must be an array`);
+                }
+                if (unit.keptBlocks !== undefined && !Array.isArray(unit.keptBlocks)) {
+                    throw new Error(`unit '${bundleName}/${unitPath}'.keptBlocks must be an array`);
                 }
                 for (const [key, hash] of Object.entries(unit.blocks)) {
                     validateBlockKey(key, `unit '${bundleName}/${unitPath}'.blocks`);
@@ -204,6 +212,12 @@ function validateLock(data: unknown): asserts data is Lock {
                         throw new Error(`unit '${bundleName}/${unitPath}'.declinedBlocks must be an array of strings`);
                     }
                     validateBlockKey(key, `unit '${bundleName}/${unitPath}'.declinedBlocks`);
+                }
+                for (const key of unit.keptBlocks ?? []) {
+                    if (typeof key !== "string") {
+                        throw new Error(`unit '${bundleName}/${unitPath}'.keptBlocks must be an array of strings`);
+                    }
+                    validateBlockKey(key, `unit '${bundleName}/${unitPath}'.keptBlocks`);
                 }
             }
         }

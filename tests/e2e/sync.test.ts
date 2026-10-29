@@ -153,6 +153,45 @@ describe("E2E: sync", () => {
         expect(await fs.readFile(lockPath(), "utf8")).toBe(locked);
     });
 
+    it.each([{ force: false }, { force: true }])(
+        "rejects drift in a selected parent of an edited block without installing it (force: $force)",
+        async ({ force }) => {
+            const sourceRoot = path.join(projectDir, "block-source/templates");
+            const templatePath = path.join(sourceRoot, "blocks/rules/blocks.md");
+            const bundle: Bundle = {
+                name: "blocks",
+                version: "1.0.0",
+                description: "Blocks",
+                default: true,
+                platforms: ["claude-code"],
+                items: [{ source: "blocks/rules/blocks.md", target: "rules/blocks.md", category: "rule" }],
+            };
+            const manifest: Manifest = { schemaVersion: 1, bundles: { blocks: bundle } };
+            await fs.mkdir(path.dirname(templatePath), { recursive: true });
+            await fs.writeFile(path.join(sourceRoot, "manifest.json"), JSON.stringify(manifest));
+            await fs.writeFile(
+                templatePath,
+                `---\ndescription: Blocks\n---\n<astp-block name="parent">\nParent v1\n<astp-block name="child">\nChild v1\n</astp-block>\n</astp-block>\n`,
+            );
+            await executeInstall({ ...opts, bundle: "blocks", source: "./block-source" });
+            const blockPath = path.join(rootDir, "rules/blocks.md");
+            await fs.writeFile(blockPath, (await fs.readFile(blockPath, "utf8")).replace("Child v1", "Local child"));
+            const local = await fs.readFile(blockPath, "utf8");
+            const locked = await fs.readFile(lockPath(), "utf8");
+            await fs.writeFile(
+                templatePath,
+                `---\ndescription: Blocks\n---\n<astp-block name="parent">\nChanged upstream\n<astp-block name="child">\nChild v1\n</astp-block>\n</astp-block>\n`,
+            );
+
+            await expect(executeSync({ ...opts, force })).rejects.toThrow(
+                "Locked unit 'blocks/rules/blocks.md' does not match its source; run astp update before sync",
+            );
+
+            expect(await fs.readFile(blockPath, "utf8")).toBe(local);
+            expect(await fs.readFile(lockPath(), "utf8")).toBe(locked);
+        },
+    );
+
     it("accepts kept deselected blocks whose template bodies changed without rewriting lock", async () => {
         const sourceRoot = path.join(projectDir, "block-source/templates");
         const templatePath = path.join(sourceRoot, "blocks/rules/blocks.md");
