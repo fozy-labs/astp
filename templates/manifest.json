@@ -501,9 +501,9 @@
         },
         "agreement": {
             "name": "agreement",
-            "version": "1.6.0",
-            "description": "Working agreement rule, communication and tracker skills and /retro and /git commands — how the agent decides, asks, scopes changes, writes for the user, works with the issue tracker and git, and reviews finished work",
-            "use-when": "Any project or user setup that wants structured agent collaboration, git and issue-tracker workflows, and session retrospectives",
+            "version": "1.7.0",
+            "description": "Working agreement rule, communication and tracker skills and /retro, /git and /release commands — how the agent decides, asks, scopes changes, writes for the user, works with Git and the issue tracker, releases and reviews work",
+            "use-when": "Any project or user setup that wants structured agent collaboration, Git and issue-tracker workflows, releases and session retrospectives",
             "default": false,
             "platforms": [
                 "claude-code",
@@ -538,6 +538,15 @@
                     "source": "agreement/skills/retro/SKILL.md",
                     "target": "skills/retro/SKILL.md",
                     "category": "skill",
+                    "platforms": [
+                        "claude-code"
+                    ]
+                },
+                {
+                    "source": "agreement/skills/release/SKILL.md",
+                    "target": "skills/release/SKILL.md",
+                    "category": "skill",
+                    "optional": true,
                     "platforms": [
                         "claude-code"
                     ]
