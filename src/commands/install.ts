@@ -5,7 +5,9 @@ import {
     assertBundleSources,
     DEFAULT_SOURCE,
     downloadBundle,
+    downloadBundleRefs,
     groupTemplateItems,
+    isOptionalRef,
     loadInstalled,
     readUnitBlockFiles,
     readUnitDescription,
@@ -141,8 +143,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             assertBundlePlatform(bundle, platform);
         }
 
-        // Block choices need the template content, so every candidate is
-        // downloaded before the selection and the confirmation.
+        // Block choices need the template content; optional refs wait for selection.
         const [only] = candidates;
         s.start(candidates.length === 1 && only ? `Downloading ${only.bundle.name}...` : "Downloading bundles...");
         const downloaded: DownloadedBundle[] = [];
@@ -150,18 +151,19 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             try {
                 const units = groupTemplateItems(bundle, platform);
                 validateUnitTargets(target.rootDir, units);
+                const downloadUnits = units.filter((unit) => !isOptionalRef(unit) || Boolean(options.blocks?.length));
                 const tempDir = await downloadBundle(
                     source.source,
                     bundle,
-                    units,
+                    downloadUnits,
                     platform,
                     source.useLockedRevisions
-                        ? lockedRefRevisions(installedState.lock.bundles[bundle.name], false, units)
+                        ? lockedRefRevisions(installedState.lock.bundles[bundle.name], false, downloadUnits)
                         : undefined,
                 );
                 tempDirs.push(tempDir);
-                await assertBundleSources(tempDir, bundle.name, units);
-                await assertBundleBlocks(tempDir, bundle.name, units);
+                await assertBundleSources(tempDir, bundle.name, downloadUnits);
+                await assertBundleBlocks(tempDir, bundle.name, downloadUnits);
                 const unitBlockFiles = new Map<string, Map<string, UnitBlockFile>>();
                 for (const unit of units) {
                     const description = await readUnitDescription(tempDir, unit);
@@ -213,6 +215,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             );
         }
 
+        const selectionFailures: typeof unavailable = [];
         for (const { bundle, source, tempDir, units, unitBlockFiles } of downloaded) {
             const choice = chosen?.get(bundle.name);
             if (chosen && !choice) continue;
@@ -243,6 +246,43 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                         .map((unit) => unit.relativePath),
                 );
                 declined = new Set([...paths].filter((unitPath) => !selected.has(unitPath)));
+            }
+
+            const selectedRefs = units.filter(
+                (unit) =>
+                    unit.kind === "skill" &&
+                    unit.items.length === 0 &&
+                    isOptionalRef(unit) &&
+                    selected.has(unit.relativePath),
+            );
+            if (selectedRefs.length > 0) {
+                s.start(`Downloading selected ${bundle.name} skills...`);
+                try {
+                    await downloadBundleRefs(
+                        source.source,
+                        bundle,
+                        selectedRefs,
+                        tempDir,
+                        source.useLockedRevisions
+                            ? lockedRefRevisions(installedState.lock.bundles[bundle.name], false, selectedRefs)
+                            : undefined,
+                    );
+                    await assertBundleSources(tempDir, bundle.name, selectedRefs);
+                    await assertBundleBlocks(tempDir, bundle.name, selectedRefs);
+                    for (const unit of selectedRefs) {
+                        const description = await readUnitDescription(tempDir, unit);
+                        if (description) unit.description = description;
+                        unitBlockFiles.set(unit.relativePath, await readUnitBlockFiles(tempDir, unit, platform));
+                    }
+                } catch (error) {
+                    s.stop(`Failed to download selected ${bundle.name} skills.`);
+                    if (options.bundle !== undefined) throw error;
+                    const entry = { bundle: bundle.name, message: errorMessage(error) };
+                    unavailable.push(entry);
+                    selectionFailures.push(entry);
+                    continue;
+                }
+                s.stop(`Downloaded selected ${bundle.name} skills.`);
             }
 
             const requested = resolveBlockKeys(options.blocks ?? [], unitBlockFiles, bundle.name);
@@ -277,6 +317,17 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 for (const [file, selection] of selections) blockSelections.set(file, selection);
             }
             plans.push({ bundle, source, selected, declined, tempDir, units, blockSelections, force });
+        }
+
+        if (selectionFailures.length > 0) {
+            if (plans.length === 0) {
+                throw new Error(
+                    `No selected bundle could be downloaded:\n${selectionFailures
+                        .map((entry) => `  • ${entry.bundle}: ${entry.message}`)
+                        .join("\n")}`,
+                );
+            }
+            warnUnavailable(selectionFailures, target);
         }
 
         const selectedUnits = plans.flatMap((plan) =>

@@ -501,7 +501,7 @@
         },
         "agreement": {
             "name": "agreement",
-            "version": "1.5.0",
+            "version": "1.6.0",
             "description": "Working agreement rule, communication and tracker skills and /retro and /git commands — how the agent decides, asks, scopes changes, writes for the user, works with the issue tracker and git, and reviews finished work",
             "use-when": "Any project or user setup that wants structured agent collaboration, git and issue-tracker workflows, and session retrospectives",
             "default": false,
@@ -559,6 +559,16 @@
                     "source": "agreement/skills/git/references/isolation.md",
                     "target": "skills/git/references/isolation.md",
                     "category": "skill"
+                }
+            ],
+            "refs": [
+                {
+                    "source": "gh:obra/superpowers/skills/brainstorming#2ce8aa15d05bd57213e6f746f953aafb7ded7a8b",
+                    "target": "skills/brainstorming",
+                    "optional": true,
+                    "platforms": [
+                        "claude-code"
+                    ]
                 }
             ]
         },

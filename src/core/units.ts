@@ -26,6 +26,10 @@ export interface SkillTemplateUnit extends TemplateUnitMetadata {
 
 export type TemplateUnit = FileTemplateUnit | SkillTemplateUnit;
 
+export function isOptionalRef(unit: TemplateUnit): boolean {
+    return unit.kind === "skill" && unit.ref !== undefined && unit.optional === true;
+}
+
 export function groupTemplateItems(input: TemplateItem[] | Bundle, platform?: Platform): TemplateUnit[] {
     const items = Array.isArray(input) ? input : input.items;
     const resolvedItems = platform

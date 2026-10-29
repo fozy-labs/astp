@@ -355,6 +355,73 @@ describe("E2E: manifest sources", () => {
         );
     });
 
+    it("does not download an unselected optional ref during install, list, or update", async () => {
+        const sourceRoot = path.join(projectDir, "optional-ref/templates");
+        const manifestPath = path.join(sourceRoot, "manifest.json");
+        const bundle: Bundle = {
+            ...ruleBundle("optional-ref", "1.0.0"),
+            refs: [{ source: "./missing", target: "skills/optional", optional: true }],
+        };
+        const manifest: Manifest = { schemaVersion: "3.1", bundles: { "optional-ref": bundle } };
+        await fs.mkdir(path.join(sourceRoot, "optional-ref/rules"), { recursive: true });
+        await fs.writeFile(manifestPath, JSON.stringify(manifest));
+        await fs.writeFile(path.join(sourceRoot, "optional-ref/rules/optional-ref.md"), "version 1.0.0\n");
+
+        await executeInstall({ ...opts, bundle: "optional-ref", source: "./optional-ref" });
+
+        expect(await rule("optional-ref")).toBe("version 1.0.0\n");
+        expect((await readLockFixture(rootDir)).bundles["optional-ref"]!.declined).toEqual(["skills/optional"]);
+        const write = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        let outputText: string;
+        try {
+            await executeList({ ...opts, bundle: "optional-ref", source: "./optional-ref", json: true });
+            outputText = write.mock.calls.map(([chunk]) => String(chunk)).join("");
+        } finally {
+            write.mockRestore();
+        }
+        const output = JSON.parse(outputText!) as {
+            units: Array<{ path: string; description: string | null; optional?: boolean }>;
+        };
+        expect(output.units).toContainEqual({
+            name: "optional",
+            path: "skills/optional",
+            kind: "skill",
+            status: "declined",
+            description: null,
+            optional: true,
+        });
+
+        bundle.version = "1.1.0";
+        await fs.writeFile(manifestPath, JSON.stringify(manifest));
+        await fs.writeFile(path.join(sourceRoot, "optional-ref/rules/optional-ref.md"), "version 1.1.0\n");
+        await executeUpdate(opts);
+
+        expect(await rule("optional-ref")).toBe("version 1.1.0\n");
+    });
+
+    it("downloads an optional ref when explicitly selected", async () => {
+        const sourceRoot = path.join(projectDir, "selected-optional-ref/templates");
+        const bundle: Bundle = {
+            ...ruleBundle("optional-ref", "1.0.0"),
+            refs: [{ source: "./external", target: "skills/external", optional: true }],
+        };
+        const manifest: Manifest = { schemaVersion: "3.1", bundles: { "optional-ref": bundle } };
+        await fs.mkdir(path.join(sourceRoot, "optional-ref/rules"), { recursive: true });
+        await fs.mkdir(path.join(sourceRoot, "external"), { recursive: true });
+        await fs.writeFile(path.join(sourceRoot, "manifest.json"), JSON.stringify(manifest));
+        await fs.writeFile(path.join(sourceRoot, "optional-ref/rules/optional-ref.md"), "rule\n");
+        await fs.writeFile(path.join(sourceRoot, "external/SKILL.md"), "# External\n");
+
+        await executeInstall({
+            ...opts,
+            bundle: "optional-ref",
+            source: "./selected-optional-ref",
+            skills: ["external"],
+        });
+
+        expect(await fs.readFile(path.join(rootDir, "skills/external/SKILL.md"), "utf8")).toBe("# External\n");
+    });
+
     it("installs and updates a refs-only bundle from an external skill directory", async () => {
         const external = path.join(projectDir, "refs/templates/external-skill");
         const manifestPath = path.join(projectDir, "refs/templates/manifest.json");
