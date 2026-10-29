@@ -12,7 +12,7 @@
             "name": "agreement",
             "source": "./templates/agreement",
             "description": "Working agreement rule, communication and tracker skills and /retro and /git commands — how the agent decides, asks, scopes changes, writes for the user, works with the issue tracker and git, and reviews finished work",
-            "version": "1.5.0",
+            "version": "1.6.0",
             "skills": [
                 "./skills/communication",
                 "./skills/retro"
