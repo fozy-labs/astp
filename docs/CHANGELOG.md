@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [`astp sync`](../README.md#sync) restores locked units and block selections without changing `astp.lock`; schema 2 records exact Git commits for bundle sources and external refs, reused by `install` and `sync` and advanced by `update`. Run `update` once to migrate older Git locks.
 - [`astp proxy`](../README.md#proxy) creates an editable template source in `./templates`, with independent versions, local-edit protection, lazy remote refs, materialized local refs, and downstream install from the generated manifest.
-- Bundle `refs` install external skill directories without vendoring them; the first is `modern-web-guidance` from Google Chrome.
+- Bundle `refs` install external skill directories without vendoring them; the first is `web`, which installs Google Chrome's `modern-web-guidance` skill.
 - Nested `<astp-block>` blocks with independent selection, updates and local-edit protection; selecting a child selects its ancestors.
 - Skill, agent and rule descriptions from frontmatter in install and update selection prompts.
 - `platforms` filters on bundle items and `<astp-block>` tags, including `!<name>` exclusions; bundle filters now support exclusions too.
