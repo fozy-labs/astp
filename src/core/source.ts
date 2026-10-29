@@ -52,7 +52,12 @@ export async function resolveSource(spec: string, baseDir: string): Promise<Mani
     const trimmed = spec.trim();
     if (LOCAL_RE.test(trimmed)) {
         const resolved = path.resolve(baseDir, trimmed);
-        const manifestPath = isJson(resolved) ? resolved : path.join(resolved, DEFAULT_MANIFEST);
+        const unc = trimmed.startsWith("//") || trimmed.startsWith("\\\\");
+        let manifestPath = isJson(resolved) ? resolved : path.join(resolved, DEFAULT_MANIFEST);
+        if (!unc && !isJson(resolved) && !(await pathExists(manifestPath, spec))) {
+            const direct = path.join(resolved, "manifest.json");
+            if (await pathExists(direct, spec)) manifestPath = direct;
+        }
         return { kind: "local", spec: resolved, manifestPath };
     }
 
@@ -104,10 +109,16 @@ export async function resolveSource(spec: string, baseDir: string): Promise<Mani
 /** The string recorded in `astp.lock`: relative to the lock for a path inside a project, else absolute. */
 export function formatSource(source: ManifestSource, target: InstallTarget): string {
     if (source.kind !== "local" || target.type === "user") return source.spec;
-    const fromProject = path.relative(path.dirname(target.rootDir), source.spec);
+    return formatSourceAt(source, target.rootDir);
+}
+
+/** Formats a local source relative to a project-rooted lock directory. */
+export function formatSourceAt(source: ManifestSource, rootDir: string): string {
+    if (source.kind !== "local") return source.spec;
+    const fromProject = path.relative(path.dirname(rootDir), source.spec);
     if (fromProject === ".." || fromProject.startsWith(`..${path.sep}`) || path.isAbsolute(fromProject))
         return source.spec;
-    const relative = path.relative(target.rootDir, source.spec).split(path.sep).join("/");
+    const relative = path.relative(rootDir, source.spec).split(path.sep).join("/");
     return relative.startsWith("../") || relative === ".." ? relative : `./${relative}`;
 }
 

@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { assertSafeName, assertSafeRelativePath, nullPrototype } from "./path-safety.js";
 
-export interface LockRef {
+export interface LockUnitRef {
     source: string;
     resolvedCommit?: string;
 }
@@ -14,7 +14,7 @@ export interface LockUnit {
     version: string;
     hash: string;
     /** External skill source and its locked Git revision. */
-    ref?: LockRef;
+    ref?: LockUnitRef;
     /**
      * Block state for units whose template has `<astp-block>` files: key is
      * `<root-relative file target>#<block name>`, value the template block hash.
@@ -25,11 +25,17 @@ export interface LockUnit {
     declinedBlocks?: string[];
 }
 
+export interface LockRef {
+    version: string;
+    hash: string;
+}
+
 export interface LockBundle {
     source: string;
     resolvedCommit?: string;
     declined: string[];
     units: Record<string, LockUnit>;
+    refs?: Record<string, LockRef>;
 }
 
 export interface Lock {
@@ -67,6 +73,7 @@ export async function readLock(rootDir: string): Promise<Lock> {
     }
     for (const bundle of Object.values(data.bundles)) {
         bundle.units = nullPrototype(bundle.units);
+        if (bundle.refs) bundle.refs = nullPrototype(bundle.refs);
         for (const unit of Object.values(bundle.units)) if (unit.blocks) unit.blocks = nullPrototype(unit.blocks);
     }
     return { ...data, schemaVersion: 2, bundles: nullPrototype(data.bundles) };
@@ -109,6 +116,16 @@ export async function writeLock(rootDir: string, lock: Lock): Promise<void> {
                             return [unitPath, entry];
                         }),
                 );
+                const refs = bundle.refs
+                    ? Object.fromEntries(
+                          Object.keys(bundle.refs)
+                              .sort()
+                              .map((refPath) => [
+                                  refPath,
+                                  { hash: bundle.refs![refPath]!.hash, version: bundle.refs![refPath]!.version },
+                              ]),
+                      )
+                    : undefined;
                 return [
                     bundleName,
                     {
@@ -116,6 +133,7 @@ export async function writeLock(rootDir: string, lock: Lock): Promise<void> {
                         source: bundle.source,
                         ...(bundle.resolvedCommit ? { resolvedCommit: bundle.resolvedCommit } : {}),
                         units,
+                        ...(refs ? { refs } : {}),
                     },
                 ];
             }),
@@ -186,6 +204,19 @@ function validateLock(data: unknown): asserts data is Lock {
                         throw new Error(`unit '${bundleName}/${unitPath}'.declinedBlocks must be an array of strings`);
                     }
                     validateBlockKey(key, `unit '${bundleName}/${unitPath}'.declinedBlocks`);
+                }
+            }
+        }
+        if (value.refs !== undefined) {
+            if (!isRecord(value.refs)) throw new Error(`bundle '${bundleName}'.refs must be an object`);
+            for (const [refPath, ref] of Object.entries(value.refs)) {
+                assertSafeRelativePath(refPath, `ref '${bundleName}/${refPath}'`);
+                if (!isRecord(ref)) throw new Error(`ref '${bundleName}/${refPath}' must be an object`);
+                if (typeof ref.version !== "string") {
+                    throw new Error(`ref '${bundleName}/${refPath}'.version must be a string`);
+                }
+                if (typeof ref.hash !== "string") {
+                    throw new Error(`ref '${bundleName}/${refPath}'.hash must be a string`);
                 }
             }
         }

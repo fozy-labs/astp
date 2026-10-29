@@ -189,6 +189,45 @@ describe("lock file", () => {
         await writeLock(rootDir, { schemaVersion: 1, bundles: {} });
         await expect(fs.access(path.join(rootDir, "astp.lock"))).rejects.toMatchObject({ code: "ENOENT" });
     });
+
+    it("round-trips sorted proxy refs", async () => {
+        await writeLock(rootDir, {
+            schemaVersion: 1,
+            bundles: {
+                core: {
+                    source: "repo",
+                    declined: [],
+                    units: {},
+                    refs: {
+                        "core/skills/z": { version: "1.0.0", hash: "z" },
+                        "core/skills/a": { version: "1.0.0", hash: "a" },
+                    },
+                },
+            },
+        });
+
+        const lock = await readLock(rootDir);
+        expect(Object.keys(lock.bundles.core!.refs!)).toEqual(["core/skills/a", "core/skills/z"]);
+        expect(lock.bundles.core!.refs!["core/skills/a"]).toEqual({ version: "1.0.0", hash: "a" });
+    });
+
+    it("rejects malformed proxy refs", async () => {
+        await fs.writeFile(
+            path.join(rootDir, "astp.lock"),
+            JSON.stringify({
+                schemaVersion: 1,
+                bundles: {
+                    core: {
+                        source: "repo",
+                        declined: [],
+                        units: {},
+                        refs: { "../outside": { version: "1.0.0", hash: "a" } },
+                    },
+                },
+            }),
+        );
+        await expect(readLock(rootDir)).rejects.toThrow(/Invalid lock file/);
+    });
 });
 
 describe("lock block fields", () => {

@@ -35,8 +35,9 @@ astp install fozy-labs --target project
 | `astp check` | Check for updates and bundles out of sync with the manifest |
 | `astp delete [bundle] [--skill <name>] [--force]` | Remove an installed bundle or selected units |
 | `astp list [bundle] [--source <spec>] [--json]` | List available and installed bundles or bundle units |
+| `astp proxy [install\|update\|check\|delete]` | Create and maintain an editable template source |
 
-All commands accept `--platform <claude-code|kimi-code>` and `--target <project|user>`, which skip the platform and target prompts; in a terminal the other prompts of each command still run. Resolved roots:
+Agent-install commands accept `--platform <claude-code|kimi-code>` and `--target <project|user>`, which skip the platform and target prompts; in a terminal the other prompts of each command still run. Resolved roots:
 
 | Platform | `--target project` | `--target user` |
 |----------|--------------------|-----------------|
@@ -51,7 +52,7 @@ By default bundles come from `gh:fozy-labs/astp` (`templates/manifest.json` on `
 
 | `--source` | Reads |
 |------------|-------|
-| `./x.json`, `./dir` | a local manifest, or `<dir>/templates/manifest.json`; bundle `B` from `B/` next to the manifest |
+| `./x.json`, `./dir` | a local manifest, `<dir>/templates/manifest.json`, or `<dir>/manifest.json` when the nested file is absent; bundle `B` from `B/` next to the manifest |
 | `owner/repo[/path][#ref]`, `gh:` `gitlab:` `bitbucket:` `sourcehut:` + the same | a git repo at a branch, tag or commit; no ref means the default branch; a bare `owner/repo` that is also a local path is rejected: write `./owner/repo` or `gh:owner/repo` |
 | `https://github.com/owner/repo[/tree/<ref>/<dir> \| /blob/<ref>/<file>.json]` | the same, from a GitHub URL |
 | `npm:<name>[@<version or tag>]` | `templates/manifest.json` in an npm package |
@@ -109,6 +110,28 @@ astp list [bundle] [--source <spec>] [--json] [--platform <claude-code|kimi-code
 ```
 
 List bundles and installed unit state. Add a bundle name for per-unit status, optional/label tags and descriptions, with each unit's blocks, their status, tags and descriptions; `use-when` on bundles and blocks is included in both text and `--json` output (`optional` and `labels` on units when set; `name`, `key`, `status`, `description`, `optional`, `required`, and `use-when` and `labels` when set on blocks).
+
+### proxy
+
+```bash
+astp proxy
+astp proxy install [bundle] [--source <spec>] [--skill <name>]... [--force] [--output <dir>]
+astp proxy update [--force] [--output <dir>]
+astp proxy check [--output <dir>]
+astp proxy delete [bundle] [--skill <name>]... [--force] [--output <dir>]
+```
+
+Proxy creates an editable astp source in `./templates` by default, including its `manifest.json` and `astp.lock`. Regular templates are copied to `<bundle>/<target>` without rendering blocks or selecting a platform. Remote refs stay lazy and are not downloaded until a downstream install selects them; local-path refs are copied and converted to regular items so the generated source also works when published. Local edits and changed ref definitions are protected without `--force`.
+
+Published bundle versions start at the upstream version and then advance independently: additions are minor, removals are major, and content or metadata changes are patch updates. `proxy check` writes nothing. Deleting the last bundle removes the generated manifest and lock.
+
+```bash
+astp proxy install docs --source gh:fozy-labs/astp
+# Edit ./templates/docs, commit it to an organization repository, then install from that repository.
+astp install docs --source gh:my-org/agent-templates --platform claude-code --target project
+```
+
+See the [proxy design](docs/proxy-mode.md) for the state and synchronization rules.
 
 ## Bundles
 

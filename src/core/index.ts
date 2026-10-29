@@ -22,11 +22,27 @@ export {
     validateManifest,
 } from "./manifest.js";
 export type { NewerManifestNotice, SchemaVersion } from "./manifest.js";
-export { closeSource, downloadBundle, fetchManifest } from "./fetcher.js";
+export { closeSource, downloadBundle, fetchManifest, isLocalRefSource } from "./fetcher.js";
+export {
+    compareProxyBundle,
+    deleteProxyUnits,
+    downloadProxyBundle,
+    hashProxyRef,
+    isRemoteRef,
+    loadProxyState,
+    proxyUnitPath,
+    readProxyManifest,
+    resolveProxyOutput,
+    stripBundlePrefix,
+    syncProxyBundle,
+    writeProxyManifest,
+} from "./proxy.js";
+export type { ProxyComparison, ProxyDeleteResult, ProxyDownload, ProxyState, ProxySyncResult } from "./proxy.js";
 export {
     ACCEPTED_SOURCES,
     DEFAULT_SOURCE,
     formatSource,
+    formatSourceAt,
     resolveRefRevision,
     resolveSource,
     resolveSourceRevision,
@@ -34,7 +50,7 @@ export {
 export type { ManifestSource, RevisionOptions } from "./source.js";
 export { computeSkillTreeHash, computeTemplateUnitHash } from "./skill-tree.js";
 export { readLock, writeLock } from "./lock.js";
-export type { Lock, LockBundle, LockUnit } from "./lock.js";
+export type { Lock, LockBundle, LockRef, LockUnit } from "./lock.js";
 export {
     assertBundleBlocks,
     assertBundleSources,

@@ -4,3 +4,4 @@ export { executeUpdate } from "./update.js";
 export { executeSync } from "./sync.js";
 export { executeCheck } from "./check.js";
 export { executeDelete } from "./delete.js";
+export { executeProxyCheck, executeProxyDelete, executeProxyInstall, executeProxyUpdate } from "./proxy.js";

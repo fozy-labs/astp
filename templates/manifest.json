@@ -223,7 +223,7 @@
         },
         "docs": {
             "name": "docs",
-            "version": "1.3.4",
+            "version": "1.3.5",
             "description": "Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas",
             "use-when": "The agent writes or maintains Markdown documentation, specs, changelogs, Mermaid diagrams or .mmd statechart schemas",
             "default": false,
@@ -254,7 +254,11 @@
                 {
                     "source": "docs/skills/statechart-craft/SKILL.md",
                     "target": "skills/statechart-craft/SKILL.md",
-                    "category": "skill"
+                    "category": "skill",
+                    "optional": true,
+                    "labels": [
+                        "deprecated"
+                    ]
                 },
                 {
                     "source": "docs/skills/statechart-craft/references/viz.md",
