@@ -215,6 +215,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
             );
         }
 
+        const selectionFailures: typeof unavailable = [];
         for (const { bundle, source, tempDir, units, unitBlockFiles } of downloaded) {
             const choice = chosen?.get(bundle.name);
             if (chosen && !choice) continue;
@@ -278,7 +279,7 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                     if (options.bundle !== undefined) throw error;
                     const entry = { bundle: bundle.name, message: errorMessage(error) };
                     unavailable.push(entry);
-                    warnUnavailable([entry], target);
+                    selectionFailures.push(entry);
                     continue;
                 }
                 s.stop(`Downloaded selected ${bundle.name} skills.`);
@@ -316,6 +317,17 @@ export async function executeInstall(options: InstallOptions): Promise<void> {
                 for (const [file, selection] of selections) blockSelections.set(file, selection);
             }
             plans.push({ bundle, source, selected, declined, tempDir, units, blockSelections, force });
+        }
+
+        if (selectionFailures.length > 0) {
+            if (plans.length === 0) {
+                throw new Error(
+                    `No selected bundle could be downloaded:\n${selectionFailures
+                        .map((entry) => `  • ${entry.bundle}: ${entry.message}`)
+                        .join("\n")}`,
+                );
+            }
+            warnUnavailable(selectionFailures, target);
         }
 
         const selectedUnits = plans.flatMap((plan) =>

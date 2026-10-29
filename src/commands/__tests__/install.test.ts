@@ -452,6 +452,19 @@ describe("interactive bundle tree selection", () => {
         expect(mockSyncBundle).toHaveBeenCalledWith(expect.objectContaining({ bundle: bundleB }));
     });
 
+    it("fails when every selected bundle's optional ref fails to download", async () => {
+        const refBundleA: Bundle = {
+            ...bundleA,
+            refs: [{ source: "./missing", target: "skills/optional", optional: true }],
+        };
+        mockFetchManifest.mockResolvedValue({ ...abManifest, bundles: { a: refBundleA, b: bundleB } });
+        mockSelectBundleItems.mockResolvedValue(new Map([["a", { units: ["skills/optional"], blocks: [] }]]));
+
+        await expect(executeInstall({})).rejects.toThrow("No selected bundle could be downloaded");
+        expect(mockConfirmInstall).not.toHaveBeenCalled();
+        expect(mockSyncBundle).not.toHaveBeenCalled();
+    });
+
     it("builds entries from each bundle's lock source and opens it once", async () => {
         const altBundleB: Bundle = {
             ...bundleB,
