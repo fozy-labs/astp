@@ -562,8 +562,8 @@
                 }
             ]
         },
-        "modern-web-guidance": {
-            "name": "modern-web-guidance",
+        "web": {
+            "name": "web",
             "version": "1.0.0",
             "description": "Modern web platform guidance — browser APIs, CSS, performance, accessibility and responsible fallbacks",
             "use-when": "The project builds web applications and needs current web platform capabilities and browser compatibility guidance",
