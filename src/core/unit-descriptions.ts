@@ -8,6 +8,7 @@ export async function readUnitDescription(tempDir: string, unit: TemplateUnit): 
     const item =
         unit.kind === "file"
             ? unit.item
-            : unit.items.find((item) => item.target === path.posix.join(unit.relativePath, "SKILL.md"))!;
+            : unit.items.find((item) => item.target === path.posix.join(unit.relativePath, "SKILL.md"));
+    if (!item) return null;
     return readDescription(await fs.readFile(path.join(tempDir, item.target), "utf8"));
 }

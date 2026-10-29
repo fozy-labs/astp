@@ -104,36 +104,54 @@ export async function downloadBundle(
             }
         }
 
-        for (const unit of units) {
-            if (unit.kind !== "skill" || !unit.ref) continue;
-            assertSafeRelativePath(unit.relativePath, "ref target");
-            const refDir = path.join(tempDir, unit.relativePath);
-            unit.resolvedCommit = await downloadRef(
-                source,
-                unit.ref.source,
-                refDir,
-                refRevisions.get(unit.relativePath),
-            );
-            const { files, special } = await listSkillTree(refDir);
-            if (special.length > 0) {
-                throw new Error(
-                    `Referenced skill '${unit.ref.source}' contains non-regular files: ${special.join(", ")}`,
-                );
-            }
-            if (!files.includes("SKILL.md")) {
-                throw new Error(`Referenced skill '${unit.ref.source}' has no SKILL.md`);
-            }
-            unit.items = files.sort().map((file) => {
-                const target = `${unit.relativePath}/${file}`;
-                assertSafeRelativePath(target, "referenced skill file");
-                return { source: unit.ref!.source, target, category: "skill" };
-            });
-        }
+        await downloadRefs(source, units, tempDir, refRevisions);
         return tempDir;
     } catch (error) {
         await fs.rm(tempDir, { recursive: true, force: true });
         const message = error instanceof Error ? error.message : String(error);
         throw new Error(`Failed to download bundle '${bundle.name}' from '${source.spec}': ${message}`);
+    }
+}
+
+/** Fetches selected external skill refs into an existing bundle download. */
+export async function downloadBundleRefs(
+    source: ManifestSource,
+    bundle: Bundle,
+    units: TemplateUnit[],
+    tempDir: string,
+    refRevisions: ReadonlyMap<string, RevisionOptions> = new Map(),
+): Promise<void> {
+    try {
+        await downloadRefs(source, units, tempDir, refRevisions);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`Failed to download bundle '${bundle.name}' from '${source.spec}': ${message}`);
+    }
+}
+
+async function downloadRefs(
+    source: ManifestSource,
+    units: TemplateUnit[],
+    tempDir: string,
+    refRevisions: ReadonlyMap<string, RevisionOptions>,
+): Promise<void> {
+    for (const unit of units) {
+        if (unit.kind !== "skill" || !unit.ref) continue;
+        assertSafeRelativePath(unit.relativePath, "ref target");
+        const refDir = path.join(tempDir, unit.relativePath);
+        unit.resolvedCommit = await downloadRef(source, unit.ref.source, refDir, refRevisions.get(unit.relativePath));
+        const { files, special } = await listSkillTree(refDir);
+        if (special.length > 0) {
+            throw new Error(`Referenced skill '${unit.ref.source}' contains non-regular files: ${special.join(", ")}`);
+        }
+        if (!files.includes("SKILL.md")) {
+            throw new Error(`Referenced skill '${unit.ref.source}' has no SKILL.md`);
+        }
+        unit.items = files.sort().map((file) => {
+            const target = `${unit.relativePath}/${file}`;
+            assertSafeRelativePath(target, "referenced skill file");
+            return { source: unit.ref!.source, target, category: "skill" };
+        });
     }
 }
 

@@ -5,8 +5,10 @@ import {
     assertBundleSources,
     compareVersions,
     downloadBundle,
+    downloadBundleRefs,
     groupTemplateItems,
     hasFillInstruction,
+    isOptionalRef,
     loadInstalled,
     ownTemplateContent,
     readUnitBlockFiles,
@@ -165,17 +167,6 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             const installed = installedState.bundles.find((entry) => entry.bundleName === bundleName);
             const units = groupTemplateItems(bundle, platform);
             validateUnitTargets(target.rootDir, units);
-            s.start(`Downloading ${bundleName}...`);
-            const tempDir = await downloadBundle(source, bundle, units, platform);
-            tempDirs.push(tempDir);
-            s.stop(`Downloaded ${bundleName}.`);
-            await assertBundleSources(tempDir, bundleName, units);
-            await assertBundleBlocks(tempDir, bundleName, units);
-            for (const unit of units) {
-                const description = await readUnitDescription(tempDir, unit);
-                if (description) unit.description = description;
-            }
-
             const manifestPaths = new Set(units.map((unit) => unit.relativePath));
             const tracked = new Set(
                 installed?.units
@@ -186,6 +177,18 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             const newUnits = units.filter(
                 (unit) => !tracked.has(unit.relativePath) && !oldDeclined.has(unit.relativePath),
             );
+            const downloadUnits = units.filter((unit) => !isOptionalRef(unit) || tracked.has(unit.relativePath));
+            s.start(`Downloading ${bundleName}...`);
+            const tempDir = await downloadBundle(source, bundle, downloadUnits, platform);
+            tempDirs.push(tempDir);
+            s.stop(`Downloaded ${bundleName}.`);
+            await assertBundleSources(tempDir, bundleName, downloadUnits);
+            await assertBundleBlocks(tempDir, bundleName, downloadUnits);
+            for (const unit of units) {
+                const description = await readUnitDescription(tempDir, unit);
+                if (description) unit.description = description;
+            }
+
             const checked =
                 isInteractive() && newUnits.length > 0
                     ? new Set(await selectNewUnits(bundleName, newUnits))
@@ -195,6 +198,18 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                 ...oldDeclined,
                 ...newUnits.filter((unit) => !checked.has(unit.relativePath)).map((unit) => unit.relativePath),
             ]);
+            const selectedRefs = units.filter(
+                (unit) => isOptionalRef(unit) && !tracked.has(unit.relativePath) && selected.has(unit.relativePath),
+            );
+            if (selectedRefs.length > 0) {
+                await downloadBundleRefs(source, bundle, selectedRefs, tempDir);
+                await assertBundleSources(tempDir, bundleName, selectedRefs);
+                await assertBundleBlocks(tempDir, bundleName, selectedRefs);
+                for (const unit of selectedRefs) {
+                    const description = await readUnitDescription(tempDir, unit);
+                    if (description) unit.description = description;
+                }
+            }
 
             if (forceOnly.has(bundleName) && !(await hasRestorableEdit(tempDir, units, installed, platform))) continue;
 

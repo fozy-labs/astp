@@ -22,7 +22,7 @@ export {
     validateManifest,
 } from "./manifest.js";
 export type { NewerManifestNotice, SchemaVersion } from "./manifest.js";
-export { closeSource, downloadBundle, fetchManifest, isLocalRefSource } from "./fetcher.js";
+export { closeSource, downloadBundle, downloadBundleRefs, fetchManifest, isLocalRefSource } from "./fetcher.js";
 export {
     compareProxyBundle,
     deleteProxyUnits,
@@ -63,7 +63,7 @@ export { removeEmptyDirectories, syncBundle } from "./sync.js";
 export type { BlockSelections, ForceScope, SyncResult } from "./sync.js";
 export { assertInsideRoot } from "./path-safety.js";
 export { compareVersions, loadInstalled } from "./version.js";
-export { groupTemplateItems, resolveUnitPaths } from "./units.js";
+export { groupTemplateItems, isOptionalRef, resolveUnitPaths } from "./units.js";
 export type { UnitBlockFile } from "./unit-blocks.js";
 export { readUnitBlockFiles } from "./unit-blocks.js";
 export { readUnitDescription } from "./unit-descriptions.js";

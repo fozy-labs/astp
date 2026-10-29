@@ -6,6 +6,7 @@ import {
     DEFAULT_SOURCE,
     downloadBundle,
     groupTemplateItems,
+    isOptionalRef,
     loadInstalled,
     readUnitBlockFiles,
     readUnitDescription,
@@ -140,14 +141,15 @@ async function list(
     const bundle = manifestBundle;
     const units = groupTemplateItems(bundle, platform);
     validateUnitTargets(target.rootDir, units);
+    const installedByPath = new Map(installed?.units.map((unit) => [`${unit.kind}\0${unit.relativePath}`, unit]) ?? []);
+    const downloadUnits = units.filter(
+        (unit) => !isOptionalRef(unit) || installedByPath.has(`${unit.kind}\0${unit.relativePath}`),
+    );
     if (!options.json) s.start(`Downloading ${bundle.name}...`);
-    const tempDir = await downloadBundle(listing.source, bundle, units, platform);
+    const tempDir = await downloadBundle(listing.source, bundle, downloadUnits, platform);
     try {
-        await assertBundleSources(tempDir, bundle.name, units);
+        await assertBundleSources(tempDir, bundle.name, downloadUnits);
         if (!options.json) s.stop(`Downloaded ${bundle.name}.`);
-        const installedByPath = new Map(
-            installed?.units.map((unit) => [`${unit.kind}\0${unit.relativePath}`, unit]) ?? [],
-        );
         const declined = new Set(installed?.declined ?? []);
         const listed = await Promise.all(
             units.map(async (unit) => {
