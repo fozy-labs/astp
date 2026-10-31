@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Install can adopt an existing block file, preserving consumer text and declining conflicting regions instead of rejecting the whole file.
 - The optional `agreement` skill [`/release`](../templates/agreement/skills/release/SKILL.md) captures either an exact release procedure or a checklist of release considerations during astp setup.
 
+### Changed
+
+- The default template source is the `templates/v<N>` branch for the newest manifest schema major supported by the CLI. Explicit `--source` values and sources recorded in `astp.lock` are used unchanged.
+
 ## [0.5.0] - 2026-10-19
 
 ### Added

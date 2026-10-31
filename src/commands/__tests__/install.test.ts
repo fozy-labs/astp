@@ -163,7 +163,7 @@ describe("executeInstall", () => {
         expect(mockConfirmInstall).not.toHaveBeenCalled();
         expect(mockResolveBundle).toHaveBeenCalledWith(testManifest, "core");
         expect(mockDownloadBundle).toHaveBeenCalledWith(
-            expect.objectContaining({ spec: "gh:fozy-labs/astp" }),
+            expect.objectContaining({ spec: "gh:fozy-labs/astp#templates/v3" }),
             expect.objectContaining({ name: "core" }),
             expect.any(Array),
             "claude-code",
@@ -173,7 +173,7 @@ describe("executeInstall", () => {
         expect(mockSyncBundle).toHaveBeenCalledWith(
             expect.objectContaining({
                 target: testTarget,
-                source: "gh:fozy-labs/astp",
+                source: "gh:fozy-labs/astp#templates/v3",
                 bundle: testBundle,
                 selected: new Set(["skills/orchestrate"]),
                 declined: new Set(),

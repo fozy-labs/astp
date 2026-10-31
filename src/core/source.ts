@@ -5,8 +5,10 @@ import type { InstallTarget } from "@/types/index.js";
 
 import type { GitCoordinates, GitProvider } from "./git.js";
 import { resolveGitCommit } from "./git.js";
+import { SUPPORTED_SCHEMA_VERSIONS } from "./manifest.js";
 
-export const DEFAULT_SOURCE = "gh:fozy-labs/astp";
+const DEFAULT_SCHEMA_MAJOR = Math.max(...Object.keys(SUPPORTED_SCHEMA_VERSIONS).map(Number));
+export const DEFAULT_SOURCE = `gh:fozy-labs/astp#templates/v${DEFAULT_SCHEMA_MAJOR}`;
 
 const DEFAULT_MANIFEST = "templates/manifest.json";
 const GIT_PROVIDERS = new Set(["gh", "github", "gitlab", "bitbucket", "sourcehut"]);

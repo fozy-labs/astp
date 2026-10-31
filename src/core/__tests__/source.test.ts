@@ -6,11 +6,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { InstallTarget } from "@/types/index.js";
 
-import { formatSource, formatSourceAt, resolveSource, resolveSourceRevision } from "../source.js";
+import { DEFAULT_SOURCE, formatSource, formatSourceAt, resolveSource, resolveSourceRevision } from "../source.js";
 
 const cwd = path.resolve("/work/project");
 
 describe("resolveSource", () => {
+    it("uses the latest supported manifest schema channel by default", async () => {
+        expect(DEFAULT_SOURCE).toBe("gh:fozy-labs/astp#templates/v3");
+        await expect(resolveSource(DEFAULT_SOURCE, cwd)).resolves.toMatchObject({
+            spec: DEFAULT_SOURCE,
+            address: "gh:fozy-labs/astp/templates#templates/v3",
+        });
+    });
+
     afterEach(() => {
         vi.unstubAllGlobals();
     });
