@@ -6,20 +6,21 @@
 
 1. Ask which form to install; recommend ask rules:
 
-   | Form              | What happens on a matching command                                   | Gap                                                                     |
-   |-------------------|----------------------------------------------------------------------|-------------------------------------------------------------------------|
-   | ask rules         | the runtime shows its usual approval prompt                          | rules match command text: `git -C <dir> push --force` slips past        |
-   | ask rules + hook  | the same prompt; the hook also parses the command and catches `-C`, `-c`, flag order | the hook script lives on disk and needs `node`                          |
-   | deny rules        | the command is refused, no prompt                                    | `/git` cannot run it either, even on the user's word                    |
+   | Form             | What happens on a matching command                                                   | Gap                                                              |
+   |------------------|--------------------------------------------------------------------------------------|------------------------------------------------------------------|
+   | ask rules        | the runtime shows its usual approval prompt                                          | rules match command text: `git -C <dir> push --force` slips past |
+   | ask rules + hook | the same prompt; the hook also parses the command and catches `-C`, `-c`, flag order | the hook script lives on disk and needs `node`                   |
+   | deny rules       | the command is refused, no prompt                                                    | `/git` cannot run it either, even on the user's word             |
 
-2. Write to the level the `/git` skill is installed at — the project when the skill sits under the project's `.claude/`, the user otherwise:
+2. Write to the level the `/git` skill is installed at — the project when the skill sits under the project, the user otherwise:
 
-   | Runtime     | Project                 | User                                                                   |
-   |-------------|-------------------------|------------------------------------------------------------------------|
-   | Claude Code | `.claude/settings.json` | `$CLAUDE_CONFIG_DIR/settings.json`, else `~/.claude/settings.json`     |
-   | Devin CLI   | `.devin/config.json`    | `%APPDATA%\devin\config.json` (Windows), else `~/.config/devin/config.json` |
+   | Example     | Project                 | User                                                                        | Note                                                                                         |
+   |-------------|-------------------------|-----------------------------------------------------------------------------|----------------------------------------------------------------------------------------------|
+   | Claude Code | `.claude/settings.json` | `$CLAUDE_CONFIG_DIR/settings.json`, else `~/.claude/settings.json`          | -                                                                                            |
+   | Devin CLI   | `.devin/config.json`    | `%APPDATA%\devin\config.json` (Windows), else `~/.config/devin/config.json` | It is backward compatible with claude, so adding it to .devin should be seriously motivated. |
 
-   Write the Devin file only when the project has `.devin/` or the session runs in Devin CLI.
+    When enabling other platforms, find instructions for them and adapt the guard to them.
+
 3. Show the user the exact change and get approval. Merge into existing arrays, skip entries already present, keep everything else in the file. An existing allow rule that is equally or more specific wins over a Devin ask rule — report such rules.
 4. Check: run `git clean -n` — it lists, deletes nothing. A prompt (or a refusal, for deny rules) means the guard works.
 

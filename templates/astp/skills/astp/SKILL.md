@@ -1,7 +1,7 @@
 ---
 name: astp
 description: >-
-  Install, update, check, delete, recommend and fill Claude Code skills, agents and rules with
+  Install, update, check, delete, recommend and fill agent skills, agents and rules with
   the astp CLI (@fozy-labs/astp). Use when the user asks to add, update, list, remove or choose
   astp bundles, skills or blocks, when `astp.lock` is involved, or when a file contains a
   <SETUP_REQUIRED> or <FILL_INSTRUCTION> block.
@@ -27,17 +27,17 @@ Route by the first rule that matches:
 
 ## Commands
 
-Without a terminal the CLI cannot prompt, so always pass `--platform <platform>` and `--target project` (`./.claude/`) or `--target user` (`$CLAUDE_CONFIG_DIR` if set, else `~/.claude/`), and give `install` a bundle name. Ask the user which target when it is not clear.
+Without a terminal the CLI cannot prompt, so always pass `--platform <platform>` and `--target <target>`, and give `install` a bundle name. Ask the user which platform and target when they are not clear. Project roots are `./.claude/` for Claude Code and `./.kimi-code/` for Kimi Code. User roots are `$CLAUDE_CONFIG_DIR`, else `~/.claude/`, and `$KIMI_CODE_HOME`, else `~/.kimi-code/`, respectively.
 
 | Goal | Command |
 |------|---------|
-| See bundles (`description`, `use-when`, installed state) | `astp list --platform claude-code --target project --json` |
-| See units and blocks of a bundle (`description`, `use-when`, tags) | `astp list <bundle> --platform claude-code --target project --json` |
-| Install a whole bundle | `astp install <bundle> --platform claude-code --target project` |
-| Add units or blocks | `astp install <bundle> --skill <name> --block <name> --platform claude-code --target project` |
-| Check, then update | `astp check --platform claude-code --target project`, then `astp update --platform claude-code --target project` |
-| Restore the locked state without changing `astp.lock` | `astp sync --platform claude-code --target project` |
-| Remove | `astp delete <bundle> [--skill <name>] --platform claude-code --target project` |
+| See bundles (`description`, `use-when`, installed state) | `astp list --platform <platform> --target <target> --json` |
+| See units and blocks of a bundle (`description`, `use-when`, tags) | `astp list <bundle> --platform <platform> --target <target> --json` |
+| Install a whole bundle | `astp install <bundle> --platform <platform> --target <target>` |
+| Add units or blocks | `astp install <bundle> --skill <name> --block <name> --platform <platform> --target <target>` |
+| Check, then update | `astp check --platform <platform> --target <target>`, then `astp update --platform <platform> --target <target>` |
+| Restore the locked state without changing `astp.lock` | `astp sync --platform <platform> --target <target>` |
+| Remove | `astp delete <bundle> [--skill <name>] --platform <platform> --target <target>` |
 
 - To add to an installed bundle, pass `--skill` or `--block`: a plain `install <bundle>` also brings back what the user declined.
 - Commit `astp.lock` with the installed files; never edit it by hand. Use `sync` to restore it and `update` to advance it.
@@ -51,11 +51,11 @@ astp skips files the user changed and files it does not own. When the output rep
 
 Read-only unless the user asks what to install for the project and approves the selection:
 
-- **Question about bundles, units, blocks or the CLI:** run `astp list --platform <platform> --target <target> --json` and `astp list <bundle> --platform <platform> --target <target> --json` for the relevant bundles (plus `astp check --platform <platform> --target <target>` or `.claude/astp.lock` when installed state matters), then answer without changing files.
-- **What to install for this project** (`/astp ask` with no question, or a request to recommend): inspect the project (`package.json`, directory layout, `CLAUDE.md`, existing `.claude/`), match it against the `description` and `use-when` fields from `astp list --platform claude-code --target project --json` and `astp list <bundle> --platform claude-code --target project --json` for candidate bundles, propose the matching bundles, units and optional blocks with a one-line reason per item, and install only what the user approves.
+- **Question about bundles, units, blocks or the CLI:** run `astp list --platform <platform> --target <target> --json` and `astp list <bundle> --platform <platform> --target <target> --json` for the relevant bundles (plus `astp check --platform <platform> --target <target>` or `<target-root>/astp.lock` when installed state matters), then answer without changing files.
+- **What to install for this project** (`/astp ask` with no question, or a request to recommend): inspect the project (`package.json`, directory layout, `AGENTS.md` or `CLAUDE.md`, existing `.kimi-code/` or `.claude/`), match it against the `description` and `use-when` fields from `astp list --platform <platform> --target <target> --json` and `astp list <bundle> --platform <platform> --target <target> --json` for candidate bundles, propose the matching bundles, units and optional blocks with a one-line reason per item, and install only what the user approves.
 
 ## Fill
 
-1. Find files containing `<SETUP_REQUIRED>` or `<FILL_INSTRUCTION>`: in the path passed to `/astp fill [path]`, else across the target root (`./.claude/` by default, or the user root when specified).
+1. Find files containing `<SETUP_REQUIRED>` or `<FILL_INSTRUCTION>`: in the path passed to `/astp fill [path]`, else across the target root (the platform's project root by default, or the user root when specified).
 2. Each `<FILL_INSTRUCTION>` (from a fresh install or a conflict wrapper left by `update`) carries its own instruction: fill it with content from the real project, asking the user whenever the environment does not provide a reliable choice. Avoid duplicating agent instructions: duplication can waste context and cause behavior the user does not expect. The `<FILL_INSTRUCTION>` is written for agents (for you), not the user: do not recite or paraphrase it to them. Start with a simpler explanation, adding context before questions and spelling out options and consequences, then adapt dynamically to the user's understanding of the topic and its concepts.
 3. Remove each resolved `<FILL_INSTRUCTION>…</FILL_INSTRUCTION>` and the file's `<SETUP_REQUIRED>…</SETUP_REQUIRED>` block once no `<FILL_INSTRUCTION>` remains. Keep the `<block_name>…</block_name>` tags around each block: astp tracks blocks by them.
