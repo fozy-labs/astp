@@ -48,7 +48,7 @@ Agent-install commands accept `--platform <claude-code|kimi-code>` and `--target
 
 ### Sources
 
-By default bundles come from `gh:fozy-labs/astp` (`templates/manifest.json` on `main`). `--source <spec>` reads another manifest; `astp.lock` records each bundle's source, and `update` and `check` use it. A bundle switches source only when `--source` is passed again. In schema 2, the lock also records the exact Git commit of the bundle and each external ref: reinstall and `sync` reuse those commits, while `update` advances them. Run `astp update` once to migrate older locks before using `sync` with Git sources.
+By default bundles come from the `templates/v<N>` branch of `gh:fozy-labs/astp`, where `N` is the newest manifest schema major supported by the CLI (currently `gh:fozy-labs/astp#templates/v3`). `--source <spec>` reads exactly the specified manifest and ref; `astp.lock` records each bundle's source, and `update` and `check` use it. A bundle switches source only when `--source` is passed again. In schema 2, the lock also records the exact Git commit of the bundle and each external ref: reinstall and `sync` reuse those commits, while `update` advances them. Run `astp update` once to migrate older locks before using `sync` with Git sources.
 
 | `--source` | Reads |
 |------------|-------|

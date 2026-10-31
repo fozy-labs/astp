@@ -398,7 +398,7 @@ describe("executeUpdate", () => {
         await executeUpdate({ platform: "claude-code", target: "project" });
 
         expect(mockDownloadBundle).toHaveBeenCalledWith(
-            expect.objectContaining({ spec: "gh:fozy-labs/astp" }),
+            expect.objectContaining({ spec: "gh:fozy-labs/astp#templates/v3" }),
             expect.objectContaining({ name: "pipeline" }),
             expect.any(Array),
             "claude-code",
