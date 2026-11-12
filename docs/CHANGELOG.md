@@ -15,7 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nested `<astp-block>` blocks with independent selection, updates and local-edit protection; selecting a child selects its ancestors.
 - Skill, agent and rule descriptions from frontmatter in install and update selection prompts.
 - `platforms` filters on bundle items and `<astp-block>` tags, including `!<name>` exclusions; bundle filters now support exclusions too.
-- [`kimi-code` platform](../README.md#commands): skills install under `.kimi-code/skills/`; `ponytail` supports both platforms, and `agreement` installs its working-agreement blocks into `.kimi-code/AGENTS.md`.
 - [`targets`](../templates/README.md#templateitem-fields) on agent and rule manifest items overrides the install path per platform without duplicating the source. The shipped manifest now uses schema `3.1`; older CLIs must be updated before fetching it.
 - Install can adopt an existing block file, preserving consumer text and declining conflicting regions instead of rejecting the whole file.
 - The optional `agreement` skill [`/release`](../templates/agreement/skills/release/SKILL.md) captures either an exact release procedure or a checklist of release considerations during astp setup.
@@ -23,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The default template source is the `templates/v<N>` branch for the newest manifest schema major supported by the CLI. Explicit `--source` values and sources recorded in `astp.lock` are used unchanged.
+
+### Removed
+
+- **Breaking:** the `kimi-code` platform and its `.kimi-code/` install root; Claude Code is the only supported platform.
 
 ## [0.5.0] - 2026-10-19
 

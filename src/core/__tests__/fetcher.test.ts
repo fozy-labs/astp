@@ -240,9 +240,9 @@ describe("fetcher", () => {
         const source = await resolveSource("./manifest.json", work);
         const overridden: Bundle = {
             ...bundle,
-            items: [{ ...bundle.items[0]!, targets: { "kimi-code": "AGENTS.md" } }],
+            items: [{ ...bundle.items[0]!, targets: { "claude-code": "AGENTS.md" } }],
         };
-        const dir = await downloadBundle(source, overridden, undefined, "kimi-code");
+        const dir = await downloadBundle(source, overridden, undefined, "claude-code");
         tempDirs.push(dir);
 
         expect(await fs.readFile(path.join(dir, "AGENTS.md"), "utf8")).toBe("# a\n");
@@ -254,19 +254,19 @@ describe("fetcher", () => {
         const chained: Bundle = {
             ...bundle,
             items: [
-                { ...bundle.items[0]!, targets: { "kimi-code": "rules/b.md" } },
+                { ...bundle.items[0]!, targets: { "claude-code": "rules/b.md" } },
                 {
                     source: "docs/rules/b.md",
                     target: "rules/b.md",
                     category: "rule",
-                    targets: { "kimi-code": "rules/c.md" },
+                    targets: { "claude-code": "rules/c.md" },
                 },
             ],
         };
         await writeRoot(work);
         await fs.writeFile(path.join(work, "docs/rules/b.md"), "# b\n");
         const local = await resolveSource("./manifest.json", work);
-        const localDir = await downloadBundle(local, chained, undefined, "kimi-code");
+        const localDir = await downloadBundle(local, chained, undefined, "claude-code");
         tempDirs.push(localDir);
         expect(await fs.readFile(path.join(localDir, "rules/b.md"), "utf8")).toBe("# a\n");
         expect(await fs.readFile(path.join(localDir, "rules/c.md"), "utf8")).toBe("# b\n");
@@ -277,7 +277,7 @@ describe("fetcher", () => {
             return { dir: options!.dir! } as never;
         });
         const archive = await resolveSource("gh:o/r", work);
-        const archiveDir = await downloadBundle(archive, chained, undefined, "kimi-code");
+        const archiveDir = await downloadBundle(archive, chained, undefined, "claude-code");
         tempDirs.push(archiveDir);
         await closeSource(archive);
         expect(await fs.readFile(path.join(archiveDir, "rules/b.md"), "utf8")).toBe("# a\n");
@@ -422,9 +422,9 @@ describe("fetcher", () => {
         const source = await resolveSource("https://host/m/manifest.json", work);
         const overridden: Bundle = {
             ...bundle,
-            items: [{ ...bundle.items[0]!, targets: { "kimi-code": "AGENTS.md" } }],
+            items: [{ ...bundle.items[0]!, targets: { "claude-code": "AGENTS.md" } }],
         };
-        const dir = await downloadBundle(source, overridden, undefined, "kimi-code");
+        const dir = await downloadBundle(source, overridden, undefined, "claude-code");
         tempDirs.push(dir);
 
         expect(await fs.readFile(path.join(dir, "AGENTS.md"), "utf8")).toBe("file /m/docs/rules/a.md");
@@ -442,16 +442,16 @@ describe("fetcher", () => {
                     source: "docs/AGENTS.md",
                     target: "AGENTS.md",
                     category: "rule",
-                    platforms: ["kimi-code"],
+                    platforms: ["claude-code"],
                 },
                 {
                     ...bundle.items[0]!,
-                    platforms: ["claude-code"],
-                    targets: { "kimi-code": "AGENTS.md" },
+                    platforms: ["!claude-code"],
+                    targets: { "claude-code": "AGENTS.md" },
                 },
             ],
         };
-        const dir = await downloadBundle(source, filtered, undefined, "kimi-code");
+        const dir = await downloadBundle(source, filtered, undefined, "claude-code");
         tempDirs.push(dir);
 
         expect(await fs.readFile(path.join(dir, "AGENTS.md"), "utf8")).toBe("file /m/docs/AGENTS.md");

@@ -3,9 +3,8 @@
 /**
  * Coding agent platform a bundle targets.
  * `claude-code` — Anthropic Claude Code CLI (installs under `.claude/` or `$CLAUDE_CONFIG_DIR`, else `~/.claude/`).
- * `kimi-code` — Kimi Code CLI (installs under `.kimi-code/` or `$KIMI_CODE_HOME`, else `~/.kimi-code/`).
  */
-export type Platform = "claude-code" | "kimi-code";
+export type Platform = "claude-code";
 export type PlatformFilter = Platform | `!${Platform}`;
 
 // ── Remote Manifest Types (§3.1) ──────────────────────────────────────

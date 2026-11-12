@@ -36,7 +36,7 @@ vi.mock("@clack/prompts", async (importOriginal) => ({
 
 const mockSelect = vi.mocked(p.select);
 const projectTarget: InstallTarget = { platform: "claude-code", type: "project", rootDir: "/project/.claude" };
-const userTarget: InstallTarget = { platform: "kimi-code", type: "user", rootDir: "/home/user/.kimi-code" };
+const userTarget: InstallTarget = { platform: "claude-code", type: "user", rootDir: "/home/user/.claude" };
 
 const UP = "\x1b[A";
 const DOWN = "\x1b[B";
@@ -420,10 +420,10 @@ describe("BundleTreePrompt blocks", () => {
 });
 
 describe("selectPlatform", () => {
-    it("requires an explicit platform without a terminal when several are supported", async () => {
-        expect(ALL_PLATFORMS).toEqual(["claude-code", "kimi-code"]);
+    it("skips the prompt when only one platform is supported", async () => {
+        expect(ALL_PLATFORMS).toEqual(["claude-code"]);
 
-        await expect(selectPlatform()).rejects.toThrow("--platform is required without a terminal");
+        await expect(selectPlatform()).resolves.toBe("claude-code");
 
         expect(mockSelect).not.toHaveBeenCalled();
     });
@@ -486,7 +486,7 @@ describe("legacy migration prompts", () => {
 
         const reportText = String(vi.mocked(p.log.info).mock.calls.at(-1)?.[0]);
         expect(reportText).toContain("core: legacy skill skills/current");
-        expect(reportText).toContain("run `astp update --platform kimi-code --target user` to migrate.");
+        expect(reportText).toContain("run `astp update --platform claude-code --target user` to migrate.");
         expect(reportText).toContain("skills/removed — not in the current manifest, left in place.");
         expect(reportText).not.toContain("skills/removed — run `astp update --force` to migrate.");
     });
@@ -541,7 +541,7 @@ describe("legacy migration prompts", () => {
 
         expect(p.log.warn).toHaveBeenCalledWith(
             expect.stringContaining(
-                "astp install core --skill skills/sample --force --platform kimi-code --target user",
+                "astp install core --skill skills/sample --force --platform claude-code --target user",
             ),
         );
     });
@@ -558,7 +558,7 @@ describe("legacy migration prompts", () => {
 
         expect(p.log.warn).toHaveBeenCalledWith(
             expect.stringContaining(
-                'astp install core --skill skills/sample --force --source "./my src" --platform kimi-code --target user',
+                'astp install core --skill skills/sample --force --source "./my src" --platform claude-code --target user',
             ),
         );
     });

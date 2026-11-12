@@ -196,7 +196,7 @@ it("upgrades an existing output schema before writing platform target overrides"
     };
     await fs.writeFile(path.join(outputDir, "manifest.json"), JSON.stringify(existing));
     const bundle = ruleBundle();
-    bundle.items[0]!.targets = { "kimi-code": "AGENTS.md" };
+    bundle.items[0]!.targets = { "claude-code": "AGENTS.md" };
     await writeUpstream(bundle, { "core/rules/core.md": "rule\n" });
 
     await sync(bundle);
@@ -204,7 +204,7 @@ it("upgrades an existing output schema before writing platform target overrides"
     const manifest = await generated();
     expect(manifest.schemaVersion).toBe("3.1");
     expect(manifest.bundles.other).toEqual(existing.bundles.other);
-    expect(manifest.bundles.core!.items[0]!.targets).toEqual({ "kimi-code": "AGENTS.md" });
+    expect(manifest.bundles.core!.items[0]!.targets).toEqual({ "claude-code": "AGENTS.md" });
 });
 
 it("removes only a bundle symlink during forced replacement and preserves its destination", async () => {

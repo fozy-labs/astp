@@ -40,7 +40,7 @@ A bundle mirrors the install root: `fozy-labs/skills/fozy-labs-di/SKILL.md` inst
 | `description` | `string` | Human-readable description for display in prompts. |
 | `use-when` | `string` *(optional)* | Non-empty guidance on when to install or use the bundle; shown in `astp list`, omitted from interactive prompts. |
 | `default` | `boolean` | Whether this bundle is pre-selected by default in the interactive wizard. |
-| `platforms` | `PlatformFilter[]` *(optional)* | Coding agents this bundle supports: `"claude-code"` or `"kimi-code"`. Defaults to all platforms when omitted. |
+| `platforms` | `PlatformFilter[]` *(optional)* | Coding agents this bundle supports: `"claude-code"` is the only value. Defaults to all platforms when omitted. |
 | `items` | `TemplateItem[]` | Files included in this bundle. Use `[]` for a refs-only bundle. |
 | `refs` | `BundleRef[]` *(optional)* | External skill directories downloaded without vendoring their files. |
 
@@ -59,7 +59,6 @@ A referenced directory must contain `SKILL.md`. Astp installs every regular file
 | Value | Project root | User root |
 |-------|--------------|-----------|
 | `claude-code` | `./.claude/` | `$CLAUDE_CONFIG_DIR`, else `~/.claude/` |
-| `kimi-code` | `./.kimi-code/` | `$KIMI_CODE_HOME`, else `~/.kimi-code/` |
 
 The same `target` path lands under the platform's own root, so write bundle items as if they live directly under `skills/<name>/SKILL.md`, `agents/...`, etc. Agent and rule items can override that path for a platform with `targets`.
 
@@ -71,7 +70,7 @@ A platform filter is a platform value or its negation, such as `"claude-code"` o
 |-------|------|-------------|
 | `source` | `string` | Path relative to `templates/` (e.g., `fozy-labs/skills/fozy-labs-di/SKILL.md`). |
 | `target` | `string` | Default path relative to install root (e.g., `skills/fozy-labs-di/SKILL.md`). |
-| `targets` | `Partial<Record<Platform, string>>` *(optional)* | Per-platform overrides of `target` for agent/rule file items. Requires manifest schema 3; for example, `{ "kimi-code": "AGENTS.md" }`. |
+| `targets` | `Partial<Record<Platform, string>>` *(optional)* | Per-platform overrides of `target` for agent/rule file items. Requires manifest schema 3; for example, `{ "claude-code": "AGENTS.md" }`. |
 | `category` | `string` | Category: `agent`, `skill`, or `rule`. |
 | `optional` | `boolean` *(optional)* | Unchecked by default on `install` and `update`. For a skill, set on its `SKILL.md` item only. |
 | `labels` | `string[]` *(optional)* | Distinct `[a-z][a-z0-9_-]*` tags (e.g. `["experimental"]`, `["deprecated"]`) shown in prompts and `astp list`. For a skill, set on its `SKILL.md` item only. |

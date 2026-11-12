@@ -52,7 +52,11 @@ describe("without a terminal", () => {
         [["list", "--platform", "claude-code"], "--target is required without a terminal (project|user)"],
         [["delete", "core", "--platform", "claude-code"], "--target is required without a terminal (project|user)"],
         [["install", "core", "--platform", "claude-code"], "--target is required without a terminal (project|user)"],
-        [["check", "--target", "project"], "--platform is required without a terminal (claude-code|kimi-code)"],
+        [["check"], "--target is required without a terminal (project|user)"],
+        [
+            ["check", "--platform", "kimi-code", "--target", "project"],
+            "Invalid --platform value 'kimi-code'. Expected one of: claude-code",
+        ],
         [
             ["install", "--platform", "claude-code", "--target", "project"],
             "install needs a bundle name without a terminal",
