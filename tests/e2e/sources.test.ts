@@ -280,35 +280,33 @@ describe("E2E: manifest sources", () => {
                     version: "1.0.0",
                     description: "Platform rules",
                     default: false,
-                    platforms: ["claude-code", "kimi-code"],
+                    platforms: ["claude-code"],
                     items: [
                         {
-                            source: "core/rules/claude.md",
-                            target: "rules/claude.md",
+                            source: "core/rules/excluded.md",
+                            target: "rules/excluded.md",
                             category: "rule",
-                            platforms: ["claude-code"],
-                            targets: { "kimi-code": "AGENTS.md" },
+                            platforms: ["!claude-code"],
+                            targets: { "claude-code": "AGENTS.md" },
                         },
                         {
                             source: "core/AGENTS.md",
                             target: "AGENTS.md",
                             category: "rule",
-                            platforms: ["kimi-code"],
+                            platforms: ["claude-code"],
                         },
                     ],
                 },
             },
         };
         await fs.writeFile(manifestPath, JSON.stringify(manifest));
-        await fs.writeFile(path.join(projectDir, "a/templates/core/rules/claude.md"), "Claude only\n");
-        await fs.writeFile(path.join(projectDir, "a/templates/core/AGENTS.md"), "Kimi instructions\n");
-        const kimiRoot = path.join(projectDir, ".kimi-code");
-        vi.mocked(resolveTarget).mockReturnValue({ platform: "kimi-code", type: "project", rootDir: kimiRoot });
+        await fs.writeFile(path.join(projectDir, "a/templates/core/rules/excluded.md"), "Excluded\n");
+        await fs.writeFile(path.join(projectDir, "a/templates/core/AGENTS.md"), "Active instructions\n");
 
-        await executeInstall({ ...opts, platform: "kimi-code", bundle: "core", source: "./a" });
+        await executeInstall({ ...opts, bundle: "core", source: "./a" });
 
-        expect(await fs.readFile(path.join(kimiRoot, "AGENTS.md"), "utf8")).toBe("Kimi instructions\n");
-        await expect(fs.stat(path.join(kimiRoot, "rules/claude.md"))).rejects.toMatchObject({ code: "ENOENT" });
+        expect(await fs.readFile(path.join(rootDir, "AGENTS.md"), "utf8")).toBe("Active instructions\n");
+        await expect(fs.stat(path.join(rootDir, "rules/excluded.md"))).rejects.toMatchObject({ code: "ENOENT" });
     });
 
     it("names the bundle and a fix when its lock source is gone", async () => {

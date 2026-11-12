@@ -283,19 +283,19 @@ describe("validateManifest", () => {
     });
 
     it("accepts platform target overrides on file items in schema 3", () => {
-        const item = { ...rule("core", "rules/a.md"), targets: { "kimi-code": "AGENTS.md" } };
+        const item = { ...rule("core", "rules/a.md"), targets: { "claude-code": "AGENTS.md" } };
         const data = { ...withBundle("core", [item]), schemaVersion: "3.0" };
         expect(validateManifest(data).bundles.core.items[0]).toEqual(item);
     });
 
     it.each([
-        ["2.0", { "kimi-code": "AGENTS.md" }, "rule", "requires manifest schema 3.0"],
+        ["2.0", { "claude-code": "AGENTS.md" }, "rule", "requires manifest schema 3.0"],
         ["3.0", {}, "rule", "must be a non-empty object"],
         ["3.0", [], "rule", "must be a non-empty object"],
         ["3.0", { jetbrains: "AGENTS.md" }, "rule", "unknown platform 'jetbrains'"],
-        ["3.0", { "kimi-code": "../AGENTS.md" }, "rule", "must be a safe relative path"],
-        ["3.0", { "kimi-code": "rules/Thumbs.db" }, "rule", "OS clutter file name"],
-        ["3.0", { "kimi-code": "skills/a/SKILL.md" }, "skill", "supported only for agent and rule items"],
+        ["3.0", { "claude-code": "../AGENTS.md" }, "rule", "must be a safe relative path"],
+        ["3.0", { "claude-code": "rules/Thumbs.db" }, "rule", "OS clutter file name"],
+        ["3.0", { "claude-code": "skills/a/SKILL.md" }, "skill", "supported only for agent and rule items"],
     ])("rejects invalid target overrides in schema %s", (schemaVersion, targets, category, message) => {
         const target = category === "skill" ? "skills/a/SKILL.md" : "rules/a.md";
         const item = { ...rule("core", target), category, targets };
@@ -304,18 +304,18 @@ describe("validateManifest", () => {
 
     it("rejects effective target collisions for one platform", () => {
         const items = [
-            { ...rule("core", "rules/a.md"), targets: { "kimi-code": "AGENTS.md" } },
-            { ...rule("core", "rules/b.md"), targets: { "kimi-code": "AGENTS.md" } },
+            { ...rule("core", "rules/a.md"), targets: { "claude-code": "AGENTS.md" } },
+            { ...rule("core", "rules/b.md"), targets: { "claude-code": "AGENTS.md" } },
         ];
         expect(() => validateManifest({ ...withBundle("core", items), schemaVersion: "3.0" })).toThrow(
-            `Invalid bundle 'core': items for platform 'kimi-code' "AGENTS.md" and "AGENTS.md" collide`,
+            `Invalid bundle 'core': items for platform 'claude-code' "AGENTS.md" and "AGENTS.md" collide`,
         );
     });
 
     it("rejects a platform target override inside a referenced skill", () => {
         const data = {
             ...withBundle("core", [
-                { ...rule("core", "rules/a.md"), targets: { "kimi-code": "skills/external/SKILL.md" } },
+                { ...rule("core", "rules/a.md"), targets: { "claude-code": "skills/external/SKILL.md" } },
             ]),
             schemaVersion: "3.0",
         };
@@ -323,20 +323,22 @@ describe("validateManifest", () => {
             ...data.bundles.core,
             refs: [{ source: "gh:o/r/x", target: "skills/external" }],
         };
-        expect(() => validateManifest(data)).toThrow(`Invalid bundle 'core': items and refs for platform 'kimi-code'`);
+        expect(() => validateManifest(data)).toThrow(
+            `Invalid bundle 'core': items and refs for platform 'claude-code'`,
+        );
     });
 
     it("ignores filtered-out file items when checking platform target collisions", () => {
         const items = [
             {
-                ...rule("core", "rules/claude.md"),
-                platforms: ["claude-code"],
-                targets: { "kimi-code": "AGENTS.md" },
+                ...rule("core", "rules/excluded.md"),
+                platforms: ["!claude-code"],
+                targets: { "claude-code": "AGENTS.md" },
             },
             {
-                ...rule("core", "rules/kimi.md"),
-                platforms: ["kimi-code"],
-                targets: { "kimi-code": "AGENTS.md" },
+                ...rule("core", "rules/claude.md"),
+                platforms: ["claude-code"],
+                targets: { "claude-code": "AGENTS.md" },
             },
         ];
         expect(() => validateManifest({ ...withBundle("core", items), schemaVersion: "3.0" })).not.toThrow();
@@ -348,7 +350,7 @@ describe("validateManifest", () => {
                 source: "core/skills/a/SKILL.md",
                 target: "skills/a/SKILL.md",
                 category: "skill",
-                platforms: ["claude-code"],
+                platforms: ["!claude-code"],
             },
             {
                 source: "core/skills/a/references/guide.md",
@@ -356,8 +358,8 @@ describe("validateManifest", () => {
                 category: "skill",
             },
             {
-                ...rule("core", "rules/kimi.md"),
-                targets: { "kimi-code": "skills/a/references/guide.md" },
+                ...rule("core", "rules/a.md"),
+                targets: { "claude-code": "skills/a/references/guide.md" },
             },
         ];
         expect(() => validateManifest({ ...withBundle("core", items), schemaVersion: "3.0" })).not.toThrow();

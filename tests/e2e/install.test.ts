@@ -613,9 +613,9 @@ describe("E2E: install", () => {
         expect(secondDefaults).toEqual(["skills/orchestrate", optTarget]);
     });
 
-    it("supports the Kimi install, list, check, update and delete flow", async () => {
+    it("supports a platform target override through install, list, check, update and delete", async () => {
         const ruleTarget = "rules/working-agreement.md";
-        const rootDir = path.join(projectDir, ".kimi-code");
+        const rootDir = path.join(projectDir, ".claude");
         const agentsPath = path.join(rootDir, "AGENTS.md");
         const contents = {
             [ruleTarget]: [
@@ -627,27 +627,26 @@ describe("E2E: install", () => {
                 "",
             ].join("\n"),
         };
-        manifest.bundles.core.platforms = ["claude-code", "kimi-code"];
         manifest.bundles.agreement = {
             name: "agreement",
             version: "1.0.0",
             description: "Working agreement",
             default: false,
-            platforms: ["claude-code", "kimi-code"],
+            platforms: ["claude-code"],
             items: [
                 {
                     source: `agreement/${ruleTarget}`,
                     target: ruleTarget,
-                    targets: { "kimi-code": "AGENTS.md" },
+                    targets: { "claude-code": "AGENTS.md" },
                     category: "rule",
                 },
             ],
         };
-        mockResolveTarget.mockReturnValue({ platform: "kimi-code", type: "project", rootDir });
+        mockResolveTarget.mockReturnValue({ platform: "claude-code", type: "project", rootDir });
         async function mockDownloads(): Promise<void> {
             const directories: Record<string, string> = {};
             for (const name of ["core", "agreement"]) {
-                const dir = await setupTemplateDir(manifest, name, contents, "kimi-code");
+                const dir = await setupTemplateDir(manifest, name, contents, "claude-code");
                 directories[name] = dir;
                 templateDirs.push(dir);
             }
@@ -655,8 +654,8 @@ describe("E2E: install", () => {
         }
         await mockDownloads();
 
-        await executeInstall({ bundle: "core", platform: "kimi-code", target: "project" });
-        await executeInstall({ bundle: "agreement", platform: "kimi-code", target: "project" });
+        await executeInstall({ bundle: "core", platform: "claude-code", target: "project" });
+        await executeInstall({ bundle: "agreement", platform: "claude-code", target: "project" });
 
         expect(await fs.readFile(path.join(rootDir, "skills/orchestrate/SKILL.md"), "utf8")).toContain("# SKILL");
         expect(await fs.readFile(agentsPath, "utf8")).toBe(
@@ -670,7 +669,7 @@ describe("E2E: install", () => {
         const write = vi.spyOn(process.stdout, "write").mockReturnValue(true);
         let listed = "";
         try {
-            await executeList({ bundle: "agreement", json: true, platform: "kimi-code", target: "project" });
+            await executeList({ bundle: "agreement", json: true, platform: "claude-code", target: "project" });
             listed = write.mock.calls.map(([chunk]) => String(chunk)).join("");
         } finally {
             write.mockRestore();
@@ -681,21 +680,21 @@ describe("E2E: install", () => {
             blocks: [{ name: "principles", key: "AGENTS.md#principles", status: "selected" }],
         });
 
-        await executeCheck({ platform: "kimi-code", target: "project" });
+        await executeCheck({ platform: "claude-code", target: "project" });
         expect(vi.mocked(showCheckReport).mock.calls[0]![0].updates).toEqual([]);
 
         manifest.bundles.agreement.version = "1.1.0";
         contents[ruleTarget] = contents[ruleTarget].replace("- Root cause.", "- Fix root causes.");
         await mockDownloads();
         await fs.appendFile(agentsPath, "\nMy project instructions.\n");
-        await executeUpdate({ platform: "kimi-code", target: "project" });
+        await executeUpdate({ platform: "claude-code", target: "project" });
         const updated = await fs.readFile(agentsPath, "utf8");
         expect(updated).toContain("- Fix root causes.");
         expect(updated).toContain("My project instructions.");
 
-        await executeDelete({ bundle: "agreement", platform: "kimi-code", target: "project" });
+        await executeDelete({ bundle: "agreement", platform: "claude-code", target: "project" });
         expect(await fs.readFile(agentsPath, "utf8")).toBe(updated);
-        await executeDelete({ bundle: "agreement", force: true, platform: "kimi-code", target: "project" });
+        await executeDelete({ bundle: "agreement", force: true, platform: "claude-code", target: "project" });
         await expect(fs.stat(agentsPath)).rejects.toMatchObject({ code: "ENOENT" });
         lock = await readLockFixture(rootDir);
         expect(lock.bundles.agreement).toBeUndefined();

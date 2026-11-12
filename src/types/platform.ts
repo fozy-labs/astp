@@ -27,4 +27,4 @@ export function filterBundlesByPlatform(manifest: Manifest, platform: Platform):
     return Object.values(manifest.bundles).filter((bundle) => bundleSupportsPlatform(bundle, platform));
 }
 
-export const ALL_PLATFORMS = ["claude-code", "kimi-code"] as const satisfies readonly Platform[];
+export const ALL_PLATFORMS = ["claude-code"] as const satisfies readonly Platform[];

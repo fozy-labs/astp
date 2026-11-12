@@ -370,13 +370,9 @@ describe("syncBundle", () => {
         ].join("\n");
         const agentsRule = (): TemplateItem => ({
             ...rule("rules/working-agreement.md"),
-            targets: { "kimi-code": "AGENTS.md" },
+            targets: { "claude-code": "AGENTS.md" },
         });
         const selectAgents = { selected: new Set(["AGENTS.md"]), declined: new Set<string>() };
-
-        beforeEach(() => {
-            target = { ...target, platform: "kimi-code" };
-        });
 
         it("adopts consumer text and preserves it on later template updates", async () => {
             await writeFiles(rootDir, { "AGENTS.md": "# My instructions\n\nKeep this section.\n" });

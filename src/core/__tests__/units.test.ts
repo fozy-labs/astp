@@ -133,15 +133,15 @@ describe("groupTemplateItems", () => {
             {
                 source: "bundle/rules/working-agreement.md",
                 target: "rules/working-agreement.md",
-                targets: { "kimi-code": "AGENTS.md" },
+                targets: { "claude-code": "AGENTS.md" },
                 category: "rule" as const,
             },
         ];
 
-        expect(groupTemplateItems(items, "kimi-code")).toEqual([
+        expect(groupTemplateItems(items, "claude-code")).toEqual([
             { kind: "file", relativePath: "AGENTS.md", item: { ...items[0], target: "AGENTS.md" } },
         ]);
-        expect(groupTemplateItems(items, "claude-code")).toEqual([
+        expect(groupTemplateItems(items)).toEqual([
             { kind: "file", relativePath: "rules/working-agreement.md", item: items[0] },
         ]);
         expect(items[0]!.target).toBe("rules/working-agreement.md");

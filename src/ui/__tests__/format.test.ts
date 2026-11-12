@@ -36,10 +36,10 @@ describe("installRetry", () => {
     it("includes the selected platform and target", () => {
         expect(
             installRetry("core", ["--force"], {
-                platform: "kimi-code",
+                platform: "claude-code",
                 type: "project",
-                rootDir: "/project/.kimi-code",
+                rootDir: "/project/.claude",
             }),
-        ).toBe("astp install core --force --platform kimi-code --target project");
+        ).toBe("astp install core --force --platform claude-code --target project");
     });
 });
