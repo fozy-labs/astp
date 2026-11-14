@@ -539,7 +539,7 @@ describe("loadInstalled with blocks", () => {
         };
     }
 
-    async function setup(content: string) {
+    async function setup(content: string, extra: Record<string, unknown> = {}) {
         await fs.mkdir(path.join(rootDir, "rules"), { recursive: true });
         await fs.writeFile(path.join(rootDir, "rules/x.md"), content);
         await writeLock(rootDir, {
@@ -548,7 +548,7 @@ describe("loadInstalled with blocks", () => {
                 core: {
                     source: "repo",
                     declined: [],
-                    units: { "rules/x.md": await lockUnitFor() },
+                    units: { "rules/x.md": await lockUnitFor(extra) },
                 },
             },
         });
@@ -568,6 +568,15 @@ describe("loadInstalled with blocks", () => {
         const unit = await setup(CLEAN.replace("text", "filled"));
         expect(unit.state).toBe("unmodified");
         expect(unit.blocks).toEqual({ missing: false, dirty: true, edited: ["rules/x.md#a"] });
+    });
+
+    it("reports an edited nested child without marking its parent edited", async () => {
+        const { blockHash } = await import("../blocks.js");
+        const content = `${TEMPLATE_FM}\n<a>\nparent\n<b>\nedited\n</b>\n</a>\n`;
+        const unit = await setup(content, {
+            blocks: { "rules/x.md#a": blockHash("parent\n"), "rules/x.md#b": blockHash("child\n") },
+        });
+        expect(unit.blocks).toEqual({ missing: false, dirty: true, edited: ["rules/x.md#b"] });
     });
 
     it("consumer text outside blocks is dirty but edits no block", async () => {

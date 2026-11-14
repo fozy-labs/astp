@@ -5,6 +5,7 @@ import type { PromptOptions } from "@clack/core";
 import * as p from "@clack/prompts";
 
 import { groupTemplateItems } from "@/core/index.js";
+import type { ProxyComparison } from "@/core/proxy.js";
 import type { TemplateUnit } from "@/core/units.js";
 import type {
     Bundle,
@@ -111,7 +112,7 @@ export interface BlockOption {
 export interface BundleEntry {
     /** Resolved bundle (items from its lock source). */
     bundle: Bundle;
-    /** `groupTemplateItems(bundle.items)`. */
+    /** `groupTemplateItems(bundle)`, with refs materialized by `downloadBundle`. */
     units: TemplateUnit[];
     /** Unit paths Space selects on an empty bundle: all minus the lock's declines. */
     defaults: string[];
@@ -480,7 +481,7 @@ export async function confirmInstall(
     target: InstallTarget,
     selectedUnits?: TemplateUnit[],
 ): Promise<boolean> {
-    const units = selectedUnits ?? bundles.flatMap((bundle) => groupTemplateItems(bundle.items, target.platform));
+    const units = selectedUnits ?? bundles.flatMap((bundle) => groupTemplateItems(bundle, target.platform));
     const targetLabel = describeTarget(target);
 
     const confirmed = await p.confirm({
@@ -577,7 +578,7 @@ export async function confirmDelete(
 
 export function showCheckReport(
     report: UpdateReport,
-    target: InstallTargetType,
+    target: InstallTarget,
     changed: Array<{ path: string; modified: boolean; force: "replace" | "delete" | null }>,
 ): void {
     const lines: string[] = [];
@@ -606,8 +607,8 @@ export function showCheckReport(
             const guidance = !unit.inManifest
                 ? "not in the current manifest, left in place."
                 : unit.clean
-                  ? `run \`astp update --target ${target}\` to migrate.`
-                  : `modified locally — \`astp update --force --target ${target}\` replaces it.`;
+                  ? `run \`astp update --platform ${target.platform} --target ${target.type}\` to migrate.`
+                  : `modified locally — \`astp update --force --platform ${target.platform} --target ${target.type}\` replaces it.`;
             lines.push(`${unit.bundleName}: legacy ${unit.kind} ${unit.targetPath} — ${guidance}`);
         }
     }
@@ -619,9 +620,9 @@ export function showCheckReport(
             const label = unit.modified ? "modified" : "text edited";
             const hint =
                 unit.force === "delete"
-                    ? `, removed upstream; \`astp update --force --target ${target}\` deletes it`
+                    ? `, removed upstream; \`astp update --force --platform ${target.platform} --target ${target.type}\` deletes it`
                     : unit.force === "replace"
-                      ? `; \`astp update --force --target ${target}\` replaces it`
+                      ? `; \`astp update --force --platform ${target.platform} --target ${target.type}\` replaces it`
                       : "";
             lines.push(`  • ${unit.path} — ${label}${hint}`);
         }
@@ -656,6 +657,17 @@ export function warnModified(files: FileStatus[], command: string): void {
     );
 }
 
+export function warnMixedVersion(
+    entries: Array<{ bundle: string; unit: string; version: string; sourceVersion: string }>,
+): void {
+    const list = entries
+        .map((entry) => `  • ${entry.bundle}/${entry.unit} (locked ${entry.version}, source ${entry.sourceVersion})`)
+        .join("\n");
+    p.log.warn(
+        `Locked units from a different source version cannot be restored by sync, even with --force — skipped:\n${list}`,
+    );
+}
+
 export function warnKeptRemoved(units: FileStatus[]): void {
     const paths = units.map((unit) => `  • ${unit.targetPath}`).join("\n");
     p.log.warn(
@@ -672,7 +684,7 @@ export function warnForeign(
     bundleName: string,
     units: ForeignUnit[],
     blockKeys: string[],
-    target: InstallTargetType,
+    target: InstallTarget,
     source?: string,
 ): void {
     const owned = units.filter(
@@ -702,7 +714,10 @@ export function warnForeign(
             )
             .join("\n");
         const deletes = new Set(
-            owned.map((unit) => `  astp delete ${unit.owner.bundle} --skill ${unit.owner.path} --target ${target}`),
+            owned.map(
+                (unit) =>
+                    `  astp delete ${unit.owner.bundle} --skill ${unit.owner.path} --platform ${target.platform} --target ${target.type}`,
+            ),
         );
         const commands = [
             ...deletes,
@@ -733,9 +748,9 @@ export function warnLegacyModified(files: FileStatus[], command: string): void {
     p.log.warn(`Legacy units modified locally — skipped:\n${paths}\nRun \`${command}\` to replace them.`);
 }
 
-export function warnUnavailable(entries: Array<{ bundle: string; message: string }>, target: InstallTargetType): void {
+export function warnUnavailable(entries: Array<{ bundle: string; message: string }>, target: InstallTarget): void {
     p.log.warn(
-        `Unavailable, not shown:\n${entries.map((entry) => `  • ${entry.bundle}: ${entry.message}`).join("\n")}\nTo read a bundle from another source: astp install <bundle> --source <spec> --target ${target}`,
+        `Unavailable, not shown:\n${entries.map((entry) => `  • ${entry.bundle}: ${entry.message}`).join("\n")}\nTo read a bundle from another source: astp install <bundle> --source <spec> --platform ${target.platform} --target ${target.type}`,
     );
 }
 
@@ -749,6 +764,49 @@ export function warnNewerManifest(
     p.log.warn(
         `Manifest${from} uses schema version ${manifestVersion}, which is newer than supported by this astp CLI (${supportedVersion}).\nRun \`${updateCommand}\` to update astp.`,
     );
+}
+
+export async function confirmProxyAction(message: string): Promise<boolean> {
+    const confirmed = await p.confirm({ message });
+    if (p.isCancel(confirmed)) throw new CancelledError();
+    return confirmed;
+}
+
+export async function selectProxyBundles(names: string[]): Promise<string[]> {
+    const selected = await p.multiselect({
+        message: "Select bundles to delete:\n(Space = toggle, Enter = confirm)",
+        options: names.map((name) => ({ value: name, label: name })),
+        required: true,
+    });
+    if (p.isCancel(selected)) throw new CancelledError();
+    return selected as string[];
+}
+
+export function showProxyCheckReport(reports: ProxyComparison[]): void {
+    const lines: string[] = [];
+    for (const report of reports) {
+        const available = report.availableVersion ?? "—";
+        const status =
+            report.availableVersion === null
+                ? "not in upstream"
+                : report.outOfSync
+                  ? report.installedVersion === report.availableVersion
+                      ? "out of sync"
+                      : "update available"
+                  : "up to date";
+        lines.push(`${report.bundleName}: ${report.installedVersion || "—"} → ${available} (${status})`);
+        if (report.newUnits.length > 0) lines.push(`  new: ${report.newUnits.join(", ")}`);
+        if (report.removedUnits.length > 0) lines.push(`  removed: ${report.removedUnits.join(", ")}`);
+        if (report.modifiedUnits.length > 0) lines.push(`  changed locally: ${report.modifiedUnits.join(", ")}`);
+        if (report.missingUnits.length > 0) lines.push(`  missing: ${report.missingUnits.join(", ")}`);
+        if (report.driftUnits.length > 0) lines.push(`  manifest drift: ${report.driftUnits.join(", ")}`);
+    }
+    p.log.info(lines.join("\n"));
+}
+
+export function warnProxyForeign(units: ForeignUnit[], command: string): void {
+    const paths = units.map((unit) => `  • ${unit.targetPath}`).join("\n");
+    p.log.warn(`Already present with other content — left untouched:\n${paths}\nRun \`${command}\` to overwrite.`);
 }
 
 export function showSuccess(message: string): void {

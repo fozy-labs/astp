@@ -7,6 +7,8 @@ import { executeCheck } from "@/commands/check.js";
 import { executeDelete } from "@/commands/delete.js";
 import { executeInstall } from "@/commands/install.js";
 import { executeList } from "@/commands/list.js";
+import { executeProxyCheck, executeProxyDelete, executeProxyInstall, executeProxyUpdate } from "@/commands/proxy.js";
+import { executeSync } from "@/commands/sync.js";
 import { executeUpdate } from "@/commands/update.js";
 import type { InstallTargetType, Platform } from "@/types/index.js";
 import { ALL_PLATFORMS } from "@/types/index.js";
@@ -113,6 +115,21 @@ program
     });
 
 program
+    .command("sync")
+    .description("Restore files from the commits and selections recorded in astp.lock")
+    .option("--force", "Overwrite locally changed managed files")
+    .option("--platform <name>", PLATFORM_HELP)
+    .option("--target <type>", TARGET_HELP)
+    .addHelpText("after", "\nDoes not resolve new versions or write astp.lock. Old Git locks need astp update first.")
+    .action(async (options: { force?: boolean; platform?: string; target?: string }) => {
+        await executeSync({
+            force: options.force,
+            platform: parsePlatform(options.platform),
+            target: parseTarget(options.target),
+        });
+    });
+
+program
     .command("check")
     .description("Report bundles with updates or out of sync with their source; changes nothing")
     .option("--platform <name>", PLATFORM_HELP)
@@ -169,6 +186,71 @@ program
             });
         },
     );
+
+const OUTPUT_HELP = "Template source output directory (default: ./templates)";
+const proxy = program
+    .command("proxy")
+    .description("Create and maintain an editable astp template source")
+    .option("--output <dir>", OUTPUT_HELP)
+    .action(async (options: { output?: string }) => {
+        await executeProxyInstall(options);
+    });
+
+proxy
+    .command("install")
+    .description("Import or add bundles and units to a template source")
+    .argument("[bundle]", "Bundle name; required without a terminal")
+    .option("--source <spec>", SOURCE_HELP)
+    .option("--skill <name>", "Add a unit by name or path; repeatable", collect)
+    .option("--force", "Overwrite files or ref definitions changed locally")
+    .option("--output <dir>", OUTPUT_HELP)
+    .action(
+        async (
+            bundle: string | undefined,
+            options: { source?: string; skill?: string[]; force?: boolean; output?: string },
+        ) => {
+            await executeProxyInstall({
+                bundle,
+                source: options.source,
+                skills: options.skill,
+                force: options.force,
+                output: options.output ?? proxy.opts().output,
+            });
+        },
+    );
+
+proxy
+    .command("update")
+    .description("Update proxied bundles from the sources recorded in astp.lock")
+    .option("--force", "Overwrite locally changed files and ref definitions")
+    .option("--output <dir>", OUTPUT_HELP)
+    .action(async (options: { force?: boolean; output?: string }) => {
+        await executeProxyUpdate({ ...options, output: options.output ?? proxy.opts().output });
+    });
+
+proxy
+    .command("check")
+    .description("Report upstream and local proxy changes; changes nothing")
+    .option("--output <dir>", OUTPUT_HELP)
+    .action(async (options: { output?: string }) => {
+        await executeProxyCheck({ ...options, output: options.output ?? proxy.opts().output });
+    });
+
+proxy
+    .command("delete")
+    .description("Delete a proxied bundle or some of its units")
+    .argument("[bundle]", "Proxied bundle name; required without a terminal")
+    .option("--skill <name>", "Delete a unit by name or path; repeatable", collect)
+    .option("--force", "Also delete locally changed files and ref definitions")
+    .option("--output <dir>", OUTPUT_HELP)
+    .action(async (bundle: string | undefined, options: { skill?: string[]; force?: boolean; output?: string }) => {
+        await executeProxyDelete({
+            bundle,
+            skills: options.skill,
+            force: options.force,
+            output: options.output ?? proxy.opts().output,
+        });
+    });
 
 try {
     await program.parseAsync();

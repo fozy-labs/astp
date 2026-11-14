@@ -19,6 +19,10 @@ export function itemSupportsPlatform(item: TemplateItem, platform: Platform): bo
     return supportsPlatform(item.platforms, platform);
 }
 
+export function resolveItemTarget(item: TemplateItem, platform: Platform): string {
+    return item.targets?.[platform] ?? item.target;
+}
+
 export function filterBundlesByPlatform(manifest: Manifest, platform: Platform): Bundle[] {
     return Object.values(manifest.bundles).filter((bundle) => bundleSupportsPlatform(bundle, platform));
 }

@@ -35,14 +35,32 @@ export interface Bundle {
     platforms?: PlatformFilter[];
     /** Files included in this bundle. */
     items: TemplateItem[];
+    /** External skill directories downloaded instead of vendored template files. */
+    refs?: BundleRef[];
+}
+
+/** An external skill directory within a bundle. */
+export interface BundleRef {
+    /** Giget source, or a local directory when the manifest itself is local. */
+    source: string;
+    /** Skill directory relative to install root (e.g. "skills/modern-web-guidance"). */
+    target: string;
+    /** Whether the unit is unchecked by default on install and update. */
+    optional?: boolean;
+    /** Informational tags shown in prompts and `astp list`. */
+    labels?: string[];
+    /** Platforms this skill supports, with `!platform` exclusions. */
+    platforms?: PlatformFilter[];
 }
 
 /** A single template file within a bundle. */
 export interface TemplateItem {
     /** Path relative to templates/ (e.g., "docs/skills/markdown-craft/SKILL.md"). */
     source: string;
-    /** Path relative to install root (e.g., "skills/markdown-craft/SKILL.md"). */
+    /** Default path relative to install root (e.g., "skills/markdown-craft/SKILL.md"). */
     target: string;
+    /** Per-platform target overrides for agent/rule file items. Requires manifest schema 3. */
+    targets?: Partial<Record<Platform, string>>;
     /** Category for display grouping. */
     category: ItemCategory;
     /** Whether the unit is unchecked by default on install and update. */
@@ -156,6 +174,7 @@ export {
     filterBundlesByPlatform,
     getBundlePlatforms,
     itemSupportsPlatform,
+    resolveItemTarget,
     supportsPlatform,
 } from "./platform.js";
 export { describeTarget, resolveTarget } from "./resolve-target.js";

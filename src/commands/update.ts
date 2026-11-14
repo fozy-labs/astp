@@ -5,15 +5,20 @@ import {
     assertBundleSources,
     compareVersions,
     downloadBundle,
+    downloadBundleRefs,
     groupTemplateItems,
     hasFillInstruction,
+    isOptionalRef,
     loadInstalled,
+    ownTemplateContent,
     readUnitBlockFiles,
     readUnitDescription,
     syncBundle,
     validateUnitTargets,
+    writeLock,
 } from "@/core/index.js";
 import type { BlockSelections, UnitBlockFile } from "@/core/index.js";
+import type { TemplateUnit } from "@/core/units.js";
 import type { Bundle, FileStatus, InstalledBundle, InstallTarget, InstallTargetType, Platform } from "@/types/index.js";
 import { resolveTarget } from "@/types/index.js";
 import { describeUnitCounts } from "@/ui/format.js";
@@ -48,8 +53,10 @@ interface UpdatePlan {
     bundleName: string;
     bundle: Bundle;
     spec: string;
+    resolvedCommit?: string;
     installed: InstalledBundle | undefined;
     tempDir: string;
+    units: TemplateUnit[];
     selected: Set<string>;
     declined: Set<string>;
     blockSelections: BlockSelections;
@@ -72,6 +79,23 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
     try {
         s.start("Fetching manifests...");
         const opened = await sources.openInstalled(installedState.bundles, installedState.lock);
+        const persistResolvedCommits = async (): Promise<void> => {
+            let changed = false;
+            for (const [bundleName, source] of opened) {
+                const lockBundle = installedState.lock.bundles[bundleName];
+                if (
+                    !lockBundle ||
+                    lockBundle.resolvedCommit ||
+                    !source.resolvedCommit ||
+                    !source.manifest.bundles[bundleName]
+                ) {
+                    continue;
+                }
+                lockBundle.resolvedCommit = source.resolvedCommit;
+                changed = true;
+            }
+            if (changed) await writeLock(target.rootDir, installedState.lock);
+        };
         s.stop("Manifests fetched.");
         sources.warnIfNewer();
         const report = mergeReports(
@@ -112,10 +136,17 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                     }
                 }
                 if (modifiedLockUnits.length > 0)
-                    warnModified(modifiedLockUnits, `astp update --force --target ${target.type}`);
+                    warnModified(
+                        modifiedLockUnits,
+                        `astp update --force --platform ${target.platform} --target ${target.type}`,
+                    );
                 if (modifiedLegacyUnits.length > 0)
-                    warnLegacyModified(modifiedLegacyUnits, `astp update --force --target ${target.type}`);
+                    warnLegacyModified(
+                        modifiedLegacyUnits,
+                        `astp update --force --platform ${target.platform} --target ${target.type}`,
+                    );
             }
+            await persistResolvedCommits();
             return;
         }
 
@@ -134,19 +165,8 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             const bundle = manifest.bundles[bundleName];
             if (!bundle) continue;
             const installed = installedState.bundles.find((entry) => entry.bundleName === bundleName);
-            const units = groupTemplateItems(bundle.items, platform);
+            const units = groupTemplateItems(bundle, platform);
             validateUnitTargets(target.rootDir, units);
-            s.start(`Downloading ${bundleName}...`);
-            const tempDir = await downloadBundle(source, bundle);
-            tempDirs.push(tempDir);
-            s.stop(`Downloaded ${bundleName}.`);
-            await assertBundleSources(tempDir, bundleName, units);
-            await assertBundleBlocks(tempDir, bundleName, units);
-            for (const unit of units) {
-                const description = await readUnitDescription(tempDir, unit);
-                if (description) unit.description = description;
-            }
-
             const manifestPaths = new Set(units.map((unit) => unit.relativePath));
             const tracked = new Set(
                 installed?.units
@@ -157,6 +177,18 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             const newUnits = units.filter(
                 (unit) => !tracked.has(unit.relativePath) && !oldDeclined.has(unit.relativePath),
             );
+            const downloadUnits = units.filter((unit) => !isOptionalRef(unit) || tracked.has(unit.relativePath));
+            s.start(`Downloading ${bundleName}...`);
+            const tempDir = await downloadBundle(source, bundle, downloadUnits, platform);
+            tempDirs.push(tempDir);
+            s.stop(`Downloaded ${bundleName}.`);
+            await assertBundleSources(tempDir, bundleName, downloadUnits);
+            await assertBundleBlocks(tempDir, bundleName, downloadUnits);
+            for (const unit of units) {
+                const description = await readUnitDescription(tempDir, unit);
+                if (description) unit.description = description;
+            }
+
             const checked =
                 isInteractive() && newUnits.length > 0
                     ? new Set(await selectNewUnits(bundleName, newUnits))
@@ -166,6 +198,18 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                 ...oldDeclined,
                 ...newUnits.filter((unit) => !checked.has(unit.relativePath)).map((unit) => unit.relativePath),
             ]);
+            const selectedRefs = units.filter(
+                (unit) => isOptionalRef(unit) && !tracked.has(unit.relativePath) && selected.has(unit.relativePath),
+            );
+            if (selectedRefs.length > 0) {
+                await downloadBundleRefs(source, bundle, selectedRefs, tempDir);
+                await assertBundleSources(tempDir, bundleName, selectedRefs);
+                await assertBundleBlocks(tempDir, bundleName, selectedRefs);
+                for (const unit of selectedRefs) {
+                    const description = await readUnitDescription(tempDir, unit);
+                    if (description) unit.description = description;
+                }
+            }
 
             if (forceOnly.has(bundleName) && !(await hasRestorableEdit(tempDir, units, installed, platform))) continue;
 
@@ -178,7 +222,18 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
                 const selections = await selectUpdateBlocks(unit.relativePath, blockFiles, lockUnit);
                 for (const [fileTarget, selection] of selections) blockSelections.set(fileTarget, selection);
             }
-            plans.push({ bundleName, bundle, spec, installed, tempDir, selected, declined, blockSelections });
+            plans.push({
+                bundleName,
+                bundle,
+                spec,
+                resolvedCommit: opened.get(bundleName)!.resolvedCommit,
+                installed,
+                tempDir,
+                units,
+                selected,
+                declined,
+                blockSelections,
+            });
         }
 
         const totals = {
@@ -192,10 +247,12 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             const result = await syncBundle({
                 target,
                 source: plan.spec,
+                resolvedCommit: plan.resolvedCommit,
                 bundle: plan.bundle,
                 installed: plan.installed,
                 lock: installedState.lock,
                 tempDir: plan.tempDir,
+                units: plan.units,
                 selected: plan.selected,
                 declined: plan.declined,
                 blockSelections: plan.blockSelections,
@@ -207,20 +264,23 @@ export async function executeUpdate(options: UpdateOptions): Promise<void> {
             totals.kept.push(...result.kept, ...result.released);
             const legacy = result.skipped.filter((status) => status.state === "legacy");
             const modified = result.skipped.filter((status) => status.state !== "legacy");
-            if (modified.length > 0) warnModified(modified, `astp update --force --target ${target.type}`);
-            if (legacy.length > 0) warnLegacyModified(legacy, `astp update --force --target ${target.type}`);
+            if (modified.length > 0)
+                warnModified(modified, `astp update --force --platform ${target.platform} --target ${target.type}`);
+            if (legacy.length > 0)
+                warnLegacyModified(legacy, `astp update --force --platform ${target.platform} --target ${target.type}`);
             if (result.kept.length > 0) warnKeptRemoved(result.kept);
             if (result.keptBlocks.length > 0) warnKeptBlocks(result.keptBlocks);
             if (result.released.length > 0 || result.releasedBlocks.length > 0) {
                 warnReleased(result.released, result.releasedBlocks);
             }
             if (result.foreign.length > 0 || result.foreignBlocks.length > 0) {
-                warnForeign(plan.bundleName, result.foreign, result.foreignBlocks, target.type);
+                warnForeign(plan.bundleName, result.foreign, result.foreignBlocks, target);
             }
             if (result.conflictBlocks.length > 0) warnBlockConflicts(result.conflictBlocks);
             s.stop(`Updated ${plan.bundleName}.`);
         }
 
+        await persistResolvedCommits();
         const synced = plans.length > 0;
         if (!synced) {
             if (report.notInManifest.length === 0) showInfo("All bundles up to date.");
@@ -254,7 +314,7 @@ async function hasRestorableEdit(
         const block = blockFiles
             .get(key.slice(0, hashIndex))
             ?.blocks.find((candidate) => candidate.name === key.slice(hashIndex + 1));
-        if (!block || !hasFillInstruction(block.content)) return true;
+        if (!block || !hasFillInstruction(ownTemplateContent(block))) return true;
     }
     return false;
 }

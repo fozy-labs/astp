@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import type { InstallTarget, Manifest, TemplateItem } from "@/types/index.js";
+import type { InstallTarget, Manifest, Platform, TemplateItem } from "@/types/index.js";
+import { resolveItemTarget } from "@/types/index.js";
 
 export async function readLockFixture(rootDir: string): Promise<{
     schemaVersion: number;
@@ -224,18 +225,20 @@ export async function createTempProject(): Promise<{ dir: string; cleanup: () =>
 
 /**
  * Creates a temp directory with template files matching what `downloadBundle` would return.
- * File paths inside the directory match `item.target` for each bundle item.
+ * File paths inside the directory match each item's effective target for the platform.
  */
 export async function setupTemplateDir(
     manifest: Manifest,
     bundleName: string,
     contents: Record<string, string> = {},
+    platform?: Platform,
 ): Promise<string> {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), `astp-tpl-${bundleName}-`));
     const bundle = manifest.bundles[bundleName];
 
     for (const item of bundle.items) {
-        const filePath = path.join(dir, item.target);
+        const target = platform ? resolveItemTarget(item, platform) : item.target;
+        const filePath = path.join(dir, target);
         await fs.mkdir(path.dirname(filePath), { recursive: true });
         const content = contents[item.target] ?? generateTemplateContent(item, bundle.version);
         await fs.writeFile(filePath, content, typeof content === "string" ? "utf8" : undefined);

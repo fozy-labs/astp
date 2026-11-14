@@ -4,11 +4,16 @@ import path from "node:path";
 
 import { downloadTemplate } from "giget";
 
-import type { Bundle, Manifest } from "@/types/index.js";
+import type { Bundle, Manifest, Platform } from "@/types/index.js";
+import { itemSupportsPlatform, resolveItemTarget } from "@/types/index.js";
 
 import { validateManifest } from "./manifest.js";
-import { assertSafeRelativePath } from "./path-safety.js";
-import type { ManifestSource } from "./source.js";
+import { assertSafeRelativePath, foldPath } from "./path-safety.js";
+import { listSkillTree } from "./skill-tree.js";
+import type { ManifestSource, RevisionOptions } from "./source.js";
+import { resolveRefRevision } from "./source.js";
+import type { TemplateUnit } from "./units.js";
+import { groupTemplateItems } from "./units.js";
 
 const NPM_REGISTRY = "https://registry.npmjs.org";
 
@@ -45,16 +50,26 @@ export async function fetchManifest(source: ManifestSource): Promise<Manifest> {
     return validateManifest(data);
 }
 
-/** Copies or fetches bundle `<root>/<bundle>/` into a fresh temp dir laid out by item `target`. */
-export async function downloadBundle(source: ManifestSource, bundle: Bundle): Promise<string> {
+/** Fetches regular items and external skill refs into a fresh temp dir laid out by install target. */
+export async function downloadBundle(
+    source: ManifestSource,
+    bundle: Bundle,
+    units: TemplateUnit[] = groupTemplateItems(bundle),
+    platform?: Platform,
+    refRevisions: ReadonlyMap<string, RevisionOptions> = new Map(),
+): Promise<string> {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), `astp-${bundle.name}-`));
     try {
+        assertRefTargetsDoNotOverlap(units);
         if (source.kind === "url") {
             const root = new URL(".", source.manifestUrl);
             for (const item of bundle.items) {
+                if (platform && !itemSupportsPlatform(item, platform)) continue;
+                const target = platform ? resolveItemTarget(item, platform) : item.target;
                 assertSafeRelativePath(item.target, "item target");
+                assertSafeRelativePath(target, "item target");
                 const url = new URL([bundle.name, ...item.target.split("/")].map(encodeURIComponent).join("/"), root);
-                const filePath = path.join(tempDir, item.target);
+                const filePath = path.join(tempDir, target);
                 const relative = path.relative(tempDir, filePath);
                 if (
                     !url.href.startsWith(root.href) ||
@@ -62,7 +77,7 @@ export async function downloadBundle(source: ManifestSource, bundle: Bundle): Pr
                     relative.startsWith(`..${path.sep}`) ||
                     path.isAbsolute(relative)
                 ) {
-                    throw new Error(`item '${item.target}' resolves outside the manifest directory`);
+                    throw new Error(`item '${target}' resolves outside the manifest directory`);
                 }
                 const response = await request(url);
                 // A missing file is reported by assertBundleSources.
@@ -71,28 +86,144 @@ export async function downloadBundle(source: ManifestSource, bundle: Bundle): Pr
                 await fs.mkdir(path.dirname(filePath), { recursive: true });
                 await fs.writeFile(filePath, Buffer.from(await response.arrayBuffer()));
             }
-            return tempDir;
+        } else if (bundle.items.length > 0 || !bundle.refs?.length) {
+            const manifestRoot =
+                source.kind === "local"
+                    ? path.dirname(source.manifestPath)
+                    : path.dirname(path.join(await downloadArchive(source), source.manifestFile));
+            const bundleDir = path.join(manifestRoot, bundle.name);
+            try {
+                if (source.kind === "archive" && !(await isInsideDownload(source, bundleDir))) {
+                    throw new Error("bundle directory resolves outside the downloaded source");
+                }
+                await fs.cp(bundleDir, tempDir, { recursive: true, filter: isPlainEntry });
+                await copyTargetOverrides(tempDir, bundle, platform);
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+                throw new Error(`bundle directory not found: ${source.kind === "local" ? bundleDir : bundle.name}`);
+            }
         }
 
-        const manifestRoot =
-            source.kind === "local"
-                ? path.dirname(source.manifestPath)
-                : path.dirname(path.join(await downloadArchive(source), source.manifestFile));
-        const bundleDir = path.join(manifestRoot, bundle.name);
-        try {
-            if (source.kind === "archive" && !(await isInsideDownload(source, bundleDir))) {
-                throw new Error("bundle directory resolves outside the downloaded source");
-            }
-            await fs.cp(bundleDir, tempDir, { recursive: true, filter: isPlainEntry });
-        } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-            throw new Error(`bundle directory not found: ${source.kind === "local" ? bundleDir : bundle.name}`);
-        }
+        await downloadRefs(source, units, tempDir, refRevisions);
         return tempDir;
     } catch (error) {
         await fs.rm(tempDir, { recursive: true, force: true });
         const message = error instanceof Error ? error.message : String(error);
         throw new Error(`Failed to download bundle '${bundle.name}' from '${source.spec}': ${message}`);
+    }
+}
+
+/** Fetches selected external skill refs into an existing bundle download. */
+export async function downloadBundleRefs(
+    source: ManifestSource,
+    bundle: Bundle,
+    units: TemplateUnit[],
+    tempDir: string,
+    refRevisions: ReadonlyMap<string, RevisionOptions> = new Map(),
+): Promise<void> {
+    try {
+        await downloadRefs(source, units, tempDir, refRevisions);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`Failed to download bundle '${bundle.name}' from '${source.spec}': ${message}`);
+    }
+}
+
+async function downloadRefs(
+    source: ManifestSource,
+    units: TemplateUnit[],
+    tempDir: string,
+    refRevisions: ReadonlyMap<string, RevisionOptions>,
+): Promise<void> {
+    for (const unit of units) {
+        if (unit.kind !== "skill" || !unit.ref) continue;
+        assertSafeRelativePath(unit.relativePath, "ref target");
+        const refDir = path.join(tempDir, unit.relativePath);
+        unit.resolvedCommit = await downloadRef(source, unit.ref.source, refDir, refRevisions.get(unit.relativePath));
+        const { files, special } = await listSkillTree(refDir);
+        if (special.length > 0) {
+            throw new Error(`Referenced skill '${unit.ref.source}' contains non-regular files: ${special.join(", ")}`);
+        }
+        if (!files.includes("SKILL.md")) {
+            throw new Error(`Referenced skill '${unit.ref.source}' has no SKILL.md`);
+        }
+        unit.items = files.sort().map((file) => {
+            const target = `${unit.relativePath}/${file}`;
+            assertSafeRelativePath(target, "referenced skill file");
+            return { source: unit.ref!.source, target, category: "skill" };
+        });
+    }
+}
+
+function assertRefTargetsDoNotOverlap(units: TemplateUnit[]): void {
+    const occupied = units
+        .filter((unit) => unit.kind === "file" || !unit.ref)
+        .map((unit) => ({ path: unit.relativePath, folded: foldPath(unit.relativePath) }));
+    for (const unit of units) {
+        if (unit.kind !== "skill" || !unit.ref) continue;
+        assertSafeRelativePath(unit.relativePath, "ref target");
+        const folded = foldPath(unit.relativePath);
+        const existing = occupied.find(
+            (unit) =>
+                folded === unit.folded || folded.startsWith(`${unit.folded}/`) || unit.folded.startsWith(`${folded}/`),
+        );
+        if (existing) {
+            throw new Error(`Ref target '${unit.relativePath}' overlaps existing unit '${existing.path}'`);
+        }
+        occupied.push({ path: unit.relativePath, folded });
+    }
+}
+
+const LOCAL_REF_RE = /^(?:\.{1,2}(?:[\\/]|$)|[\\/]|[A-Za-z]:[\\/])/;
+
+export function isLocalRefSource(refSource: string): boolean {
+    return LOCAL_REF_RE.test(refSource);
+}
+
+async function downloadRef(
+    source: ManifestSource,
+    refSource: string,
+    outputDir: string,
+    revision: RevisionOptions = {},
+): Promise<string | undefined> {
+    if (isLocalRefSource(refSource)) {
+        if (source.kind !== "local") {
+            throw new Error(`Local ref '${refSource}' requires a local manifest`);
+        }
+        const manifestDir = path.dirname(source.manifestPath);
+        const refDir = path.resolve(manifestDir, refSource);
+        const relative = path.relative(manifestDir, refDir);
+        if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+            throw new Error(`Local ref '${refSource}' resolves outside the manifest directory`);
+        }
+        await fs.cp(refDir, outputDir, { recursive: true, filter: isPlainEntry });
+        return undefined;
+    }
+    const resolved = await resolveRefRevision(refSource, revision);
+    await withGigetEnv(resolved.auth, () => downloadTemplate(resolved.address, { dir: outputDir, force: true }));
+    return resolved.resolvedCommit;
+}
+
+async function copyTargetOverrides(tempDir: string, bundle: Bundle, platform?: Platform): Promise<void> {
+    if (!platform) return;
+    const overrides: Array<{ targetFile: string; content: Buffer }> = [];
+    for (const item of bundle.items) {
+        if (!itemSupportsPlatform(item, platform)) continue;
+        const target = resolveItemTarget(item, platform);
+        if (target === item.target) continue;
+        assertSafeRelativePath(item.target, "item target");
+        assertSafeRelativePath(target, "item target");
+        const sourceFile = path.join(tempDir, item.target);
+        try {
+            if (!(await fs.lstat(sourceFile)).isFile()) continue;
+            overrides.push({ targetFile: path.join(tempDir, target), content: await fs.readFile(sourceFile) });
+        } catch (error) {
+            if (!["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error;
+        }
+    }
+    for (const { targetFile, content } of overrides) {
+        await fs.mkdir(path.dirname(targetFile), { recursive: true });
+        await fs.writeFile(targetFile, content);
     }
 }
 

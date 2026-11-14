@@ -29,7 +29,7 @@ import {
 } from "@/ui/prompts.js";
 
 import { canSymlinkFiles } from "../../src/__tests__/links.js";
-import { cleanupDir, createTempProject, setupTemplateDir } from "./helpers.js";
+import { cleanupDir, createTempProject, makeProjectTarget, setupTemplateDir } from "./helpers.js";
 
 vi.mock("@/core/index.js", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@/core/index.js")>()),
@@ -336,7 +336,7 @@ describe("lock-file command flows", () => {
         await executeInstall({ platform: "claude-code", target: "project" });
         expect(mockWarnUnavailable).toHaveBeenCalledWith(
             [expect.objectContaining({ bundle: "second", message: "download failed" })],
-            "project",
+            makeProjectTarget(projectDir),
         );
         const lock = JSON.parse(await fs.readFile(path.join(rootDir, "astp.lock"), "utf8"));
         expect(Object.keys(lock.bundles)).toEqual(["first"]);
@@ -750,7 +750,7 @@ describe("lock-file command flows", () => {
                 "core",
                 [expect.objectContaining({ targetPath: "skills/beta" })],
                 [],
-                "project",
+                makeProjectTarget(projectDir),
             );
             expect(vi.mocked(warnModified)).not.toHaveBeenCalled();
             expect(await checkUpdates()).toEqual([]);
@@ -826,7 +826,7 @@ describe("lock-file command flows", () => {
             expect(await fs.readFile(path.join(rootDir, "skills/alpha/SKILL.md"), "utf8")).toContain("alpha edit");
             expect(vi.mocked(warnModified)).toHaveBeenCalledWith(
                 [expect.objectContaining({ targetPath: "skills/alpha", kind: "skill" })],
-                "astp install core --skill skills/alpha --force --target project",
+                "astp install core --skill skills/alpha --force --platform claude-code --target project",
             );
         });
     });

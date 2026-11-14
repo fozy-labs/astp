@@ -1,4 +1,4 @@
-import type { InstallTargetType } from "@/types/index.js";
+import type { InstallTarget } from "@/types/index.js";
 
 /**
  * Labels a set of units by what they install: skills are whole directories,
@@ -34,6 +34,6 @@ export function shellArg(value: string): string {
 }
 
 /** The `install` retry hint for the given flags. */
-export function installRetry(bundleName: string, flags: string[], target: InstallTargetType, source?: string): string {
-    return `astp install ${bundleName} ${flags.join(" ")}${source !== undefined ? ` --source ${shellArg(source)}` : ""} --target ${target}`;
+export function installRetry(bundleName: string, flags: string[], target: InstallTarget, source?: string): string {
+    return `astp install ${bundleName} ${flags.join(" ")}${source !== undefined ? ` --source ${shellArg(source)}` : ""} --platform ${target.platform} --target ${target.type}`;
 }

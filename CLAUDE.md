@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `src/` - CLI source; `@/*` aliases `src/*`
   - `cli.ts` - commander entry, parses `--platform` / `--target`; no subcommand → wizard
-  - `commands/` - one `execute*` per command: install, update, check, delete, list
+  - `commands/` - one `execute*` per command: install, update, sync, check, delete, list, proxy
     - `sources.ts` - open each `--source` / lock source once per command, merge reports
     - `blocks.ts` - resolve `--block` values and the blocks the install tree offers and pre-checks
   - `core/` - no UI; everything goes through `core/index.ts`
@@ -40,7 +40,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `ui/` - `@clack/prompts` wizard and prompts; `format.ts` - unit counts and printed retry commands
 - `templates/` - shipped bundles; author guide in [templates/README.md](templates/README.md)
   - `manifest.json` - source of truth: bundles, versions, platforms, `source` → `target` items
-  - `<bundle>/` - astp, fozy-labs, docs, design, agreement
+  - `<bundle>/` - astp, fozy-labs, docs, thinking, ponytail, agreement, web
 - `scripts/` - marketplace generator (run by Node type stripping, own `tsconfig.json`)
 - `tests/`
   - `e2e/` - command flows with `fetchManifest` / `downloadBundle` mocked, no network, plus a real-CLI no-terminal test
@@ -61,12 +61,12 @@ flowchart LR
     ver --> cmd
 ```
 
-- By default the CLI reads templates from GitHub `main`: a `templates/` change reaches users on merge, not on npm release.
+- By default the CLI reads templates from the `templates/v<N>` branch for the newest supported manifest schema major: a `templates/` change reaches users when that branch advances, not on npm release.
 - `astp.lock` in the install root is the whole install state: `kind`, `version`, `hash` per unit (a skill's hash covers every file in its dir; for block files, only frontmatter), `blocks`/`declinedBlocks`, `declined` per bundle. `install` and `update` skip modified or foreign units unless `--force`.
 - Files without blocks are byte-identical to templates; `astp-*` fields mark only legacy installs.
-- A manifest item's `target` is its `source` minus the bundle prefix, and giget lays files out by `target`.
-- Watch that changes landing in `main` come with a version bump for their bundle in `manifest.json`.
-- A new platform needs an entry in `ALL_PLATFORMS` and in `PLATFORM_ROOTS` (`resolve-target.ts`).
+- A manifest item's default `target` is its `source` minus the bundle prefix; optional `targets` overrides select the effective path per platform, and downloads lay files out by it.
+- Watch that changes to shipped templates come with a version bump for their bundle in `manifest.json`.
+- Claude Code is the only supported platform. A new platform needs `Platform`, `ALL_PLATFORMS`, `PLATFORM_ROOTS` (`resolve-target.ts`), block validation (`core/blocks.ts`) and UI labels (`ui/prompts.ts`).
 
 Commits follow Conventional Commits with scopes such as `templates`, `fozy-labs`, `markdown-craft`, `claude-code`; releases are `chore(release): vX.Y.Z` plus a `v*` tag.
 Consumer-visible CLI changes get an entry under `## [Unreleased]` in `docs/CHANGELOG.md`; the release commit turns that heading into the version.

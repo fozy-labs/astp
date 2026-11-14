@@ -7,10 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-15
+
 ### Added
 
+- [`astp sync`](../README.md#sync) restores locked units and block selections without changing `astp.lock`; schema 2 records exact Git commits for bundle sources and external refs, reused by `install` and `sync` and advanced by `update`. Run `update` once to migrate older Git locks.
+- [`astp proxy`](../README.md#proxy) creates an editable template source in `./templates`, with independent versions, local-edit protection, lazy remote refs, materialized local refs, and downstream install from the generated manifest.
+- Bundle `refs` install external skill directories without vendoring them, and optional refs download only when selected; the first is `web`, which installs Google Chrome's `modern-web-guidance` skill.
+- Nested `<astp-block>` blocks with independent selection, updates and local-edit protection; selecting a child selects its ancestors.
 - Skill, agent and rule descriptions from frontmatter in install and update selection prompts.
 - `platforms` filters on bundle items and `<astp-block>` tags, including `!<name>` exclusions; bundle filters now support exclusions too.
+- [`targets`](../templates/README.md#templateitem-fields) on agent and rule manifest items overrides the install path per platform without duplicating the source. The shipped manifest now uses schema `3.1`; older CLIs must be updated before fetching it.
+- Install can adopt an existing block file, preserving consumer text and declining conflicting regions instead of rejecting the whole file.
+- The optional `agreement` skill [`/release`](../templates/agreement/skills/release/SKILL.md) captures either an exact release procedure or a checklist of release considerations during astp setup.
+
+### Changed
+
+- The default template source is the `templates/v<N>` branch for the newest manifest schema major supported by the CLI. Explicit `--source` values and sources recorded in `astp.lock` are used unchanged.
+
+### Removed
+
+- **Breaking:** the `kimi-code` platform and its `.kimi-code/` install root; Claude Code is the only supported platform.
 
 ## [0.5.0] - 2026-10-19
 
@@ -57,6 +74,7 @@ Upgrading from 0.3.x: [migration steps](../README.md#upgrading-from-03x).
 - Without a terminal, a command missing arguments waited for a prompt forever. Now it fails with
   an error naming what to pass.
 
-[Unreleased]: https://github.com/fozy-labs/astp/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/fozy-labs/astp/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/fozy-labs/astp/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/fozy-labs/astp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/fozy-labs/astp/compare/v0.3.1...v0.4.0

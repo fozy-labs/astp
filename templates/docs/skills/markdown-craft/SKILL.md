@@ -2,7 +2,7 @@
 name: markdown-craft
 description: >-
     Authoring and maintenance rules for Markdown: documentation, specs, reports,
-    READMEs, changelogs, CLAUDE.md and skill files, issue and PR bodies and comments,
+    READMEs, changelogs, AGENTS.md, CLAUDE.md and skill files, issue and PR bodies and comments,
     multi-section chat replies, and large comment blocks in code. Covers one home per
     fact, document bloat, qualifiers, cross-references as Markdown links instead of §N,
     Mermaid diagrams, hard specs and changelogs. Use when writing, editing,

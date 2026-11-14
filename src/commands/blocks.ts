@@ -3,6 +3,7 @@ import type { BlockOption } from "@/ui/prompts.js";
 import { isInteractive, selectBlocks } from "@/ui/prompts.js";
 
 interface BlockEntry extends BlockOption {
+    parent?: string;
     required: boolean;
 }
 
@@ -13,6 +14,7 @@ function unitBlockEntries(blockFiles: Map<string, UnitBlockFile>): BlockEntry[] 
             entries.push({
                 key: `${target}#${block.name}`,
                 name: block.name,
+                ...(block.parent ? { parent: block.parent } : {}),
                 description: block.description,
                 ...(block.labels ? { labels: block.labels } : {}),
                 file: target,
@@ -25,10 +27,23 @@ function unitBlockEntries(blockFiles: Map<string, UnitBlockFile>): BlockEntry[] 
 }
 
 function toSelections(entries: BlockEntry[], selectedKeys: Set<string>): BlockSelections {
+    const gated = new Set(selectedKeys);
+    const byKey = new Map(entries.map((entry) => [entry.key, entry]));
+    for (const entry of entries) {
+        let current = entry;
+        while (gated.has(current.key) && current.parent) {
+            const parentKey = `${current.file}#${current.parent}`;
+            gated.add(parentKey);
+            current = byKey.get(parentKey)!;
+        }
+    }
+    for (const entry of entries) {
+        if (entry.parent && !gated.has(`${entry.file}#${entry.parent}`)) gated.delete(entry.key);
+    }
     const selections: BlockSelections = new Map();
     for (const entry of entries) {
         const selection = selections.get(entry.file) ?? { selected: new Set<string>(), declined: new Set<string>() };
-        (selectedKeys.has(entry.key) ? selection.selected : selection.declined).add(entry.name);
+        (gated.has(entry.key) ? selection.selected : selection.declined).add(entry.name);
         selections.set(entry.file, selection);
     }
     return selections;

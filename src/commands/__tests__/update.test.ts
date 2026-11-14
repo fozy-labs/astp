@@ -129,9 +129,11 @@ function createInstalledBundle(
     return { bundleName: "pipeline", version, units, declined: [] };
 }
 
-const createState = (bundles: InstalledBundle[] = [createInstalledBundle()]) => ({
+const createState = (
+    bundles: InstalledBundle[] = [createInstalledBundle()],
+): Awaited<ReturnType<typeof loadInstalled>> => ({
     bundles,
-    lock: { schemaVersion: 1 as const, bundles: {} },
+    lock: { schemaVersion: 1, bundles: {} },
 });
 
 const updateReport = (
@@ -225,6 +227,132 @@ describe("executeUpdate", () => {
         expect(mockDownloadBundle).not.toHaveBeenCalled();
     });
 
+    it("persists a resolved commit for an up-to-date schema-1 lock", async () => {
+        const state = createState();
+        state.lock.bundles.pipeline = {
+            source: "gh:fozy-labs/astp",
+            units: { [testItem.target]: { kind: "file", version: "1.0.0", hash: "h" } },
+            declined: [],
+        };
+        mockLoadInstalled.mockResolvedValue(state);
+        mockCompareVersions.mockReturnValue({
+            updates: [],
+            upToDate: state.bundles,
+            notInManifest: [],
+            legacySkills: [],
+        });
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(state.lock.bundles.pipeline.resolvedCommit).toBe("0123456789abcdef0123456789abcdef01234567");
+        expect(mockWriteLock).toHaveBeenCalledWith(testTarget.rootDir, state.lock);
+        expect(mockSyncBundle).not.toHaveBeenCalled();
+    });
+
+    it("does not persist a resolved commit for a bundle missing from the manifest", async () => {
+        const state = createState();
+        state.lock.bundles.pipeline = {
+            source: "gh:fozy-labs/astp",
+            units: { [testItem.target]: { kind: "file", version: "1.0.0", hash: "h" } },
+            declined: [],
+        };
+        mockLoadInstalled.mockResolvedValue(state);
+        mockFetchManifest.mockResolvedValue({ ...testManifest, bundles: {} });
+        mockCompareVersions.mockReturnValue({
+            updates: [],
+            upToDate: [],
+            notInManifest: state.bundles,
+            legacySkills: [],
+        });
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(state.lock.bundles.pipeline.resolvedCommit).toBeUndefined();
+        expect(mockWriteLock).not.toHaveBeenCalled();
+        expect(mockSyncBundle).not.toHaveBeenCalled();
+    });
+
+    it("does not advance a pinned resolved commit for an up-to-date bundle", async () => {
+        const pinnedCommit = "fedcba9876543210fedcba9876543210fedcba98";
+        const installed = createInstalledBundle([], "1.1.0");
+        const state = createState([installed]);
+        state.lock.bundles.pipeline = {
+            source: "gh:fozy-labs/astp",
+            resolvedCommit: pinnedCommit,
+            units: {},
+            declined: [],
+        };
+        mockLoadInstalled.mockResolvedValue(state);
+        mockCompareVersions.mockReturnValue({
+            updates: [],
+            upToDate: [installed],
+            notInManifest: [],
+            legacySkills: [],
+        });
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(state.lock.bundles.pipeline.resolvedCommit).toBe(pinnedCommit);
+        expect(mockWriteLock).not.toHaveBeenCalled();
+        expect(mockSyncBundle).not.toHaveBeenCalled();
+    });
+
+    it("persists resolved commits for up-to-date bundles alongside updated bundles", async () => {
+        const stable = { ...createInstalledBundle([], "1.1.0"), bundleName: "stable" };
+        const state = createState([createInstalledBundle(), stable]);
+        state.lock.bundles.pipeline = {
+            source: "gh:fozy-labs/astp",
+            units: { [testItem.target]: { kind: "file", version: "1.0.0", hash: "h" } },
+            declined: [],
+        };
+        state.lock.bundles.stable = {
+            source: "gh:fozy-labs/astp",
+            units: {},
+            declined: [],
+        };
+        mockLoadInstalled.mockResolvedValue(state);
+        mockFetchManifest.mockResolvedValue({
+            ...testManifest,
+            bundles: { pipeline: testBundle, stable: { ...testBundle, name: "stable" } },
+        });
+        mockCompareVersions.mockReturnValue({ ...updateReport(), upToDate: [stable] });
+
+        await executeUpdate({ platform: "claude-code", target: "project" });
+
+        expect(mockSyncBundle).toHaveBeenCalledTimes(1);
+        expect(state.lock.bundles.pipeline.resolvedCommit).toBe("0123456789abcdef0123456789abcdef01234567");
+        expect(state.lock.bundles.stable.resolvedCommit).toBe("0123456789abcdef0123456789abcdef01234567");
+        expect(mockWriteLock).toHaveBeenCalledWith(testTarget.rootDir, state.lock);
+    });
+
+    it("does not advance an up-to-date lock when a mixed update download fails", async () => {
+        const stable = { ...createInstalledBundle([], "1.1.0"), bundleName: "stable" };
+        const state = createState([createInstalledBundle(), stable]);
+        state.lock.bundles.pipeline = {
+            source: "gh:fozy-labs/astp",
+            units: { [testItem.target]: { kind: "file", version: "1.0.0", hash: "h" } },
+            declined: [],
+        };
+        state.lock.bundles.stable = {
+            source: "gh:fozy-labs/astp",
+            units: {},
+            declined: [],
+        };
+        mockLoadInstalled.mockResolvedValue(state);
+        mockFetchManifest.mockResolvedValue({
+            ...testManifest,
+            bundles: { pipeline: testBundle, stable: { ...testBundle, name: "stable" } },
+        });
+        mockCompareVersions.mockReturnValue({ ...updateReport(), upToDate: [stable] });
+        mockDownloadBundle.mockRejectedValue(new Error("network down"));
+
+        await expect(executeUpdate({ platform: "claude-code", target: "project" })).rejects.toThrow("network down");
+
+        expect(state.lock.bundles.stable.resolvedCommit).toBeUndefined();
+        expect(mockWriteLock).not.toHaveBeenCalled();
+        expect(mockSyncBundle).not.toHaveBeenCalled();
+    });
+
     it("warns about modified lock and legacy units when versions match", async () => {
         const lockUnit = createInstalledUnit("modified");
         const legacyUnit = createInstalledUnit("modified", "skills/old", "legacy", "skill");
@@ -241,11 +369,11 @@ describe("executeUpdate", () => {
 
         expect(mockWarnModified).toHaveBeenCalledWith(
             [{ targetPath: testItem.target, kind: "file", state: "modified" }],
-            "astp update --force --target project",
+            "astp update --force --platform claude-code --target project",
         );
         expect(mockWarnLegacyModified).toHaveBeenCalledWith(
             [{ targetPath: "skills/old", kind: "skill", state: "legacy" }],
-            "astp update --force --target project",
+            "astp update --force --platform claude-code --target project",
         );
         expect(mockShowInfo).toHaveBeenCalledWith("All bundles up to date.");
         expect(mockDownloadBundle).not.toHaveBeenCalled();
@@ -270,8 +398,10 @@ describe("executeUpdate", () => {
         await executeUpdate({ platform: "claude-code", target: "project" });
 
         expect(mockDownloadBundle).toHaveBeenCalledWith(
-            expect.objectContaining({ spec: "gh:fozy-labs/astp" }),
+            expect.objectContaining({ spec: "gh:fozy-labs/astp#templates/v3" }),
             expect.objectContaining({ name: "pipeline" }),
+            expect.any(Array),
+            "claude-code",
         );
         expect(mockSyncBundle).toHaveBeenCalledWith(expect.objectContaining({ bundle: emptyBundle }));
     });
@@ -333,7 +463,7 @@ describe("executeUpdate", () => {
         expect(mockSyncBundle).toHaveBeenCalled();
         expect(mockWarnModified).toHaveBeenCalledWith(
             [{ targetPath: testItem.target, kind: "file", state: "modified" }],
-            "astp update --force --target project",
+            "astp update --force --platform claude-code --target project",
         );
         expect(mockWarnKeptRemoved).toHaveBeenCalledWith([
             { targetPath: keptUnit.relativePath, kind: "file", state: "modified" },
@@ -401,7 +531,7 @@ describe("executeUpdate", () => {
 
         expect(mockWarnModified).toHaveBeenCalledWith(
             [{ targetPath: testItem.target, kind: "file", state: "modified" }],
-            "astp update --force --target project",
+            "astp update --force --platform claude-code --target project",
         );
         expect(mockSyncBundle).toHaveBeenCalledWith(expect.objectContaining({ force: false }));
     });

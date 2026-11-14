@@ -31,11 +31,13 @@ astp install fozy-labs --target project
 | `astp` | Launch interactive wizard |
 | `astp install [bundle] [--source <spec>] [--skill <name>] [--block <name>] [--force]` | Install a bundle or selected units to the selected target |
 | `astp update [--force]` | Update installed files to latest versions |
+| `astp sync [--force]` | Restore files from the commits and selections in `astp.lock` without changing it |
 | `astp check` | Check for updates and bundles out of sync with the manifest |
 | `astp delete [bundle] [--skill <name>] [--force]` | Remove an installed bundle or selected units |
 | `astp list [bundle] [--source <spec>] [--json]` | List available and installed bundles or bundle units |
+| `astp proxy [install\|update\|check\|delete]` | Create and maintain an editable template source |
 
-All commands accept `--platform <claude-code>` and `--target <project|user>`, which skip the platform and target prompts; in a terminal the other prompts of each command still run. Resolved roots:
+Agent-install commands accept `--platform <claude-code>` and `--target <project|user>`, which skip the platform and target prompts; in a terminal the other prompts of each command still run. Resolved roots:
 
 | Platform | `--target project` | `--target user` |
 |----------|--------------------|-----------------|
@@ -43,11 +45,11 @@ All commands accept `--platform <claude-code>` and `--target <project|user>`, wh
 
 ### Sources
 
-By default bundles come from `gh:fozy-labs/astp` (`templates/manifest.json` on `main`). `--source <spec>` reads another manifest; `astp.lock` records each bundle's source, and `update` and `check` use it. A bundle switches source only when `--source` is passed again.
+By default bundles come from the `templates/v<N>` branch of `gh:fozy-labs/astp`, where `N` is the newest manifest schema major supported by the CLI (currently `gh:fozy-labs/astp#templates/v3`). `--source <spec>` reads exactly the specified manifest and ref; `astp.lock` records each bundle's source, and `update` and `check` use it. A bundle switches source only when `--source` is passed again. In schema 2, the lock also records the exact Git commit of the bundle and each external ref: reinstall and `sync` reuse those commits, while `update` advances them. Run `astp update` once to migrate older locks before using `sync` with Git sources.
 
 | `--source` | Reads |
 |------------|-------|
-| `./x.json`, `./dir` | a local manifest, or `<dir>/templates/manifest.json`; bundle `B` from `B/` next to the manifest |
+| `./x.json`, `./dir` | a local manifest, `<dir>/templates/manifest.json`, or `<dir>/manifest.json` when the nested file is absent; bundle `B` from `B/` next to the manifest |
 | `owner/repo[/path][#ref]`, `gh:` `gitlab:` `bitbucket:` `sourcehut:` + the same | a git repo at a branch, tag or commit; no ref means the default branch; a bare `owner/repo` that is also a local path is rejected: write `./owner/repo` or `gh:owner/repo` |
 | `https://github.com/owner/repo[/tree/<ref>/<dir> \| /blob/<ref>/<file>.json]` | the same, from a GitHub URL |
 | `npm:<name>[@<version or tag>]` | `templates/manifest.json` in an npm package |
@@ -56,13 +58,15 @@ By default bundles come from `gh:fozy-labs/astp` (`templates/manifest.json` on `
 
 Plain `http://` is accepted only for `localhost`. `GIGET_AUTH` is sent only to GitHub.
 
+A manifest can also declare bundle `refs`: giget sources of external skill directories installed without copying them into the manifest repository. Local manifests can reference local directories relative to the manifest. Each ref targets `skills/<name>` and is managed as a regular skill unit. See the [template author guide](templates/README.md#bundleref-fields).
+
 ### install
 
 ```bash
 astp install [bundle] [--source <spec>] [--skill <name>]... [--block <name>]... [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
-Install template bundles. Locally modified or unmanaged files and skills are skipped by default (unmanaged ones are recorded as declined); use `--force` to overwrite them. Repeat `--skill` to add units by name or path, and `--block` to add blocks by name or by the `key` from `list --json`, installing the block's unit if needed; both keep the declined units and blocks, and scope `--force` to the named units and blocks. Without them, a non-interactive `install <bundle>` installs every non-optional unit, clears declined non-optional units, and re-selects every non-optional block. In a terminal, `install` asks to confirm; without `--skill` or `--block` it first opens a tree of bundles, units and blocks, listing every bundle when no name is given. Bundles that don't support the requested platform are rejected with a clear error.
+Install template bundles. Locally modified or unmanaged files and skills are skipped by default (unmanaged ones are recorded as declined). For a template with `<astp-block>` regions, an existing regular file with matching frontmatter is adopted instead: missing selected blocks are added, identical blocks are tracked, conflicting blocks are declined, and text outside blocks is preserved. Use `--force` to overwrite files instead. Repeat `--skill` to add units by name or path, and `--block` to add blocks by name or by the `key` from `list --json`, installing the block's unit if needed; both keep the declined units and blocks, and scope `--force` to the named units and blocks. Without them, a non-interactive `install <bundle>` installs every non-optional unit, clears declined non-optional units, and re-selects every non-optional block. In a terminal, `install` asks to confirm; without `--skill` or `--block` it first opens a tree of bundles, units and blocks, listing every bundle when no name is given. Bundles that don't support the requested platform are rejected with a clear error.
 
 ### update
 
@@ -71,6 +75,14 @@ astp update [--force] [--platform <claude-code>] [--target <project|user>]
 ```
 
 Update installed units to the latest version from each bundle's source in `astp.lock`. A non-interactive update also installs new non-optional units and keeps declined ones. Units and blocks dropped upstream are removed; modified ones are left in place and no longer tracked in `astp.lock`, unless `--force` is passed. Modified legacy units are kept unless `--force` is passed. In a terminal, it first asks which new units and blocks to install.
+
+### sync
+
+```bash
+astp sync [--force] [--platform <claude-code>] [--target <project|user>]
+```
+
+Restore the locked units and block selections without resolving new versions or writing `astp.lock`. Git bundles and external refs are downloaded at their locked commits. Locally modified files are skipped unless `--force` is passed. Local directories and other unlocked sources must still match the locked unit versions and hashes; if they have moved, run `astp update` first.
 
 ### check
 
@@ -96,6 +108,28 @@ astp list [bundle] [--source <spec>] [--json] [--platform <claude-code>] [--targ
 
 List bundles and installed unit state. Add a bundle name for per-unit status, optional/label tags and descriptions, with each unit's blocks, their status, tags and descriptions; `use-when` on bundles and blocks is included in both text and `--json` output (`optional` and `labels` on units when set; `name`, `key`, `status`, `description`, `optional`, `required`, and `use-when` and `labels` when set on blocks).
 
+### proxy
+
+```bash
+astp proxy
+astp proxy install [bundle] [--source <spec>] [--skill <name>]... [--force] [--output <dir>]
+astp proxy update [--force] [--output <dir>]
+astp proxy check [--output <dir>]
+astp proxy delete [bundle] [--skill <name>]... [--force] [--output <dir>]
+```
+
+Proxy creates an editable astp source in `./templates` by default, including its `manifest.json` and `astp.lock`. Regular templates are copied to `<bundle>/<target>` without rendering blocks or selecting a platform. Remote refs stay lazy and are not downloaded until a downstream install selects them; local-path refs are copied and converted to regular items so the generated source also works when published. Local edits and changed ref definitions are protected without `--force`.
+
+Published bundle versions start at the upstream version and then advance independently: additions are minor, removals are major, and content or metadata changes are patch updates. `proxy check` writes nothing. Deleting the last bundle removes the generated manifest and lock.
+
+```bash
+astp proxy install docs --source gh:fozy-labs/astp
+# Edit ./templates/docs, commit it to an organization repository, then install from that repository.
+astp install docs --source gh:my-org/agent-templates --platform claude-code --target project
+```
+
+See the [proxy design](docs/proxy-mode.md) for the state and synchronization rules.
+
 ## Bundles
 
 | Bundle | Contents | Description | Default |
@@ -105,16 +139,20 @@ List bundles and installed unit state. Add a bundle name for per-unit status, op
 | `docs` | 2 skills | Markdown, Mermaid and Mermaid-authored statechart rules for agent-written documents and schemas | No |
 | `thinking` | 4 skills | Reasoning skills — design decision derivation, plus optional experimental analysis, software architecture, and testing | No |
 | `ponytail` | 4 skills | Ponytail skills — smallest complete changes, change reviews, repository audits and a shortcut debt ledger | No |
-| `agreement` | 1 rule, 4 skills | Working agreement rule, communication and tracker skills and /retro and /git commands — how the agent decides, asks, scopes changes, writes for the user, works with the issue tracker and git, and reviews finished work | No |
+| `agreement` | 1 rule, 5 skills | Working agreement rule, communication and tracker skills and /retro, /git and /release commands — how the agent decides, asks, scopes changes, writes for the user, works with Git and the issue tracker, releases and reviews work | No |
+| `web` | 1 external skill | Modern web platform guidance — browser APIs, CSS, performance, accessibility and responsible fallbacks | No |
 
 - **astp** ships the `astp` skill (`/astp`): how an agent runs the CLI without prompts, answers questions and recommends bundles, units and blocks for a project (`/astp ask`), fills `<SETUP_REQUIRED>` and `<FILL_INSTRUCTION>` blocks (`/astp fill`), and asks before `--force`.
 - **fozy-labs** ships four skills covering the `@fozy-labs` stack — `simplest-di`, Feature-Sliced Design v2.1, `rx-toolkit` server state, and `rx-toolkit` signals. All four use progressive disclosure: a short `SKILL.md` plus `references/*.md` loaded only when the situation calls for them. It installs under `.claude/skills/`.
 - **thinking** ships `design-derivation` — a gated procedure for deriving visual and interface decisions (frame, value, scenario → charge and sign → surface and accuracy) instead of picking a remembered look, with no styles, palettes, or component recipes — plus three optional `experimental` skills: `analysis` (checking claims, metrics, options and causes), `software-architecture` (module boundaries, dependency direction, and invariants), and `testing` (test boundaries, data-driven and generative tests, and merge-gate suites). All four load their `references/*.md` on demand.
 - **docs** ships two skills. `markdown-craft` carries stack-agnostic rules for the Markdown an agent writes: one home per fact, one reader per document, diagram-first flows, and link hygiene, with references loaded on demand for Mermaid diagrams and for writing or reviewing a specification. `statechart-craft` covers the other kind of Mermaid an agent writes — a `.mmd` statechart schema: the `stateDiagram-v2` subset, the `%% @…` directives, the `statechart-convert` CLI and the typed file it emits, with references for the live visualizer and for the `toMermaid()` round trip.
 - **ponytail** ships four [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) skills with their MIT license and pinned-source attribution to DietrichGebert: the smallest-complete-change mode, change review, whole-repository audit and a ledger for deliberate shortcuts.
-- **agreement** ships the `working-agreement` rule, always loaded from `.claude/rules/`: how the agent fixes, ranks decisions, reads the user's messages and writes for the user; every section after the principles is a block you can deselect. Its `communication` skill, which the agent loads whenever it talks to the user, covers working out a request, asking questions, making offers and resolving dilemmas. The `tracker` skill covers posting to a Git host (GitHub, GitLab and others) — issues, PRs/MRs, labels, types and fields; its project settings, methodology and PR rules are blocks the consumer's agent fills in on install. The `/retro` command, run only by the user, reviews finished work and proposes changes to the agent's environment: `CLAUDE.md`, rules, skills, docs, checks and tools. The `/git` command, also user-only, commits, pushes, switches to an up-to-date branch, runs a task in a separate worktree, and installs approval prompts for destructive git commands; project overrides are an optional block.
+- **agreement** ships the `working-agreement` rule, always loaded from `.claude/rules/`: how the agent fixes, ranks decisions, reads the user's messages and writes for the user; every section after the principles is a block you can deselect. Its `communication` skill, which the agent loads whenever it talks to the user, covers working out a request, asking questions, making offers and resolving dilemmas. The `tracker` skill covers posting to a Git host (GitHub, GitLab and others) — issues, PRs/MRs, labels, types and fields; its project settings, methodology and PR rules are blocks the consumer's agent fills in on install. The `/retro` command, run only by the user, reviews finished work and proposes changes to the agent's environment: `CLAUDE.md`, rules, skills, docs, checks and tools. The `/git` command, also user-only, commits, pushes, switches to an up-to-date branch, runs a task in a separate worktree, and installs approval prompts for destructive git commands; project overrides are an optional block. The optional `/release` command is a fill-in block for either an exact release procedure or a checklist of release considerations.
+- **web** installs [Google Chrome's Modern Web Guidance](https://github.com/GoogleChrome/modern-web-guidance) directly from its upstream skill directory.
 
 The `design` bundle was renamed to `thinking`. astp does not move a renamed bundle on its own: if you installed `design`, run `astp delete design`, then `astp install thinking` — on the same `--target` you installed to.
+
+The `modern-web-guidance` bundle was renamed to `web`. If you installed it, run `astp delete modern-web-guidance`, then `astp install web` — again, on the same `--target`.
 
 ## Installing skills with `npx skills`
 
@@ -126,7 +164,7 @@ npx skills add fozy-labs/astp --list                   # preview what is availab
 npx skills add fozy-labs/astp --skill markdown-craft   # install one skill
 ```
 
-Discovery is driven by `.claude-plugin/marketplace.json`, generated from `templates/manifest.json`. Only bundles that support `claude-code` **and** ship skills are published, and only their skills: `npx skills` installs the `communication` and `retro` skills of `agreement` without the `working-agreement` rule — the `tracker` and `git` skills carry astp blocks, so they are astp-only.
+Discovery is driven by `.claude-plugin/marketplace.json`, generated from `templates/manifest.json`. Only bundles that support `claude-code` **and** ship committed skills are published, and only their local skills; external `refs` such as `modern-web-guidance` are astp-only. `npx skills` installs the `communication` and `retro` skills of `agreement` without the `working-agreement` rule — the `tracker`, `git` and `release` skills carry astp blocks, so they are astp-only too.
 
 > **Pick one installer per project.** `npx skills` symlinks skills from its own cache and tracks them in `skills-lock.json`; `astp` writes real files and tracks them in `astp.lock`. Neither sees the other's installs: `astp check`, `astp update` and `astp delete` ignore skills added by `npx skills`, and installing the same skill both ways leaves a file and a symlink fighting over one path.
 
@@ -138,6 +176,9 @@ Without a terminal astp never prompts: a missing `--target`, or a missing bundle
 ```bash
 # Install Fozy Labs skills
 astp install fozy-labs --platform claude-code --target project
+
+# Restore the committed lock state on another runner
+astp sync --platform claude-code --target project
 
 # Check for updates
 astp check --platform claude-code --target project

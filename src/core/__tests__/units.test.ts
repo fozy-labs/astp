@@ -128,6 +128,25 @@ describe("groupTemplateItems", () => {
         expect(groupTemplateItems(items).map((unit) => unit.relativePath)).toEqual(["skills/alpha", "rules/r.md"]);
     });
 
+    it("resolves platform target overrides without changing the canonical source", () => {
+        const items = [
+            {
+                source: "bundle/rules/working-agreement.md",
+                target: "rules/working-agreement.md",
+                targets: { "claude-code": "AGENTS.md" },
+                category: "rule" as const,
+            },
+        ];
+
+        expect(groupTemplateItems(items, "claude-code")).toEqual([
+            { kind: "file", relativePath: "AGENTS.md", item: { ...items[0], target: "AGENTS.md" } },
+        ]);
+        expect(groupTemplateItems(items)).toEqual([
+            { kind: "file", relativePath: "rules/working-agreement.md", item: items[0] },
+        ]);
+        expect(items[0]!.target).toBe("rules/working-agreement.md");
+    });
+
     it("rejects unit metadata on a non-root skill item", () => {
         for (const metadata of [
             { optional: true },
@@ -146,6 +165,42 @@ describe("groupTemplateItems", () => {
                 ]),
             ).toThrow("Skill item 'skills/alpha/references/guide.md' cannot set 'optional', 'labels' or 'platforms'");
         }
+    });
+
+    it("groups external refs as skill units and applies their metadata and platform filters", () => {
+        const bundle = {
+            name: "external",
+            version: "1.0.0",
+            description: "External skills",
+            default: false,
+            items: [],
+            refs: [
+                {
+                    source: "gh:owner/repo/skills/alpha",
+                    target: "skills/alpha",
+                    optional: true,
+                    labels: ["experimental"],
+                    platforms: ["claude-code" as const],
+                },
+                {
+                    source: "gh:owner/repo/skills/beta",
+                    target: "skills/beta",
+                    platforms: ["!claude-code" as const],
+                },
+            ],
+        };
+
+        expect(groupTemplateItems(bundle, "claude-code")).toEqual([
+            {
+                kind: "skill",
+                relativePath: "skills/alpha",
+                items: [],
+                ref: bundle.refs[0],
+                optional: true,
+                labels: ["experimental"],
+                platforms: ["claude-code"],
+            },
+        ]);
     });
 });
 

@@ -197,13 +197,13 @@ describe("E2E: manifest sources", () => {
 
         expect(vi.mocked(warnModified)).toHaveBeenCalledWith(
             [expect.objectContaining({ targetPath: "rules/a.md" })],
-            "astp install core --skill rules/a.md --force --source ./a --target project",
+            "astp install core --skill rules/a.md --force --source ./a --platform claude-code --target project",
         );
         expect(vi.mocked(warnForeign)).toHaveBeenCalledWith(
             "core",
             [expect.objectContaining({ targetPath: "rules/b.md" })],
             [],
-            "project",
+            makeProjectTarget(projectDir),
             "./a",
         );
     });
@@ -252,7 +252,7 @@ describe("E2E: manifest sources", () => {
                 },
             ],
             [],
-            "project",
+            makeProjectTarget(projectDir),
             "./b",
         );
         let lock = await readLockFixture(rootDir);
@@ -270,11 +270,50 @@ describe("E2E: manifest sources", () => {
         expect(extra.units.filter((unit) => unit.state === "missing")).toEqual([]);
     });
 
+    it("does not install an excluded override over an active target", async () => {
+        const manifestPath = path.join(projectDir, "a/templates/manifest.json");
+        const manifest: Manifest = {
+            schemaVersion: "3.0",
+            bundles: {
+                core: {
+                    name: "core",
+                    version: "1.0.0",
+                    description: "Platform rules",
+                    default: false,
+                    platforms: ["claude-code"],
+                    items: [
+                        {
+                            source: "core/rules/excluded.md",
+                            target: "rules/excluded.md",
+                            category: "rule",
+                            platforms: ["!claude-code"],
+                            targets: { "claude-code": "AGENTS.md" },
+                        },
+                        {
+                            source: "core/AGENTS.md",
+                            target: "AGENTS.md",
+                            category: "rule",
+                            platforms: ["claude-code"],
+                        },
+                    ],
+                },
+            },
+        };
+        await fs.writeFile(manifestPath, JSON.stringify(manifest));
+        await fs.writeFile(path.join(projectDir, "a/templates/core/rules/excluded.md"), "Excluded\n");
+        await fs.writeFile(path.join(projectDir, "a/templates/core/AGENTS.md"), "Active instructions\n");
+
+        await executeInstall({ ...opts, bundle: "core", source: "./a" });
+
+        expect(await fs.readFile(path.join(rootDir, "AGENTS.md"), "utf8")).toBe("Active instructions\n");
+        await expect(fs.stat(path.join(rootDir, "rules/excluded.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    });
+
     it("names the bundle and a fix when its lock source is gone", async () => {
         await executeInstall({ ...opts, bundle: "core", source: "./a" });
         await fs.rm(path.join(projectDir, "a"), { recursive: true });
         await expect(executeUpdate(opts)).rejects.toThrow(
-            /Cannot read source '\.\.\/a' of core: .*\nTo switch source: astp install core --source <spec> --target project/s,
+            /Cannot read source '\.\.\/a' of core: .*\nTo switch source: astp install core --source <spec> --platform claude-code --target project/s,
         );
     });
 
@@ -308,9 +347,132 @@ describe("E2E: manifest sources", () => {
         expect(vi.mocked(warnNewerManifest)).toHaveBeenCalledTimes(1);
         write.mockRestore();
 
-        await fs.writeFile(manifestPath, JSON.stringify({ ...raw, schemaVersion: "3.0" }));
+        await fs.writeFile(manifestPath, JSON.stringify({ ...raw, schemaVersion: "4.0" }));
         await expect(executeInstall({ ...opts, bundle: "core", source: "./a" })).rejects.toThrow(
-            "Unsupported manifest schema version 3.0 (supported: 1.0, 2.0). Update astp CLI: npm install -g @fozy-labs/astp",
+            "Unsupported manifest schema version 4.0 (supported: 1.0, 2.0–2.1, 3.0–3.1). Update astp CLI: npm install -g @fozy-labs/astp",
         );
+    });
+
+    it("does not download an unselected optional ref during install, list, or update", async () => {
+        const sourceRoot = path.join(projectDir, "optional-ref/templates");
+        const manifestPath = path.join(sourceRoot, "manifest.json");
+        const bundle: Bundle = {
+            ...ruleBundle("optional-ref", "1.0.0"),
+            refs: [{ source: "./missing", target: "skills/optional", optional: true }],
+        };
+        const manifest: Manifest = { schemaVersion: "3.1", bundles: { "optional-ref": bundle } };
+        await fs.mkdir(path.join(sourceRoot, "optional-ref/rules"), { recursive: true });
+        await fs.writeFile(manifestPath, JSON.stringify(manifest));
+        await fs.writeFile(path.join(sourceRoot, "optional-ref/rules/optional-ref.md"), "version 1.0.0\n");
+
+        await executeInstall({ ...opts, bundle: "optional-ref", source: "./optional-ref" });
+
+        expect(await rule("optional-ref")).toBe("version 1.0.0\n");
+        expect((await readLockFixture(rootDir)).bundles["optional-ref"]!.declined).toEqual(["skills/optional"]);
+        const write = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        let outputText: string;
+        try {
+            await executeList({ ...opts, bundle: "optional-ref", source: "./optional-ref", json: true });
+            outputText = write.mock.calls.map(([chunk]) => String(chunk)).join("");
+        } finally {
+            write.mockRestore();
+        }
+        const output = JSON.parse(outputText!) as {
+            units: Array<{ path: string; description: string | null; optional?: boolean }>;
+        };
+        expect(output.units).toContainEqual({
+            name: "optional",
+            path: "skills/optional",
+            kind: "skill",
+            status: "declined",
+            description: null,
+            optional: true,
+        });
+
+        bundle.version = "1.1.0";
+        await fs.writeFile(manifestPath, JSON.stringify(manifest));
+        await fs.writeFile(path.join(sourceRoot, "optional-ref/rules/optional-ref.md"), "version 1.1.0\n");
+        await executeUpdate(opts);
+
+        expect(await rule("optional-ref")).toBe("version 1.1.0\n");
+    });
+
+    it("downloads an optional ref when explicitly selected", async () => {
+        const sourceRoot = path.join(projectDir, "selected-optional-ref/templates");
+        const bundle: Bundle = {
+            ...ruleBundle("optional-ref", "1.0.0"),
+            refs: [{ source: "./external", target: "skills/external", optional: true }],
+        };
+        const manifest: Manifest = { schemaVersion: "3.1", bundles: { "optional-ref": bundle } };
+        await fs.mkdir(path.join(sourceRoot, "optional-ref/rules"), { recursive: true });
+        await fs.mkdir(path.join(sourceRoot, "external"), { recursive: true });
+        await fs.writeFile(path.join(sourceRoot, "manifest.json"), JSON.stringify(manifest));
+        await fs.writeFile(path.join(sourceRoot, "optional-ref/rules/optional-ref.md"), "rule\n");
+        await fs.writeFile(path.join(sourceRoot, "external/SKILL.md"), "# External\n");
+
+        await executeInstall({
+            ...opts,
+            bundle: "optional-ref",
+            source: "./selected-optional-ref",
+            skills: ["external"],
+        });
+
+        expect(await fs.readFile(path.join(rootDir, "skills/external/SKILL.md"), "utf8")).toBe("# External\n");
+    });
+
+    it("installs and updates a refs-only bundle from an external skill directory", async () => {
+        const external = path.join(projectDir, "refs/templates/external-skill");
+        const manifestPath = path.join(projectDir, "refs/templates/manifest.json");
+        const writeManifest = async (version: string) => {
+            const manifest: Manifest = {
+                schemaVersion: "2.1",
+                bundles: {
+                    external: {
+                        name: "external",
+                        version,
+                        description: "External skill",
+                        default: false,
+                        items: [],
+                        refs: [
+                            {
+                                source: "./external-skill",
+                                target: "skills/external",
+                            },
+                        ],
+                    },
+                },
+            };
+            await fs.mkdir(path.dirname(manifestPath), { recursive: true });
+            await fs.writeFile(manifestPath, JSON.stringify(manifest));
+        };
+        await fs.mkdir(path.join(external, "references"), { recursive: true });
+        await fs.writeFile(
+            path.join(external, "SKILL.md"),
+            "---\nname: external\ndescription: External skill\n---\n# External v1\n",
+        );
+        await fs.writeFile(path.join(external, "references/guide.md"), "Guide v1\n");
+        await writeManifest("1.0.0");
+
+        await executeInstall({ ...opts, bundle: "external", source: "./refs" });
+
+        const skillRoot = path.join(rootDir, "skills/external");
+        expect(await fs.readFile(path.join(skillRoot, "SKILL.md"), "utf8")).toContain("# External v1");
+        expect(await fs.readFile(path.join(skillRoot, "references/guide.md"), "utf8")).toBe("Guide v1\n");
+        expect((await readLockFixture(rootDir)).bundles.external!.units["skills/external"]).toMatchObject({
+            kind: "skill",
+            version: "1.0.0",
+        });
+
+        await fs.writeFile(
+            path.join(external, "SKILL.md"),
+            "---\nname: external\ndescription: External skill\n---\n# External v2\n",
+        );
+        await fs.writeFile(path.join(external, "references/new.md"), "New v2\n");
+        await writeManifest("1.1.0");
+        await executeUpdate(opts);
+
+        expect(await fs.readFile(path.join(skillRoot, "SKILL.md"), "utf8")).toContain("# External v2");
+        expect(await fs.readFile(path.join(skillRoot, "references/new.md"), "utf8")).toBe("New v2\n");
+        expect((await readLockFixture(rootDir)).bundles.external!.units["skills/external"]!.version).toBe("1.1.0");
     });
 });

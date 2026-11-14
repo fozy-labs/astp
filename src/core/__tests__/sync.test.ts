@@ -352,4 +352,173 @@ describe("syncBundle", () => {
         await expect(fs.access(path.join(rootDir, "skills/X/sub"))).rejects.toMatchObject({ code: "ENOENT" });
         await expect(fs.access(path.join(rootDir, "skills/x/sub"))).rejects.toMatchObject({ code: "ENOENT" });
     });
+
+    describe("untracked block file adoption", () => {
+        const TEMPLATE = [
+            '<astp-block name="principles" required>',
+            "# Working agreement",
+            "",
+            "- Root cause.",
+            "</astp-block>",
+            "",
+            '<astp-block name="decisions">',
+            "## Decisions",
+            "",
+            "- Ask when needed.",
+            "</astp-block>",
+            "",
+        ].join("\n");
+        const agentsRule = (): TemplateItem => ({
+            ...rule("rules/working-agreement.md"),
+            targets: { "claude-code": "AGENTS.md" },
+        });
+        const selectAgents = { selected: new Set(["AGENTS.md"]), declined: new Set<string>() };
+
+        it("adopts consumer text and preserves it on later template updates", async () => {
+            await writeFiles(rootDir, { "AGENTS.md": "# My instructions\n\nKeep this section.\n" });
+            await writeFiles(tempDir, { "AGENTS.md": TEMPLATE });
+
+            const first = await syncCore(await loadInstalled(rootDir), [agentsRule()], selectAgents);
+            expect(first.foreign).toEqual([]);
+            expect(first.installed.map((status) => status.targetPath)).toEqual(["AGENTS.md"]);
+            let content = await fs.readFile(path.join(rootDir, "AGENTS.md"), "utf8");
+            expect(content).toContain("Keep this section.");
+            expect(content).toContain("<principles>\n# Working agreement\n\n- Root cause.\n</principles>");
+            expect(content).toContain("<decisions>");
+
+            await writeFiles(tempDir, { "AGENTS.md": TEMPLATE.replace("- Root cause.", "- Fix root causes.") });
+            await syncCore(await loadInstalled(rootDir), [agentsRule()], selectAgents);
+            content = await fs.readFile(path.join(rootDir, "AGENTS.md"), "utf8");
+            expect(content).toContain("Keep this section.");
+            expect(content).toContain("- Fix root causes.");
+            expect(content).not.toContain("- Root cause.");
+            const lock = await readLock(rootDir);
+            expect(lock.bundles.core!.units["AGENTS.md"]?.blocks).toEqual({
+                "AGENTS.md#principles": expect.any(String),
+                "AGENTS.md#decisions": expect.any(String),
+            });
+        });
+
+        it("keeps a conflicting existing region and inserts selected missing regions", async () => {
+            await writeFiles(rootDir, {
+                "AGENTS.md": "# My instructions\n\n<principles>\nMy own principles.\n</principles>\n",
+            });
+            await writeFiles(tempDir, { "AGENTS.md": TEMPLATE });
+
+            const result = await syncCore(await loadInstalled(rootDir), [agentsRule()], selectAgents);
+            expect(result.foreignBlocks).toEqual(["AGENTS.md#principles"]);
+            const content = await fs.readFile(path.join(rootDir, "AGENTS.md"), "utf8");
+            expect(content).toContain("My own principles.");
+            expect(content).not.toContain("- Root cause.");
+            expect(content).toContain("<decisions>");
+            const lock = await readLock(rootDir);
+            expect(lock.bundles.core!.units["AGENTS.md"]?.declinedBlocks).toContain("AGENTS.md#principles");
+        });
+
+        it.each([
+            ["different frontmatter", "---\ncustom: value\n---\n\nMy rules.\n"],
+            ["malformed regions", "<principles>\nUnclosed region.\n"],
+        ])("declines an unsafe untracked file: %s", async (_label, existing) => {
+            await writeFiles(rootDir, { "AGENTS.md": existing });
+            await writeFiles(tempDir, { "AGENTS.md": TEMPLATE });
+
+            const result = await syncCore(await loadInstalled(rootDir), [agentsRule()], selectAgents);
+            expect(result.foreign.map((status) => status.targetPath)).toEqual(["AGENTS.md"]);
+            expect(await fs.readFile(path.join(rootDir, "AGENTS.md"), "utf8")).toBe(existing);
+        });
+
+        it("keeps whole-file overwrite semantics for --force", async () => {
+            await writeFiles(rootDir, { "AGENTS.md": "# My instructions\n" });
+            await writeFiles(tempDir, { "AGENTS.md": TEMPLATE });
+
+            await syncCore(await loadInstalled(rootDir), [agentsRule()], { ...selectAgents, force: true });
+            const content = await fs.readFile(path.join(rootDir, "AGENTS.md"), "utf8");
+            expect(content).not.toContain("# My instructions");
+            expect(content).toContain("<principles>");
+        });
+    });
+
+    describe("external skill ref metadata", () => {
+        const REF_SOURCE = "gh:owner/repo/skills/external#main";
+        const REF_SHA = "0123456789abcdef0123456789abcdef01234567";
+        const REF_PATH = "skills/external";
+        const refBundle: Bundle = {
+            ...bundle([]),
+            refs: [{ source: REF_SOURCE, target: REF_PATH }],
+        };
+
+        const syncReferenced = (installed: Awaited<ReturnType<typeof loadInstalled>>, files = ["SKILL.md"]) =>
+            syncBundle({
+                target,
+                source: "test",
+                bundle: refBundle,
+                units: [
+                    {
+                        kind: "skill",
+                        relativePath: REF_PATH,
+                        items: files.map((file) => ({
+                            source: REF_SOURCE,
+                            target: `${REF_PATH}/${file}`,
+                            category: "skill",
+                        })),
+                        ref: refBundle.refs![0]!,
+                        resolvedCommit: REF_SHA,
+                    },
+                ],
+                installed: installed.bundles.find((entry) => entry.bundleName === "core"),
+                lock: installed.lock,
+                tempDir,
+                selected: new Set([REF_PATH]),
+                declined: new Set(),
+                force: false,
+            });
+
+        async function expectPersistedRef() {
+            const lock = await readLock(rootDir);
+            expect(lock.bundles.core!.units[REF_PATH]?.ref).toEqual({
+                source: REF_SOURCE,
+                resolvedCommit: REF_SHA,
+            });
+        }
+
+        it("persists ref metadata for a plain referenced skill", async () => {
+            await writeFiles(tempDir, { [`${REF_PATH}/SKILL.md`]: A_V1 });
+
+            await syncReferenced(await loadInstalled(rootDir));
+
+            await expectPersistedRef();
+        });
+
+        it("persists ref metadata when adopting equal plain content", async () => {
+            await writeFiles(rootDir, { [`${REF_PATH}/SKILL.md`]: A_V1 });
+            await writeFiles(tempDir, { [`${REF_PATH}/SKILL.md`]: A_V1 });
+
+            await syncReferenced(await loadInstalled(rootDir));
+
+            await expectPersistedRef();
+        });
+
+        it("persists ref metadata when adopting equal block content", async () => {
+            await writeFiles(rootDir, { [`${REF_PATH}/SKILL.md`]: "<body>\nExternal\n</body>\n" });
+            await writeFiles(tempDir, {
+                [`${REF_PATH}/SKILL.md`]: '<astp-block name="body" required>\nExternal\n</astp-block>\n',
+            });
+
+            await syncReferenced(await loadInstalled(rootDir));
+
+            await expectPersistedRef();
+        });
+
+        it("persists ref metadata when a block skill becomes plain", async () => {
+            await writeFiles(tempDir, {
+                [`${REF_PATH}/SKILL.md`]: '<astp-block name="body" required>\nExternal\n</astp-block>\n',
+            });
+            await syncReferenced(await loadInstalled(rootDir));
+            await writeFiles(tempDir, { [`${REF_PATH}/SKILL.md`]: A_V1 });
+
+            await syncReferenced(await loadInstalled(rootDir));
+
+            await expectPersistedRef();
+        });
+    });
 });

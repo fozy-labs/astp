@@ -163,14 +163,17 @@ describe("executeInstall", () => {
         expect(mockConfirmInstall).not.toHaveBeenCalled();
         expect(mockResolveBundle).toHaveBeenCalledWith(testManifest, "core");
         expect(mockDownloadBundle).toHaveBeenCalledWith(
-            expect.objectContaining({ spec: "gh:fozy-labs/astp" }),
+            expect.objectContaining({ spec: "gh:fozy-labs/astp#templates/v3" }),
             expect.objectContaining({ name: "core" }),
+            expect.any(Array),
+            "claude-code",
+            undefined,
         );
         expect(mockSyncBundle).toHaveBeenCalledTimes(1);
         expect(mockSyncBundle).toHaveBeenCalledWith(
             expect.objectContaining({
                 target: testTarget,
-                source: "gh:fozy-labs/astp",
+                source: "gh:fozy-labs/astp#templates/v3",
                 bundle: testBundle,
                 selected: new Set(["skills/orchestrate"]),
                 declined: new Set(),
@@ -295,6 +298,75 @@ describe("executeInstall", () => {
             expect.objectContaining({ selected: new Set(["skills/orchestrate"]) }),
         );
     });
+
+    describe("locked external refs", () => {
+        const mainSource = "gh:fozy-labs/astp";
+        const lockedRefSource = "gh:old/repo#main";
+        const lockedRefCommit = "fedcba9876543210fedcba9876543210fedcba98";
+
+        function setupRefInstall(refSource: string): void {
+            const bundle: Bundle = {
+                ...testBundle,
+                items: [],
+                refs: [{ source: refSource, target: "skills/external" }],
+            };
+            mockResolveBundle.mockReturnValue(bundle);
+            mockLoadInstalled.mockResolvedValue({
+                lock: {
+                    schemaVersion: 2,
+                    bundles: {
+                        core: {
+                            source: mainSource,
+                            resolvedCommit: "0123456789abcdef0123456789abcdef01234567",
+                            units: {
+                                "skills/external": {
+                                    kind: "skill",
+                                    version: "1.0.0",
+                                    hash: "h",
+                                    ref: { source: lockedRefSource, resolvedCommit: lockedRefCommit },
+                                },
+                            },
+                            declined: [],
+                        },
+                    },
+                },
+                bundles: [],
+            });
+        }
+
+        it("resolves a changed ref source afresh instead of applying the old commit", async () => {
+            setupRefInstall("gh:new/repo#main");
+
+            await executeInstall({ bundle: "core", platform: "claude-code", target: "project" });
+
+            expect(mockDownloadBundle.mock.calls[0]![4]).toEqual(new Map());
+        });
+
+        it("reuses the locked ref commit when its source is unchanged", async () => {
+            setupRefInstall(lockedRefSource);
+
+            await executeInstall({ bundle: "core", platform: "claude-code", target: "project" });
+
+            expect(mockDownloadBundle.mock.calls[0]![4]).toEqual(
+                new Map([["skills/external", { lockedCommit: lockedRefCommit, requireLocked: false }]]),
+            );
+        });
+
+        it("keeps the locked ref commit for an explicit source equal to the lock", async () => {
+            setupRefInstall(lockedRefSource);
+
+            await executeInstall({
+                bundle: "core",
+                source: mainSource,
+                platform: "claude-code",
+                target: "project",
+            });
+
+            expect(mockDownloadBundle.mock.calls[0]![4]).toEqual(
+                new Map([["skills/external", { lockedCommit: lockedRefCommit, requireLocked: false }]]),
+            );
+        });
+    });
 });
 
 describe("interactive bundle tree selection", () => {
@@ -359,6 +431,38 @@ describe("interactive bundle tree selection", () => {
                 declined: new Set(["skills/s2", "agents/b1.md"]),
             }),
         );
+    });
+
+    it("continues other bundles when a selected optional ref fails to download", async () => {
+        const refBundleA: Bundle = {
+            ...bundleA,
+            refs: [{ source: "./missing", target: "skills/optional", optional: true }],
+        };
+        mockFetchManifest.mockResolvedValue({ ...abManifest, bundles: { a: refBundleA, b: bundleB } });
+        mockSelectBundleItems.mockResolvedValue(
+            new Map([
+                ["a", { units: ["skills/optional"], blocks: [] }],
+                ["b", { units: ["skills/s1"], blocks: [] }],
+            ]),
+        );
+
+        await executeInstall({});
+
+        expect(mockSyncBundle).toHaveBeenCalledTimes(1);
+        expect(mockSyncBundle).toHaveBeenCalledWith(expect.objectContaining({ bundle: bundleB }));
+    });
+
+    it("fails when every selected bundle's optional ref fails to download", async () => {
+        const refBundleA: Bundle = {
+            ...bundleA,
+            refs: [{ source: "./missing", target: "skills/optional", optional: true }],
+        };
+        mockFetchManifest.mockResolvedValue({ ...abManifest, bundles: { a: refBundleA, b: bundleB } });
+        mockSelectBundleItems.mockResolvedValue(new Map([["a", { units: ["skills/optional"], blocks: [] }]]));
+
+        await expect(executeInstall({})).rejects.toThrow("No selected bundle could be downloaded");
+        expect(mockConfirmInstall).not.toHaveBeenCalled();
+        expect(mockSyncBundle).not.toHaveBeenCalled();
     });
 
     it("builds entries from each bundle's lock source and opens it once", async () => {

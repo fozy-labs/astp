@@ -6,11 +6,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { InstallTarget } from "@/types/index.js";
 
-import { formatSource, resolveSource } from "../source.js";
+import { DEFAULT_SOURCE, formatSource, formatSourceAt, resolveSource, resolveSourceRevision } from "../source.js";
 
 const cwd = path.resolve("/work/project");
 
 describe("resolveSource", () => {
+    it("uses the latest supported manifest schema channel by default", async () => {
+        expect(DEFAULT_SOURCE).toBe("gh:fozy-labs/astp#templates/v3");
+        await expect(resolveSource(DEFAULT_SOURCE, cwd)).resolves.toMatchObject({
+            spec: DEFAULT_SOURCE,
+            address: "gh:fozy-labs/astp/templates#templates/v3",
+        });
+    });
+
     afterEach(() => {
         vi.unstubAllGlobals();
     });
@@ -26,6 +34,26 @@ describe("resolveSource", () => {
         });
     });
 
+    it("falls back to a direct local manifest while preferring the repository layout", async () => {
+        const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "astp-src-"));
+        try {
+            await fs.mkdir(path.join(tmp, "proxy"));
+            await fs.writeFile(path.join(tmp, "proxy", "manifest.json"), "{}");
+            await expect(resolveSource("./proxy", tmp)).resolves.toMatchObject({
+                manifestPath: path.join(tmp, "proxy", "manifest.json"),
+            });
+
+            await fs.mkdir(path.join(tmp, "repo", "templates"), { recursive: true });
+            await fs.writeFile(path.join(tmp, "repo", "manifest.json"), "{}");
+            await fs.writeFile(path.join(tmp, "repo", "templates", "manifest.json"), "{}");
+            await expect(resolveSource("./repo", tmp)).resolves.toMatchObject({
+                manifestPath: path.join(tmp, "repo", "templates", "manifest.json"),
+            });
+        } finally {
+            await fs.rm(tmp, { recursive: true, force: true });
+        }
+    });
+
     it.each([
         ["fozy-labs/astp", "gh:fozy-labs/astp", "gh:fozy-labs/astp/templates#HEAD", "manifest.json", true],
         ["github:o/r#feat/x", "gh:o/r#feat/x", "gh:o/r/templates#feat/x", "manifest.json", true],
@@ -38,14 +66,35 @@ describe("resolveSource", () => {
         ],
         ["gitlab:g/p/sub", "gitlab:g/p/sub", "gitlab:g/p/sub/templates#HEAD", "manifest.json", false],
         ["bitbucket:o/r/m.json", "bitbucket:o/r/m.json", "bitbucket:o/r#HEAD", "m.json", false],
+        ["sourcehut:~o/r", "sourcehut:~o/r", "sourcehut:~o/r/templates#HEAD", "manifest.json", false],
     ])("parses git spec %s", async (spec, stored, address, manifestFile, auth) => {
-        await expect(resolveSource(spec, cwd)).resolves.toEqual({
+        await expect(resolveSource(spec, cwd)).resolves.toMatchObject({
             kind: "archive",
             spec: stored,
             address,
             manifestFile,
             auth,
         });
+    });
+
+    it("pins the giget address to the resolved or locked commit", async () => {
+        const sha = "0123456789abcdef0123456789abcdef01234567";
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => new Response(JSON.stringify({ sha }))),
+        );
+        const source = await resolveSource("o/r/sub#main", cwd);
+
+        const resolved = await resolveSourceRevision(source);
+        expect(resolved.resolvedCommit).toBe(sha);
+        expect(resolved.source).toMatchObject({
+            spec: "gh:o/r/sub#main",
+            address: `gh:o/r/sub/templates#${sha}`,
+            resolvedCommit: sha,
+        });
+
+        const locked = await resolveSourceRevision(source, { lockedCommit: sha, requireLocked: true });
+        expect(locked.source).toMatchObject({ address: `gh:o/r/sub/templates#${sha}` });
     });
 
     it("parses npm specs", async () => {
@@ -180,6 +229,15 @@ describe("formatSource", () => {
         expect(formatSource(source, user)).toBe(path.join(cwd, "tests/test.manifest.json"));
         const reread = await resolveSource(formatSource(source, project), project.rootDir);
         expect(reread.spec).toBe(source.spec);
+    });
+
+    it("formats a source against a proxy output root", async () => {
+        const source = await resolveSource("./tests/test.manifest.json", cwd);
+        const output = path.join(cwd, "templates");
+        expect(formatSourceAt(source, output)).toBe("../tests/test.manifest.json");
+        await expect(resolveSource(formatSourceAt(source, output), output)).resolves.toMatchObject({
+            spec: source.spec,
+        });
     });
 
     it("stores a local path outside the project as absolute", async () => {
