@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-15
+
 ### Added
 
 - [`astp sync`](../README.md#sync) restores locked units and block selections without changing `astp.lock`; schema 2 records exact Git commits for bundle sources and external refs, reused by `install` and `sync` and advanced by `update`. Run `update` once to migrate older Git locks.
@@ -72,6 +74,7 @@ Upgrading from 0.3.x: [migration steps](../README.md#upgrading-from-03x).
 - Without a terminal, a command missing arguments waited for a prompt forever. Now it fails with
   an error naming what to pass.
 
-[Unreleased]: https://github.com/fozy-labs/astp/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/fozy-labs/astp/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/fozy-labs/astp/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/fozy-labs/astp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/fozy-labs/astp/compare/v0.3.1...v0.4.0
