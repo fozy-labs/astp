@@ -23,6 +23,17 @@ mark_stopped() {
   printf '{"reason":"%s","timestamp":%s}\n' "$reason" "$(date +%s)" > "${STATE_DIR}/server-stopped"
 }
 
+cleanup_temporary_session() {
+  case "$SESSION_DIR" in
+    /tmp/brainstorm|/tmp/brainstorm-*)
+      local parent="${SESSION_DIR%/*}"
+      if [[ ! -f "$parent/.brainstorm-last-port" && ! -f "$parent/.brainstorm-last-token" ]]; then
+        rm -rf "$SESSION_DIR"
+      fi
+      ;;
+  esac
+}
+
 read_expected_server_id() {
   [[ -f "$SERVER_ID_FILE" ]] || return 1
   local id
@@ -78,6 +89,7 @@ if [[ -f "$PID_FILE" ]]; then
   if ! is_brainstorm_server "$pid"; then
     rm -f "$PID_FILE" "$SERVER_ID_FILE"
     mark_stopped "stale_pid"
+    cleanup_temporary_session
     echo '{"status": "stale_pid"}'
     exit 0
   fi
@@ -109,10 +121,7 @@ if [[ -f "$PID_FILE" ]]; then
   rm -f "$PID_FILE" "$SERVER_ID_FILE" "${STATE_DIR}/server.log"
   mark_stopped "stop-server.sh"
 
-  # Only delete ephemeral /tmp directories
-  if [[ "$SESSION_DIR" == /tmp/* ]]; then
-    rm -rf "$SESSION_DIR"
-  fi
+  cleanup_temporary_session
 
   echo '{"status": "stopped"}'
 else

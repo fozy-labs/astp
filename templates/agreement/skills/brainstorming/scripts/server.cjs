@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const http = require('http');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 // ========== WebSocket Protocol (RFC 6455) ==========
@@ -113,6 +114,17 @@ let ownerPid = process.env.BRAINSTORM_OWNER_PID ? Number(process.env.BRAINSTORM_
 // Persisted alongside the port (BRAINSTORM_TOKEN_FILE) so a restart keeps the
 // same key and an already-open tab's cookie still validates.
 const TOKEN_FILE = process.env.BRAINSTORM_TOKEN_FILE || null;
+
+function cleanupTemporarySession() {
+  // Reconnect metadata exists only for an explicitly selected work directory.
+  if (PORT_FILE || TOKEN_FILE) return;
+  const relative = path.relative(path.resolve(os.tmpdir()), path.resolve(SESSION_DIR));
+  const isTemporary = relative === 'brainstorm' ||
+    (relative.startsWith('brainstorm-') && !relative.includes(path.sep));
+  if (!isTemporary) return;
+  fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+}
+
 function generateToken() {
   return crypto.randomBytes(32).toString('hex');
 }
@@ -571,7 +583,14 @@ function startServer() {
     for (const socket of clients) {
       try { socket.destroy(); } catch (e) { /* already gone */ }
     }
-    server.close(() => process.exit(0));
+    server.close(() => {
+      try {
+        cleanupTemporarySession();
+      } catch (e) {
+        console.error('Failed to remove temporary session:', e.message);
+      }
+      process.exit(0);
+    });
   }
 
   function ownerAlive() {
