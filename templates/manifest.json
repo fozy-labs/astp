@@ -500,9 +500,9 @@
         },
         "agreement": {
             "name": "agreement",
-            "version": "2.0.0",
-            "description": "Working agreement rule, communication and tracker skills and /retro, /git and /release commands — how the agent decides, asks, scopes changes, writes for the user, works with Git and the issue tracker, releases and reviews work",
-            "use-when": "Any project or user setup that wants structured agent collaboration, Git and issue-tracker workflows, releases and session retrospectives",
+            "version": "2.1.0",
+            "description": "Working agreement rule, communication, tracker and optional brainstorming skills and /retro, /git and /release commands — how the agent decides, asks, scopes changes, designs, writes for the user, works with Git and the issue tracker, releases and reviews work",
+            "use-when": "Any project or user setup that wants structured agent collaboration, design discussions, Git and issue-tracker workflows, releases and session retrospectives",
             "default": false,
             "platforms": [
                 "claude-code"
@@ -563,16 +563,55 @@
                     "source": "agreement/skills/git/references/isolation.md",
                     "target": "skills/git/references/isolation.md",
                     "category": "skill"
-                }
-            ],
-            "refs": [
+                },
                 {
-                    "source": "gh:obra/superpowers/skills/brainstorming#2ce8aa15d05bd57213e6f746f953aafb7ded7a8b",
-                    "target": "skills/brainstorming",
+                    "source": "agreement/skills/brainstorming/SKILL.md",
+                    "target": "skills/brainstorming/SKILL.md",
+                    "category": "skill",
                     "optional": true,
                     "platforms": [
                         "claude-code"
                     ]
+                },
+                {
+                    "source": "agreement/skills/brainstorming/builder-check-prompt.md",
+                    "target": "skills/brainstorming/builder-check-prompt.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "agreement/skills/brainstorming/visual-companion.md",
+                    "target": "skills/brainstorming/visual-companion.md",
+                    "category": "skill"
+                },
+                {
+                    "source": "agreement/skills/brainstorming/scripts/frame-template.html",
+                    "target": "skills/brainstorming/scripts/frame-template.html",
+                    "category": "skill"
+                },
+                {
+                    "source": "agreement/skills/brainstorming/scripts/helper.js",
+                    "target": "skills/brainstorming/scripts/helper.js",
+                    "category": "skill"
+                },
+                {
+                    "source": "agreement/skills/brainstorming/scripts/server.cjs",
+                    "target": "skills/brainstorming/scripts/server.cjs",
+                    "category": "skill"
+                },
+                {
+                    "source": "agreement/skills/brainstorming/scripts/start-server.sh",
+                    "target": "skills/brainstorming/scripts/start-server.sh",
+                    "category": "skill"
+                },
+                {
+                    "source": "agreement/skills/brainstorming/scripts/stop-server.sh",
+                    "target": "skills/brainstorming/scripts/stop-server.sh",
+                    "category": "skill"
+                },
+                {
+                    "source": "agreement/skills/brainstorming/LICENSE",
+                    "target": "skills/brainstorming/LICENSE",
+                    "category": "skill"
                 }
             ]
         },
