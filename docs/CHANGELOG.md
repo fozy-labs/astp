@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The optional [`brainstorming` skill](../templates/agreement/skills/brainstorming/SKILL.md) is now maintained in `agreement` with Jesse Vincent's MIT attribution, project-neutral design documents and an unbranded visual companion.
+
 ## [0.5.1] - 2026-11-15
 
 ### Added
