@@ -74,7 +74,6 @@ Upgrading from 0.3.x: [migration steps](../README.md#upgrading-from-03x).
 - Without a terminal, a command missing arguments waited for a prompt forever. Now it fails with
   an error naming what to pass.
 
-[Unreleased]: https://github.com/fozy-labs/astp/compare/v0.5.1...HEAD
-[0.5.1]: https://github.com/fozy-labs/astp/compare/v0.5.0...v0.5.1
+[Unreleased]: https://github.com/fozy-labs/astp/compare/v0.5.0...HEAD
 [0.5.0]: https://github.com/fozy-labs/astp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/fozy-labs/astp/compare/v0.3.1...v0.4.0

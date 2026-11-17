@@ -11,11 +11,13 @@
         {
             "name": "agreement",
             "source": "./templates/agreement",
-            "description": "Working agreement rule, communication and tracker skills and /retro, /git and /release commands — how the agent decides, asks, scopes changes, writes for the user, works with Git and the issue tracker, releases and reviews work",
-            "version": "2.0.0",
+            "description": "Working agreement rule, communication, tracker and optional brainstorming skills and /retro, /git, /release and /settup-glossary commands — how the agent decides, asks, scopes changes, designs, writes for the user, works with Git and the issue tracker, releases, establishes project vocabulary and reviews work",
+            "version": "2.2.0",
             "skills": [
+                "./skills/brainstorming",
                 "./skills/communication",
-                "./skills/retro"
+                "./skills/retro",
+                "./skills/settup-glossary"
             ]
         },
         {
