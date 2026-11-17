@@ -29,11 +29,13 @@ flowchart TD
 
 ## Start
 
-1. Run `git fetch origin` when `<target>` is on `origin`. Then `git worktree add --track -b <branch> <path> <target>` — `--track` makes `<target>` the branch's upstream. `<path>`, `<branch>` or `origin/<branch>` already exists: [clean up](#clean-up) the local worktree and branch first when its PR is merged (if `origin/<branch>` still exists, ask for another task name), otherwise ask for another task name.
-2. Copy gitignored files from the main checkout: those matching `.worktreeinclude` patterns when the repo has one, else the project's configured files, else `.env*` files outside dependency folders.
-3. Install dependencies with the project's install command; else, by the lockfile, in frozen mode: `npm ci`, `pnpm install --frozen-lockfile`, `yarn install --immutable` (Yarn 1: `--frozen-lockfile`), `bun install --frozen-lockfile`. A failed install: report and ask.
-4. IDE named: open the worktree with the IDE's command-line launcher — for JetBrains IDEs, the Toolbox shell script such as `webstorm`. No launcher found: give the user the path.
-5. Enter the worktree: Claude Code's `EnterWorktree` tool with `path` — the user approves once, since the path is outside the project. Without that tool, keep the main session where it is and address the worktree by absolute paths and `git -C <path>`; a `cd` outside the project does not persist between commands.
+1. The worktree starts from `<target>`: uncommitted changes and untracked files in the main checkout are not included. If `<task>` depends on them, stop and ask before creating the worktree.
+2. Run `git fetch origin` when `<target>` is on `origin`. Then `git worktree add --track -b <branch> <path> <target>` — `--track` makes `<target>` the branch's upstream. `<path>`, `<branch>` or `origin/<branch>` already exists: [clean up](#clean-up) the local worktree and branch first when its PR is merged (if `origin/<branch>` still exists, ask for another task name), otherwise ask for another task name.
+3. Copy gitignored files from the main checkout: those matching `.worktreeinclude` patterns when the repo has one, else the project's configured files, else `.env*` files outside dependency folders.
+4. Install dependencies with the project's install command; else, by the lockfile, in frozen mode: `npm ci`, `pnpm install --frozen-lockfile`, `yarn install --immutable` (Yarn 1: `--frozen-lockfile`), `bun install --frozen-lockfile`. A failed install: report and ask.
+5. IDE named: open the worktree with the IDE's command-line launcher — for JetBrains IDEs, the Toolbox shell script such as `webstorm`. No launcher found: give the user the path.
+6. Enter the worktree: Claude Code's `EnterWorktree` tool with `path` — the user approves once, since the path is outside the project. Without that tool, keep the main session where it is and address the worktree by absolute paths and `git -C <path>`; a `cd` outside the project does not persist between commands.
+7. Copied configuration can point to the same databases, services and other external resources as the main checkout. Ask before using a resource another checkout may be using.
 
 Handle the task itself in the normal flow inside the worktree; commit with the [Commit](../SKILL.md#commit) rules.
 
