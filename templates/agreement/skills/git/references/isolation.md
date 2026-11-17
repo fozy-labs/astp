@@ -2,15 +2,6 @@
 
 `/git isolation <task> [--from <branch> | --current] [ide]` (alias: `/git isolate`, also accepts `/git isolate <branch> <task>`) does the task in a separate worktree without touching the main checkout unless `--current` or a local merge into its branch is chosen.
 
-## Limitations
-
-A worktree is a separate checkout, not a sandbox or independent clone:
-
-- Branches, tags, remotes and the object database are shared with other worktrees.
-- A branch can be checked out in only one worktree at a time.
-- Uncommitted changes and untracked files are not inherited; only selected ignored files are copied.
-- Processes, ports, databases, dependency caches and other external state are not isolated; ask before using a resource another checkout may be using.
-
 ```mermaid
 flowchart TD
     A[Resolve target and branch] --> B[Create worktree]
@@ -68,3 +59,11 @@ At the end of every `isolation` run, and for `isolation cleanup [task]`, check e
 - When the `tracker` skill is installed: its branch has a PR the tracker shows merged, the PR head commit equals the local branch tip, and the worktree is clean: `git worktree remove <path>`, then `git branch -D <branch>` — a squash merge leaves the branch unmerged for git.
 - Otherwise, or when `isolation cleanup` names a task without a merged PR: ask before removing; uncommitted changes need approval to discard, per Safety.
 - Anything else stays; list it in the report.
+
+## Limitations
+
+This instruction covers only the worktree lifecycle and Git operations around a task. It does not:
+
+- define or implement `<task>`, set its acceptance criteria or decide when it is complete;
+- give `finish` a task-level meaning: `PR`, `merge` and `push` are only Git outcomes, not proof that the task is complete or correct;
+- replace the normal task flow, project instructions or the project's review and release procedures.
