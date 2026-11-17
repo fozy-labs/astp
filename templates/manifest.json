@@ -500,9 +500,9 @@
         },
         "agreement": {
             "name": "agreement",
-            "version": "2.2.0",
-            "description": "Working agreement rule, communication, tracker and optional brainstorming skills and /retro, /git, /release and /settup-glossary commands — how the agent decides, asks, scopes changes, designs, writes for the user, works with Git and the issue tracker, releases, establishes project vocabulary and reviews work",
-            "use-when": "Any project or user setup that wants structured agent collaboration, design discussions, Git and issue-tracker workflows, releases, project vocabulary and session retrospectives",
+            "version": "3.0.0",
+            "description": "Working agreement rule, communication, tracker and optional brainstorming skills and /retro, /git, /release, /settup-git and /settup-glossary commands — how the agent decides, asks, scopes changes, designs, writes for the user, works with Git and the issue tracker, releases, configures Git conventions and project vocabulary and reviews work",
+            "use-when": "Any project or user setup that wants structured agent collaboration, design discussions, Git and issue-tracker workflows, Git or vocabulary setup, releases and session retrospectives",
             "default": false,
             "platforms": [
                 "claude-code"
@@ -563,13 +563,21 @@
                     ]
                 },
                 {
-                    "source": "agreement/skills/git/references/guard.md",
-                    "target": "skills/git/references/guard.md",
+                    "source": "agreement/skills/git/references/isolation.md",
+                    "target": "skills/git/references/isolation.md",
                     "category": "skill"
                 },
                 {
-                    "source": "agreement/skills/git/references/isolation.md",
-                    "target": "skills/git/references/isolation.md",
+                    "source": "agreement/skills/settup-git/SKILL.md",
+                    "target": "skills/settup-git/SKILL.md",
+                    "category": "skill",
+                    "platforms": [
+                        "claude-code"
+                    ]
+                },
+                {
+                    "source": "agreement/skills/settup-git/references/guard.md",
+                    "target": "skills/settup-git/references/guard.md",
                     "category": "skill"
                 },
                 {
