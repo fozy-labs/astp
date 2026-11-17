@@ -1,12 +1,11 @@
 ---
 name: git
-description: Git work on the user's command — commit, push, switch to an up-to-date branch, do a task in an isolated worktree, guard against destructive git commands, or any other git task in free text.
+description: Git work on the user's command — commit, push, switch to an up-to-date branch, do a task in an isolated worktree, or any other git task in free text.
 disable-model-invocation: true
-argument-hint: "commit | push | <branch> | isolation <task> [--from <branch> | --current] [ide] | guard | <free text>  [--fast] [--one]"
+argument-hint: "commit | push | <branch> | isolation <task> [--from <branch> | --current] [ide] | <free text> [--fast] [--one]"
 allowed-tools: Bash(git status *) Bash(git worktree list *) PowerShell(git status *) PowerShell(git worktree list *)
 ---
 
-<astp-block name="commands" description="Routing, safety, commit, push and branch-switching rules" use-when="The user runs /git commands for commits, pushes, branch switching, worktrees or guards" required>
 # Git
 
 Request: $ARGUMENTS
@@ -37,12 +36,11 @@ This skill covers the git steps; any non-git task in the request runs in the nor
 | `<branch>`                                                                   | [Switch](#switch-branch) to the branch and fast-forward it to origin                                             |
 | `isolation <task> [--from <branch> \| --current] [ide]`                      | Do the task in a separate worktree (alias: `isolate`) — load [references/isolation.md](references/isolation.md) |
 | `isolation cleanup [task]`                                                   | Remove finished isolation worktrees — same reference                                                             |
-| `guard`                                                                      | Make destructive git commands need the user's approval — load [references/guard.md](references/guard.md)         |
 
 ## Before any command
 
 - Detached HEAD, a merge, rebase, cherry-pick or bisect in progress, or a repository other than the one the user works in: stop and report.
-- Project facts come from the project, not from defaults: commit format from `CLAUDE.md` and rules, commitlint config, `CONTRIBUTING`, then `git log`; the default branch, merge strategy and host CLI from the tracker skill when installed, else `git symbolic-ref refs/remotes/origin/HEAD`; the Project overrides section below, when present, wins.
+- Project instructions and contribution docs set branch naming, isolation defaults and extra approvals. Commit format comes from those files, commitlint config, then `git log`; the default branch, merge strategy and host CLI come from the tracker skill when installed, else `git symbolic-ref refs/remotes/origin/HEAD`.
 
 ## Safety
 
@@ -84,18 +82,3 @@ Always:
 ## Report
 
 End with what changed — branch, commits (short hash and subject), pushes — and what was left: stash entries, skipped files, worktrees kept.
-</astp-block>
-
-<astp-block name="project_overrides" description="Project-specific branch naming, isolation defaults and worktree setup" use-when="The project overrides default branch naming, worktree paths, isolation base/finish defaults or approval rules" optional>
-## Project overrides
-
-<FILL_INSTRUCTION>
-Fill only what differs from the defaults above and in references/isolation.md, then delete the rest of this instruction:
-- branch naming (e.g. `feat/<task>`);
-- isolation defaults: base (`--current` or a branch name) and finish (`PR`, `merge` or `push`);
-- the install command for a fresh worktree;
-- the worktree root instead of `../.tmp/<repo>/`;
-- gitignored files to copy into a worktree — first offer the user to create a `.worktreeinclude` at the repo root instead (`.gitignore` syntax, also read by Claude Code); list them here only if the user declines;
-- extra actions that need the user's approval.
-</FILL_INSTRUCTION>
-</astp-block>

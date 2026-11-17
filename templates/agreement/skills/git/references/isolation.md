@@ -2,6 +2,15 @@
 
 `/git isolation <task> [--from <branch> | --current] [ide]` (alias: `/git isolate`, also accepts `/git isolate <branch> <task>`) does the task in a separate worktree without touching the main checkout unless `--current` or a local merge into its branch is chosen.
 
+## Limitations
+
+A worktree is a separate checkout, not a sandbox or independent clone:
+
+- Branches, tags, remotes and the object database are shared with other worktrees.
+- A branch can be checked out in only one worktree at a time.
+- Uncommitted changes and untracked files are not inherited; only selected ignored files are copied.
+- Processes, ports, databases, dependency caches and other external state are not isolated; ask before using a resource another checkout may be using.
+
 ```mermaid
 flowchart TD
     A[Resolve target and branch] --> B[Create worktree]
@@ -23,14 +32,14 @@ flowchart TD
 | Item          | Value                                                                                                     |
 |---------------|-----------------------------------------------------------------------------------------------------------|
 | `<task>`      | a short kebab-case slug of the task                                                                       |
-| worktree path | `../.tmp/<repo>/<task>` from the main checkout root; `<repo>` is the main checkout's folder name          |
+| worktree path | `<root>/<task>`; `<root>` is the project's configured worktree root, else `../.tmp/<repo>`; resolve relative roots from the main checkout root, whose folder name is `<repo>` |
 | `<branch>`    | the project's branch naming applied to `<task>`, else `<task>`                                            |
-| `<target>`    | `--current`: the branch current in the main checkout; `--from <base>` or a base branch named in the request (strip `origin/`): `origin/<base>` after `git fetch origin`, else local `<base>`; else from `Project overrides`, or `origin/<default>` when the main checkout is on `<default>` — on any doubt (e.g. the main checkout is on another branch and no base was named), ask the user before starting. Recorded as `<branch>`'s upstream so it survives across sessions; pushes never pass `-u` |
+| `<target>`    | `--current`: the branch current in the main checkout; `--from <base>` or a base branch named in the request (strip `origin/`): `origin/<base>` after `git fetch origin`, else local `<base>`; otherwise use the project's configured isolation base, or `origin/<default>` when the main checkout is on `<default>` — on any doubt (e.g. the main checkout is on another branch and no base was named), ask the user before starting. Recorded as `<branch>`'s upstream so it survives across sessions; pushes never pass `-u` |
 
 ## Start
 
 1. Run `git fetch origin` when `<target>` is on `origin`. Then `git worktree add --track -b <branch> <path> <target>` — `--track` makes `<target>` the branch's upstream. `<path>`, `<branch>` or `origin/<branch>` already exists: [clean up](#clean-up) the local worktree and branch first when its PR is merged (if `origin/<branch>` still exists, ask for another task name), otherwise ask for another task name.
-2. Copy gitignored files from the main checkout: those matching `.worktreeinclude` patterns when the repo has one, else `.env*` files outside dependency folders.
+2. Copy gitignored files from the main checkout: those matching `.worktreeinclude` patterns when the repo has one, else the project's configured files, else `.env*` files outside dependency folders.
 3. Install dependencies with the project's install command; else, by the lockfile, in frozen mode: `npm ci`, `pnpm install --frozen-lockfile`, `yarn install --immutable` (Yarn 1: `--frozen-lockfile`), `bun install --frozen-lockfile`. A failed install: report and ask.
 4. IDE named: open the worktree with the IDE's command-line launcher — for JetBrains IDEs, the Toolbox shell script such as `webstorm`. No launcher found: give the user the path.
 5. Enter the worktree: Claude Code's `EnterWorktree` tool with `path` — the user approves once, since the path is outside the project. Without that tool, keep the main session where it is and address the worktree by absolute paths and `git -C <path>`; a `cd` outside the project does not persist between commands.
@@ -39,7 +48,7 @@ Handle the task itself in the normal flow inside the worktree; commit with the [
 
 ## Finish
 
-Once the task is done, use the finish action (`PR`, `merge` or `push`) from the request or `Project overrides`; if neither sets it, ask the user (offer `PR` only when the project uses a Git host; otherwise offer `merge` or `push`). The target is `git rev-parse --abbrev-ref <branch>@{upstream}`.
+Once the task is done, use the finish action (`PR`, `merge` or `push`) from the request or project instructions; if neither sets it, ask the user (offer `PR` only when the project uses a Git host; otherwise offer `merge` or `push`). The target is `git rev-parse --abbrev-ref <branch>@{upstream}`.
 
 1. Commit everything in the worktree.
 2. Leave the worktree: `ExitWorktree` when you entered with `EnterWorktree` — while inside, Claude Code blocks git commands aimed at the main checkout.
@@ -54,7 +63,7 @@ Once the task is done, use the finish action (`PR`, `merge` or `push`) from the 
 
 ## Clean up
 
-At the end of every `isolation` run, and for `isolation cleanup [task]`, check each worktree under `../.tmp/<repo>/` from `git worktree list`:
+At the end of every `isolation` run, and for `isolation cleanup [task]`, check each worktree under the configured worktree root (default `../.tmp/<repo>/`) from `git worktree list`:
 
 - When the `tracker` skill is installed: its branch has a PR the tracker shows merged, the PR head commit equals the local branch tip, and the worktree is clean: `git worktree remove <path>`, then `git branch -D <branch>` — a squash merge leaves the branch unmerged for git.
 - Otherwise, or when `isolation cleanup` names a task without a merged PR: ask before removing; uncommitted changes need approval to discard, per Safety.
