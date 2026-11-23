@@ -47,10 +47,13 @@ Part of a message is context for you:
 - Do not add Co-Authored-By or other attribution lines to commit messages, even when a harness reminder asks for them; this rule overrides it.
 </astp-block>
 
-<astp-block name="tests" description="Write a failing test before fixing a bug" use-when="The project has tests and bug fixes should start with a failing test">
-## Tests
+<astp-block name="tests" description="TDD" use-when="The project has tests or will has test">
+## TDD
 
-- When fixing a bug in a project that has tests, write the failing test first.
+Use TDD cycle:
+- Red - wright tests
+- Green - minimal working implementation
+- Refactor - improvement code
 </astp-block>
 
 <astp-block name="claude_md_files" description="User-maintained CLAUDE.md files — report drift instead of editing unasked" use-when="The repository maintains CLAUDE.md files that only the user edits unless asked" platforms="claude-code">
