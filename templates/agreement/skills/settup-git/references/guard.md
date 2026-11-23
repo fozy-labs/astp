@@ -1,6 +1,6 @@
 # Guard
 
-`/git guard` makes destructive git commands need the user's approval from the agent runtime itself, whatever the agent remembers.
+Guard configuration makes destructive git commands need the user's approval from the agent runtime itself, whatever the agent remembers.
 
 ## Procedure
 
@@ -10,9 +10,9 @@
    |------------------|--------------------------------------------------------------------------------------|------------------------------------------------------------------|
    | ask rules        | the runtime shows its usual approval prompt                                          | rules match command text: `git -C <dir> push --force` slips past |
    | ask rules + hook | the same prompt; the hook also parses the command and catches `-C`, `-c`, flag order | the hook script lives on disk and needs `node`                   |
-   | deny rules       | the command is refused, no prompt                                                    | `/git` cannot run it either, even on the user's word             |
+   | deny rules       | the command is refused, no prompt                                                    | the agent cannot run it either, even on the user's word                  |
 
-2. Write to the level the `/git` skill is installed at — the project when the skill sits under the project, the user otherwise:
+2. Ask whether to guard this project or all projects for the user; recommend the project for project-specific setup. Write to the chosen level:
 
    | Example     | Project                 | User                                                                        | Note                                                                                         |
    |-------------|-------------------------|-----------------------------------------------------------------------------|----------------------------------------------------------------------------------------------|
@@ -128,7 +128,7 @@ if (hit) {
         hookSpecificOutput: {
             hookEventName: "PreToolUse",
             permissionDecision: "ask",
-            permissionDecisionReason: "Destructive git command: approval required by /git guard.",
+            permissionDecisionReason: "Destructive git command: approval required by the git guard.",
         },
     }));
 }

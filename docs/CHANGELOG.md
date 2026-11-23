@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- [`/settup-git`](../templates/agreement/skills/settup-git/SKILL.md) records project Git conventions in existing agent or contribution documentation and optionally configures runtime guards for destructive commands.
+
 ### Changed
 
+- **Breaking:** [`/git`](../templates/agreement/skills/git/SKILL.md) no longer has astp blocks or a `guard` subcommand; project conventions and optional guards are configured by `/settup-git`. The plain `/git` skill is now published for `npx skills`.
 - The optional [`brainstorming` skill](../templates/agreement/skills/brainstorming/SKILL.md) is now maintained in `agreement` with Jesse Vincent's MIT attribution, project-neutral design documents and an unbranded visual companion.
 
 ## [0.5.1] - 2026-11-15
