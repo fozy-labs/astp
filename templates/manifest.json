@@ -274,8 +274,8 @@
         },
         "thinking": {
             "name": "thinking",
-            "version": "3.0.0",
-            "description": "Reasoning skills — design decision derivation, plus optional experimental analysis, software architecture, and testing",
+            "version": "3.0.1",
+            "description": "Experimental reasoning skills — design decision derivation, analysis, software architecture, and testing",
             "use-when": "The project needs structured reasoning for UI/visual design derivation, root-cause and option analysis, software architecture, or testing",
             "default": false,
             "platforms": [
@@ -285,7 +285,10 @@
                 {
                     "source": "thinking/skills/design-derivation/SKILL.md",
                     "target": "skills/design-derivation/SKILL.md",
-                    "category": "skill"
+                    "category": "skill",
+                    "labels": [
+                        "experimental"
+                    ]
                 },
                 {
                     "source": "thinking/skills/design-derivation/references/anti-patterns.md",

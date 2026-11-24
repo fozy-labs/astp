@@ -65,8 +65,8 @@
         {
             "name": "thinking",
             "source": "./templates/thinking",
-            "description": "Reasoning skills — design decision derivation, plus optional experimental analysis, software architecture, and testing",
-            "version": "3.0.0",
+            "description": "Experimental reasoning skills — design decision derivation, analysis, software architecture, and testing",
+            "version": "3.0.1",
             "skills": [
                 "./skills/analysis",
                 "./skills/design-derivation",
